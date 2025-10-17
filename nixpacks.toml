@@ -8,7 +8,12 @@ cmds = [
 ]
 
 [phases.build]
-cmds = ["npx turbo run build"]
+cmds = [
+  "npx turbo run build",
+  # Copy static files for Next.js standalone mode
+  "cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static",
+  "cp -r apps/web/public apps/web/.next/standalone/apps/web/public"
+]
 
 [start]
 cmd = "./start.sh"
