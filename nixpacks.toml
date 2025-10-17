@@ -12,7 +12,8 @@ cmds = [
   "npx turbo run build",
   # Copy static files for Next.js standalone mode
   "cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static",
-  "cp -r apps/web/public apps/web/.next/standalone/apps/web/public"
+  # Copy public folder if it exists
+  "[ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/apps/web/public || echo 'No public folder to copy'"
 ]
 
 [start]
