@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// ============================================
+// TENANT & MULTI-TENANCY
+// ============================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("free") // free, pro, enterprise
+  status    String   @default("active") // active, suspended, deleted
+
+  // Metadata
+  metadata  Json?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  memberships Membership[]
+  orders      Order[]
+  attachments Attachment[]
+  auditLogs   AuditLog[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  password      String?   // hashed, nullable for SSO-only users
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  memberships Membership[]
+  accounts    Account[]
+  sessions    Session[]
+  auditLogs   AuditLog[]
+
+  @@index([email])
+}
+
+model Membership {
+  id       String @id @default(cuid())
+  role     String @default("member") // owner, admin, member, viewer
+
+  // Relations
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ============================================
+// NEXTAUTH MODELS
+// ============================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// BUSINESS ENTITIES
+// ============================================
+
+model Order {
+  id           String   @id @default(cuid())
+  orderNumber  String   @unique
+  status       String   @default("pending") // pending, processing, shipped, delivered, cancelled
+
+  // Customer info
+  customerName  String
+  customerEmail String
+  customerPhone String?
+
+  // Amounts
+  subtotal     Decimal  @db.Decimal(10, 2)
+  tax          Decimal  @db.Decimal(10, 2)
+  total        Decimal  @db.Decimal(10, 2)
+  currency     String   @default("USD")
+
+  // Shipping
+  shippingAddress Json?
+  billingAddress  Json?
+
+  // Additional data
+  notes        String?
+  metadata     Json?
+
+  // Tenant
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  items        OrderItem[]
+  attachments  Attachment[]
+  auditLogs    AuditLog[]
+
+  @@index([tenantId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([customerEmail])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+
+  // Product info
+  sku         String?
+  name        String
+  description String?
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
+
+  // Additional data
+  metadata    Json?
+
+  // Order relation
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+}
+
+// ============================================
+// FILE STORAGE
+// ============================================
+
+model Attachment {
+  id          String   @id @default(cuid())
+
+  // File info
+  filename    String
+  mimeType    String
+  size        Int      // bytes
+
+  // S3/MinIO location
+  bucket      String
+  key         String   // S3 object key
+  url         String?  // presigned URL (temporary)
+
+  // Metadata
+  metadata    Json?
+
+  // Relations (polymorphic - can attach to multiple entity types)
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Uploader tracking
+  uploadedBy  String?
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([key])
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+
+  // Event info
+  action      String   // e.g., "order.created", "order.updated", "user.invited"
+  entityType  String   // e.g., "order", "user", "tenant"
+  entityId    String?  // ID of the entity affected
+
+  // Actor
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actorName   String?  // Cached for display
+  actorEmail  String?
+
+  // Context
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?    // Additional context (old/new values, etc.)
+
+  // Tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations (optional)
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Timestamp
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// JOB QUEUE (optional - for tracking job status in DB)
+// ============================================
+
+model Job {
+  id          String   @id @default(cuid())
+
+  // Job info
+  type        String   // e.g., "export-csv", "generate-pdf"
+  status      String   @default("pending") // pending, processing, completed, failed
+
+  // Payload and result
+  payload     Json?
+  result      Json?
+  error       String?
+
+  // Progress tracking
+  progress    Int      @default(0) // 0-100
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
