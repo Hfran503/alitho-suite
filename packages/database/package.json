@@ -4,6 +4,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "build": "prisma generate --schema=../../prisma/schema.prisma",
     "db:generate": "cd ../.. && prisma generate --schema=./prisma/schema.prisma",
     "db:migrate": "cd ../.. && prisma migrate deploy --schema=./prisma/schema.prisma",
     "db:migrate:dev": "cd ../.. && prisma migrate dev --schema=./prisma/schema.prisma",
