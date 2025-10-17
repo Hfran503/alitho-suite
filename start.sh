@@ -19,9 +19,17 @@ fi
 # Debug: Print REDIS_URL after loading secrets
 echo "REDIS_URL (after): ${REDIS_URL:0:30}..."
 
-# Run database migrations
+# Debug: Check if DATABASE_URL is set
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: DATABASE_URL is not set!"
+  exit 1
+else
+  echo "DATABASE_URL is set (${DATABASE_URL:0:30}...)"
+fi
+
+# Run database migrations with explicit environment variable
 echo "Running database migrations..."
-pnpm db:migrate
+env DATABASE_URL="$DATABASE_URL" pnpm db:migrate
 
 # Start the application
 echo "Starting application..."
