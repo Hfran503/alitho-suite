@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@repo/database'
 import { redis } from '@/lib/redis'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     // Check database connection

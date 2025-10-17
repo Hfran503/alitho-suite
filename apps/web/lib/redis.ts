@@ -7,10 +7,41 @@ const getRedisUrl = () => {
   throw new Error('REDIS_URL environment variable is not set')
 }
 
-export const redis = new Redis(getRedisUrl(), {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-})
+let redisInstance: Redis | null = null
+
+const getRedisInstance = () => {
+  if (!redisInstance) {
+    redisInstance = new Redis(getRedisUrl(), {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    })
+  }
+  return redisInstance
+}
+
+export const redis = {
+  get ping() {
+    return getRedisInstance().ping.bind(getRedisInstance())
+  },
+  get incr() {
+    return getRedisInstance().incr.bind(getRedisInstance())
+  },
+  get expire() {
+    return getRedisInstance().expire.bind(getRedisInstance())
+  },
+  get get() {
+    return getRedisInstance().get.bind(getRedisInstance())
+  },
+  get setex() {
+    return getRedisInstance().setex.bind(getRedisInstance())
+  },
+  get keys() {
+    return getRedisInstance().keys.bind(getRedisInstance())
+  },
+  get del() {
+    return getRedisInstance().del.bind(getRedisInstance())
+  },
+}
 
 // Rate limiting helper
 export async function rateLimit(
