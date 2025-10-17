@@ -40,12 +40,6 @@ export async function GET(_req: NextRequest) {
       PACE_PASSWORD: !!process.env.PACE_PASSWORD,
     }
 
-    // Show partial values for PACE API URL (for debugging network issues)
-    const paceApiUrl = process.env.PACE_API_URL
-    const paceUrlPreview = paceApiUrl
-      ? `${paceApiUrl.substring(0, 20)}...`
-      : null
-
     // Count how many are configured
     const totalVars = Object.keys(envStatus).length
     const configuredVars = Object.values(envStatus).filter(Boolean).length
@@ -62,7 +56,6 @@ export async function GET(_req: NextRequest) {
         variables: envStatus,
         debug: {
           nodeEnv: process.env.NODE_ENV,
-          paceApiUrlPreview,
         },
         timestamp: new Date().toISOString(),
       },
