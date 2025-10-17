@@ -148,6 +148,47 @@ if [ "$NODE_ENV" = "production" ] || [ "$USE_AWS_SECRETS" = "true" ]; then
     else
         echo -e "${GREEN}✓ NEXTAUTH_SECRET is set${NC}"
     fi
+
+    # PACE API variables (from Dokploy environment or AWS Secrets)
+    if [ -z "$PACE_API_URL" ]; then
+        # Try to load from AWS Secrets if available
+        PACE_API_URL_FROM_AWS=$(get_secret "calitho-suite/pace" "PACE_API_URL" 2>/dev/null)
+        if [ $? -eq 0 ] && [ ! -z "$PACE_API_URL_FROM_AWS" ]; then
+            export PACE_API_URL="$PACE_API_URL_FROM_AWS"
+            echo -e "${GREEN}✓ Loaded PACE_API_URL from AWS${NC}"
+        else
+            echo -e "${YELLOW}⚠ PACE_API_URL not set (AWS secret not found, using Dokploy env if available)${NC}"
+        fi
+    else
+        export PACE_API_URL="$PACE_API_URL"
+        echo -e "${GREEN}✓ Using PACE_API_URL from environment (${PACE_API_URL:0:30}...)${NC}"
+    fi
+
+    if [ -z "$PACE_USERNAME" ]; then
+        PACE_USERNAME_FROM_AWS=$(get_secret "calitho-suite/pace" "PACE_USERNAME" 2>/dev/null)
+        if [ $? -eq 0 ] && [ ! -z "$PACE_USERNAME_FROM_AWS" ]; then
+            export PACE_USERNAME="$PACE_USERNAME_FROM_AWS"
+            echo -e "${GREEN}✓ Loaded PACE_USERNAME from AWS${NC}"
+        else
+            echo -e "${YELLOW}⚠ PACE_USERNAME not set (AWS secret not found, using Dokploy env if available)${NC}"
+        fi
+    else
+        export PACE_USERNAME="$PACE_USERNAME"
+        echo -e "${GREEN}✓ Using PACE_USERNAME from environment${NC}"
+    fi
+
+    if [ -z "$PACE_PASSWORD" ]; then
+        PACE_PASSWORD_FROM_AWS=$(get_secret "calitho-suite/pace" "PACE_PASSWORD" 2>/dev/null)
+        if [ $? -eq 0 ] && [ ! -z "$PACE_PASSWORD_FROM_AWS" ]; then
+            export PACE_PASSWORD="$PACE_PASSWORD_FROM_AWS"
+            echo -e "${GREEN}✓ Loaded PACE_PASSWORD from AWS${NC}"
+        else
+            echo -e "${YELLOW}⚠ PACE_PASSWORD not set (AWS secret not found, using Dokploy env if available)${NC}"
+        fi
+    else
+        export PACE_PASSWORD="$PACE_PASSWORD"
+        echo -e "${GREEN}✓ Using PACE_PASSWORD from environment${NC}"
+    fi
 else
     echo -e "${YELLOW}Using .env file (development mode)${NC}"
 fi
