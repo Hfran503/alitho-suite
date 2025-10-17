@@ -31,33 +31,36 @@ fi
 # Run database migrations with explicit environment variable
 echo "Running database migrations..."
 
-# Try to run migrations
-MIGRATION_OUTPUT=$(env DATABASE_URL="$DATABASE_URL" pnpm db:migrate 2>&1)
-MIGRATION_EXIT_CODE=$?
-
-echo "$MIGRATION_OUTPUT"
+# Try to run migrations (allow output to stream)
+set +e  # Don't exit on error
+env DATABASE_URL="$DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
+MIGRATION_EXIT_CODE=${PIPESTATUS[0]}
+set -e  # Re-enable exit on error
 
 # Check if migration failed due to non-empty database (P3005)
-if [ $MIGRATION_EXIT_CODE -ne 0 ] && echo "$MIGRATION_OUTPUT" | grep -q "P3005"; then
-  echo ""
-  echo "⚠️  Database is not empty. Attempting to baseline..."
-  echo "This will mark existing migrations as applied without running them."
+if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+  if grep -q "P3005" /tmp/migration.log; then
+    echo ""
+    echo "⚠️  Database is not empty (P3005 error detected)"
+    echo "Attempting to baseline by marking migrations as applied..."
 
-  # Mark the init migration as already applied
-  echo "Marking 20241016000000_init as applied..."
-  cd /app
-  npx prisma migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
+    # Mark the init migration as already applied
+    echo "Marking 20241016000000_init as applied..."
+    cd /app
+    npx prisma migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
 
-  if [ $? -eq 0 ]; then
-    echo "✓ Migration baseline successful"
-    echo "Starting application (schema is already in sync)..."
+    if [ $? -eq 0 ]; then
+      echo "✓ Migration baseline successful"
+      echo "Database schema is already in sync, continuing..."
+    else
+      echo "✗ Failed to baseline migration"
+      exit 1
+    fi
   else
-    echo "✗ Failed to baseline migration"
+    echo "✗ Migration failed with exit code $MIGRATION_EXIT_CODE"
+    cat /tmp/migration.log
     exit 1
   fi
-elif [ $MIGRATION_EXIT_CODE -ne 0 ]; then
-  echo "✗ Migration failed with exit code $MIGRATION_EXIT_CODE"
-  exit 1
 else
   echo "✓ Migrations completed successfully"
 fi
