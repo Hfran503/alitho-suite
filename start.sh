@@ -16,4 +16,4 @@ pnpm db:migrate
 
 # Start the application
 echo "Starting application..."
-pnpm start:dev
+turbo run start
