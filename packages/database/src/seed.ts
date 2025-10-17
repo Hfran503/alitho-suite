@@ -86,6 +86,29 @@ async function main() {
 
   console.log('✅ Created test user membership')
 
+  // Verify data was created
+  console.log('\n📊 Database verification:')
+  const tenantCount = await prisma.tenant.count()
+  const userCount = await prisma.user.count()
+  const membershipCount = await prisma.membership.count()
+  console.log(`   Tenants: ${tenantCount}`)
+  console.log(`   Users: ${userCount}`)
+  console.log(`   Memberships: ${membershipCount}`)
+
+  // Show admin user details for debugging
+  const adminWithMembership = await prisma.user.findUnique({
+    where: { email: 'admin@example.com' },
+    include: { memberships: { include: { tenant: true } } }
+  })
+  console.log(`\n👤 Admin user verification:`)
+  console.log(`   ID: ${adminWithMembership?.id}`)
+  console.log(`   Email: ${adminWithMembership?.email}`)
+  console.log(`   Memberships: ${adminWithMembership?.memberships.length}`)
+  if (adminWithMembership?.memberships.length) {
+    console.log(`   Tenant: ${adminWithMembership.memberships[0].tenant.name}`)
+    console.log(`   Role: ${adminWithMembership.memberships[0].role}`)
+  }
+
   // Create sample orders (only if they don't exist)
   const existingOrders = await prisma.order.count({
     where: { tenantId: tenant.id }
