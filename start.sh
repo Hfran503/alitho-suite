@@ -65,7 +65,20 @@ else
   echo "✓ Migrations completed successfully"
 fi
 
+# Seed database with initial data (uses upsert, safe to run multiple times)
+echo ""
+echo "Seeding database with initial data..."
+pnpm db:seed
+
+if [ $? -eq 0 ]; then
+  echo "✓ Database seed completed"
+else
+  echo "⚠️  Database seeding failed, but continuing..."
+  echo "   This might be okay if data already exists"
+fi
+
 # Start the application
+echo ""
 echo "Starting application..."
 echo "Final REDIS_URL check: ${REDIS_URL:0:30}..."
 exec turbo run start
