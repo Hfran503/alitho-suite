@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "start": "turbo run start",
+    "start": "./start.sh",
+    "start:dev": "turbo run start",
     "start:prod": "NODE_ENV=production USE_AWS_SECRETS=true turbo run start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
