@@ -20,6 +20,39 @@ async function main() {
 
   console.log('✅ Created tenant:', tenant.slug)
 
+  // Create demo user (main admin account)
+  const demoPasswordHash = await hash('password123', 10)
+  const demoUser = await prisma.user.upsert({
+    where: { email: 'demo@example.com' },
+    update: {},
+    create: {
+      email: 'demo@example.com',
+      name: 'Demo User',
+      password: demoPasswordHash,
+      passwordResetRequired: false,
+    },
+  })
+
+  console.log('✅ Created demo user:', demoUser.email)
+
+  // Create demo user membership
+  await prisma.membership.upsert({
+    where: {
+      userId_tenantId: {
+        userId: demoUser.id,
+        tenantId: tenant.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: demoUser.id,
+      tenantId: tenant.id,
+      role: 'full_admin',
+    },
+  })
+
+  console.log('✅ Created demo user membership')
+
   // Create admin user
   const adminPasswordHash = await hash('password123', 10)
   const adminUser = await prisma.user.upsert({
