@@ -30,7 +30,37 @@ fi
 
 # Run database migrations with explicit environment variable
 echo "Running database migrations..."
-env DATABASE_URL="$DATABASE_URL" pnpm db:migrate
+
+# Try to run migrations
+MIGRATION_OUTPUT=$(env DATABASE_URL="$DATABASE_URL" pnpm db:migrate 2>&1)
+MIGRATION_EXIT_CODE=$?
+
+echo "$MIGRATION_OUTPUT"
+
+# Check if migration failed due to non-empty database (P3005)
+if [ $MIGRATION_EXIT_CODE -ne 0 ] && echo "$MIGRATION_OUTPUT" | grep -q "P3005"; then
+  echo ""
+  echo "⚠️  Database is not empty. Attempting to baseline..."
+  echo "This will mark existing migrations as applied without running them."
+
+  # Mark the init migration as already applied
+  echo "Marking 20241016000000_init as applied..."
+  cd /app
+  npx prisma migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
+
+  if [ $? -eq 0 ]; then
+    echo "✓ Migration baseline successful"
+    echo "Starting application (schema is already in sync)..."
+  else
+    echo "✗ Failed to baseline migration"
+    exit 1
+  fi
+elif [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+  echo "✗ Migration failed with exit code $MIGRATION_EXIT_CODE"
+  exit 1
+else
+  echo "✓ Migrations completed successfully"
+fi
 
 # Start the application
 echo "Starting application..."
