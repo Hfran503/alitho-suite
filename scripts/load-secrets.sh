@@ -46,11 +46,17 @@ if [ "$NODE_ENV" = "production" ] || [ "$USE_AWS_SECRETS" = "true" ]; then
         echo -e "${GREEN}✓ Loaded DATABASE_URL from AWS${NC}"
     fi
 
-    # Fetch NEXTAUTH_SECRET
+    # Fetch NEXTAUTH_SECRET and NEXTAUTH_URL
     NEXTAUTH_SECRET_FROM_AWS=$(get_secret "calitho-suite/nextauth" "NEXTAUTH_SECRET")
     if [ ! -z "$NEXTAUTH_SECRET_FROM_AWS" ]; then
         export NEXTAUTH_SECRET="$NEXTAUTH_SECRET_FROM_AWS"
         echo -e "${GREEN}✓ Loaded NEXTAUTH_SECRET from AWS${NC}"
+    fi
+
+    NEXTAUTH_URL_FROM_AWS=$(get_secret "calitho-suite/nextauth" "NEXTAUTH_URL")
+    if [ ! -z "$NEXTAUTH_URL_FROM_AWS" ]; then
+        export NEXTAUTH_URL="$NEXTAUTH_URL_FROM_AWS"
+        echo -e "${GREEN}✓ Loaded NEXTAUTH_URL from AWS${NC}"
     fi
 
     # Fetch REDIS_URL
