@@ -9,7 +9,7 @@ const getRedisUrl = () => {
 
 let redisInstance: Redis | null = null
 
-const getRedisInstance = () => {
+export const getRedisInstance = () => {
   if (!redisInstance) {
     redisInstance = new Redis(getRedisUrl(), {
       maxRetriesPerRequest: null,

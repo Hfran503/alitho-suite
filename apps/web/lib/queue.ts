@@ -1,22 +1,64 @@
 import { Queue } from 'bullmq'
-import { redis } from './redis'
+import { getRedisInstance } from './redis'
 
-// Create queues for different job types
-export const exportQueue = new Queue('exports', {
-  connection: redis,
-})
+// Lazy-loaded queues to avoid Redis initialization during build
+let _exportQueue: Queue | null = null
+let _pdfQueue: Queue | null = null
+let _emailQueue: Queue | null = null
+let _webhookQueue: Queue | null = null
 
-export const pdfQueue = new Queue('pdfs', {
-  connection: redis,
-})
+export const getExportQueue = () => {
+  if (!_exportQueue) {
+    _exportQueue = new Queue('exports', {
+      connection: getRedisInstance(),
+    })
+  }
+  return _exportQueue
+}
 
-export const emailQueue = new Queue('emails', {
-  connection: redis,
-})
+export const getPdfQueue = () => {
+  if (!_pdfQueue) {
+    _pdfQueue = new Queue('pdfs', {
+      connection: getRedisInstance(),
+    })
+  }
+  return _pdfQueue
+}
 
-export const webhookQueue = new Queue('webhooks', {
-  connection: redis,
-})
+export const getEmailQueue = () => {
+  if (!_emailQueue) {
+    _emailQueue = new Queue('emails', {
+      connection: getRedisInstance(),
+    })
+  }
+  return _emailQueue
+}
+
+export const getWebhookQueue = () => {
+  if (!_webhookQueue) {
+    _webhookQueue = new Queue('webhooks', {
+      connection: getRedisInstance(),
+    })
+  }
+  return _webhookQueue
+}
+
+// Backwards compatibility exports
+export const exportQueue = {
+  get add() { return getExportQueue().add.bind(getExportQueue()) }
+}
+
+export const pdfQueue = {
+  get add() { return getPdfQueue().add.bind(getPdfQueue()) }
+}
+
+export const emailQueue = {
+  get add() { return getEmailQueue().add.bind(getEmailQueue()) }
+}
+
+export const webhookQueue = {
+  get add() { return getWebhookQueue().add.bind(getWebhookQueue()) }
+}
 
 // Job enqueue helpers
 export async function enqueueExport(data: {
