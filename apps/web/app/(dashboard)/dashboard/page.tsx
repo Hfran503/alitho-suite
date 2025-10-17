@@ -74,7 +74,7 @@ export default async function DashboardPage() {
           {recentOrders.length === 0 ? (
             <div className="p-6 text-center text-gray-500">No orders yet</div>
           ) : (
-            recentOrders.map((order) => (
+            recentOrders.map((order: any) => (
               <Link
                 key={order.id}
                 href={`/dashboard/orders/${order.id}`}
