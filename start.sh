@@ -85,4 +85,49 @@ fi
 echo ""
 echo "Starting application..."
 echo "Final REDIS_URL check: ${REDIS_URL:0:30}..."
-exec turbo run start
+
+# Export all environment variables for the standalone server
+export NODE_ENV=production
+export DATABASE_URL="$DATABASE_URL"
+export REDIS_URL="$REDIS_URL"
+export NEXTAUTH_URL="$NEXTAUTH_URL"
+export NEXTAUTH_SECRET="$NEXTAUTH_SECRET"
+export S3_BUCKET="$S3_BUCKET"
+export S3_REGION="$S3_REGION"
+export S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID"
+export S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY"
+export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+export AWS_REGION="$AWS_REGION"
+
+# CRITICAL: Export PACE API variables
+export PACE_API_URL="$PACE_API_URL"
+export PACE_USERNAME="$PACE_USERNAME"
+export PACE_PASSWORD="$PACE_PASSWORD"
+
+echo "Environment variables exported:"
+echo "  PACE_API_URL: ${PACE_API_URL:+SET}"
+echo "  PACE_USERNAME: ${PACE_USERNAME:+SET}"
+echo "  PACE_PASSWORD: ${PACE_PASSWORD:+SET}"
+
+# Start web server using standalone mode (correct way for Next.js standalone)
+cd /app/apps/web
+node .next/standalone/apps/web/server.js &
+WEB_PID=$!
+
+# Start worker
+cd /app/apps/worker
+node dist/index.js &
+WORKER_PID=$!
+
+# Function to cleanup on exit
+cleanup() {
+  echo "Shutting down..."
+  kill $WEB_PID $WORKER_PID 2>/dev/null
+  exit 0
+}
+
+trap cleanup SIGTERM SIGINT
+
+# Wait for both processes
+wait $WEB_PID $WORKER_PID
