@@ -12,3 +12,28 @@ cmds = ["npx turbo run build"]
 
 [start]
 cmd = "./start.sh"
+
+# Environment variables that should be available at runtime
+[variables]
+NODE_ENV = "production"
+# Database
+DATABASE_URL = ""
+SHADOW_DATABASE_URL = ""
+# Redis
+REDIS_URL = ""
+# NextAuth
+NEXTAUTH_URL = ""
+NEXTAUTH_SECRET = ""
+# S3
+S3_BUCKET = ""
+S3_REGION = ""
+S3_ACCESS_KEY_ID = ""
+S3_SECRET_ACCESS_KEY = ""
+# AWS (for secrets)
+AWS_REGION = ""
+AWS_ACCESS_KEY_ID = ""
+AWS_SECRET_ACCESS_KEY = ""
+# PACE API
+PACE_API_URL = ""
+PACE_USERNAME = ""
+PACE_PASSWORD = ""
