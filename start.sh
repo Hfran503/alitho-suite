@@ -7,6 +7,7 @@ echo "Starting Calitho Suite..."
 echo "Environment check:"
 echo "  NODE_ENV: $NODE_ENV"
 echo "  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:+SET}"
+echo "  DATABASE_URL (before): ${DATABASE_URL:+SET (${DATABASE_URL:0:30}...)}"
 echo "  REDIS_URL (before): ${REDIS_URL:0:30}..."
 
 # Load secrets from AWS Secrets Manager in production
