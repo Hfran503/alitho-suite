@@ -86,43 +86,50 @@ async function main() {
 
   console.log('✅ Created test user membership')
 
-  // Create sample orders
-  for (let i = 1; i <= 5; i++) {
-    await prisma.order.create({
-      data: {
-        orderNumber: `ORD-${String(i).padStart(5, '0')}`,
-        status: ['pending', 'processing', 'shipped'][i % 3],
-        customerName: `Customer ${i}`,
-        customerEmail: `customer${i}@example.com`,
-        customerPhone: `+1-555-${String(i).padStart(4, '0')}`,
-        subtotal: 100 * i,
-        tax: 10 * i,
-        total: 110 * i,
-        currency: 'USD',
-        tenantId: tenant.id,
-        items: {
-          create: [
-            {
-              name: `Product ${i}A`,
-              sku: `SKU-${i}A`,
-              quantity: 1,
-              unitPrice: 50 * i,
-              total: 50 * i,
-            },
-            {
-              name: `Product ${i}B`,
-              sku: `SKU-${i}B`,
-              quantity: 1,
-              unitPrice: 50 * i,
-              total: 50 * i,
-            },
-          ],
-        },
-      },
-    })
-  }
+  // Create sample orders (only if they don't exist)
+  const existingOrders = await prisma.order.count({
+    where: { tenantId: tenant.id }
+  })
 
-  console.log('✅ Created 5 sample orders')
+  if (existingOrders === 0) {
+    for (let i = 1; i <= 5; i++) {
+      await prisma.order.create({
+        data: {
+          orderNumber: `ORD-${String(i).padStart(5, '0')}`,
+          status: ['pending', 'processing', 'shipped'][i % 3],
+          customerName: `Customer ${i}`,
+          customerEmail: `customer${i}@example.com`,
+          customerPhone: `+1-555-${String(i).padStart(4, '0')}`,
+          subtotal: 100 * i,
+          tax: 10 * i,
+          total: 110 * i,
+          currency: 'USD',
+          tenantId: tenant.id,
+          items: {
+            create: [
+              {
+                name: `Product ${i}A`,
+                sku: `SKU-${i}A`,
+                quantity: 1,
+                unitPrice: 50 * i,
+                total: 50 * i,
+              },
+              {
+                name: `Product ${i}B`,
+                sku: `SKU-${i}B`,
+                quantity: 1,
+                unitPrice: 50 * i,
+                total: 50 * i,
+              },
+            ],
+          },
+        },
+      })
+    }
+    console.log('✅ Created 5 sample orders')
+  } else {
+    console.log(`✅ Sample orders already exist (${existingOrders} found)`)
+  }
 
   console.log('🎉 Seeding complete!')
 }

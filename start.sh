@@ -68,13 +68,17 @@ fi
 # Seed database with initial data (uses upsert, safe to run multiple times)
 echo ""
 echo "Seeding database with initial data..."
+set +e  # Don't exit on error
 pnpm db:seed
+SEED_EXIT_CODE=$?
+set -e  # Re-enable exit on error
 
-if [ $? -eq 0 ]; then
-  echo "✓ Database seed completed"
+if [ $SEED_EXIT_CODE -eq 0 ]; then
+  echo "✓ Database seed completed successfully"
 else
-  echo "⚠️  Database seeding failed, but continuing..."
-  echo "   This might be okay if data already exists"
+  echo "⚠️  Database seeding had issues (exit code: $SEED_EXIT_CODE)"
+  echo "   This is usually okay if core data (tenant/users) already exists"
+  echo "   Continuing with application startup..."
 fi
 
 # Start the application
