@@ -3,12 +3,7 @@ const nextConfig = {
   output: 'standalone',
   serverExternalPackages: ['@prisma/client', 'bcryptjs'],
   transpilePackages: ['@repo/ui', '@repo/types', '@repo/database'],
-  env: {
-    DATABASE_URL: process.env.DATABASE_URL,
-    REDIS_URL: process.env.REDIS_URL,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-  },
+  // Next.js automatically loads .env files, no need to explicitly map them
   images: {
     remotePatterns: [
       {

@@ -191,3 +191,68 @@ export type PaginationParams = {
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
 }
+
+// ============================================
+// PACE API - JOB SHIPMENT SCHEMAS
+// ============================================
+
+export const jobShipmentSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().optional(),
+  job: z.string().optional(),
+  jobPart: z.string().optional(),
+  jobPartKey: z.string().optional(),
+  customer: z.string().optional(),
+  quantity: z.number().optional(),
+  quantityRemaining: z.number().optional(),
+  dateTime: z.string().optional(), // ISO date-time from PACE
+  shipVia: z.number().optional(),
+  shipViaNote: z.string().optional(),
+  trackingNumber: z.string().optional(),
+  description: z.string().optional(),
+  weight: z.number().optional(),
+  cost: z.number().optional(),
+  quotedPrice: z.number().optional(),
+  shipmentType: z.number().optional(),
+  // Contact info
+  contactFirstName: z.string().optional(),
+  contactLastName: z.string().optional(),
+  contactNumber: z.number().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  // Address info
+  address1: z.string().optional(),
+  address2: z.string().optional(),
+  address3: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  stateKey: z.string().optional(),
+  zip: z.string().optional(),
+  country: z.number().optional(),
+  // Additional fields
+  shipInNameOf: z.string().optional(),
+  shipperName: z.string().optional(),
+  accountNumber: z.string().optional(),
+  invoice: z.number().optional(),
+  assignedTo: z.string().optional(),
+  notes: z.string().optional(),
+  proof: z.boolean().optional(),
+  scheduled: z.boolean().optional(),
+  scheduledFlag: z.number().optional(),
+  // Custom fields
+  u_specialinformation: z.string().optional(),
+  u_create_date: z.string().optional(), // ISO date-time
+  u_csr_qty: z.string().optional(), // Planned Qty (CSR QTY)
+})
+
+export const jobShipmentFilterSchema = z.object({
+  startDate: z.string().optional(), // ISO date string
+  endDate: z.string().optional(), // ISO date string
+  job: z.string().optional(),
+  customer: z.string().optional(),
+  page: z.number().positive().optional(),
+  pageSize: z.number().positive().optional(),
+})
+
+export type JobShipment = z.infer<typeof jobShipmentSchema>
+export type JobShipmentFilter = z.infer<typeof jobShipmentFilterSchema>

@@ -8,6 +8,7 @@ interface NavItem {
   name: string
   href: string
   icon: React.ReactNode
+  submenu?: NavItem[]
 }
 
 const navItems: NavItem[] = [
@@ -28,6 +29,35 @@ const navItems: NavItem[] = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
+  },
+  {
+    name: 'Shipments',
+    href: '/shipments',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+      </svg>
+    ),
+    submenu: [
+      {
+        name: 'All Shipments',
+        href: '/shipments',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        ),
+      },
+      {
+        name: 'XPath Testing',
+        href: '/shipments-by-date',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
     name: 'Customers',
@@ -66,6 +96,7 @@ interface SidebarProps {
 export function Sidebar({ onPinChange }: SidebarProps = {}) {
   const [isHovered, setIsHovered] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([])
   const pathname = usePathname()
 
   const isExpanded = isPinned || isHovered
@@ -76,6 +107,14 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
     if (onPinChange) {
       onPinChange(newPinState)
     }
+  }
+
+  const toggleSubmenu = (href: string) => {
+    setExpandedMenus(prev =>
+      prev.includes(href)
+        ? prev.filter(h => h !== href)
+        : [...prev, href]
+    )
   }
 
   return (
@@ -91,25 +130,84 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
         <ul className="flex-1 space-y-1 px-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+            const hasSubmenu = item.submenu && item.submenu.length > 0
+            const isSubmenuExpanded = expandedMenus.includes(item.href)
+
             return (
               <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                  }`}
-                >
-                  <span className="flex-shrink-0">{item.icon}</span>
-                  <span
-                    className={`whitespace-nowrap transition-opacity duration-300 ${
-                      isExpanded ? 'opacity-100' : 'opacity-0'
+                {hasSubmenu ? (
+                  <>
+                    <button
+                      onClick={() => toggleSubmenu(item.href)}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors w-full ${
+                        isActive
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex-shrink-0">{item.icon}</span>
+                      <span
+                        className={`whitespace-nowrap transition-opacity duration-300 flex-1 text-left ${
+                          isExpanded ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                      {isExpanded && (
+                        <svg
+                          className={`w-4 h-4 transition-transform duration-200 ${
+                            isSubmenuExpanded ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
+                    </button>
+                    {isExpanded && isSubmenuExpanded && item.submenu && (
+                      <ul className="mt-1 space-y-1 ml-4">
+                        {item.submenu.map((subitem) => {
+                          const isSubActive = pathname === subitem.href
+                          return (
+                            <li key={subitem.href}>
+                              <Link
+                                href={subitem.href}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
+                                  isSubActive
+                                    ? 'bg-blue-500 text-white'
+                                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                                }`}
+                              >
+                                <span className="flex-shrink-0">{subitem.icon}</span>
+                                <span className="whitespace-nowrap">{subitem.name}</span>
+                              </Link>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                     }`}
                   >
-                    {item.name}
-                  </span>
-                </Link>
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    <span
+                      className={`whitespace-nowrap transition-opacity duration-300 ${
+                        isExpanded ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
+                      {item.name}
+                    </span>
+                  </Link>
+                )}
               </li>
             )
           })}
