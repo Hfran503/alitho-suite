@@ -55,7 +55,7 @@ async function processExport(job: Job<ExportJobData>) {
     })
 
     // Flatten data for export
-    const flatData = orders.map((order) => ({
+    const flatData = orders.map((order: any) => ({
       orderNumber: order.orderNumber,
       status: order.status,
       customerName: order.customerName,
