@@ -125,7 +125,7 @@ export function UsersSettings() {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="all">All Roles</option>
-            {Object.entries(USER_ROLES).map(([key, value]) => (
+            {Object.entries(USER_ROLES).map(([, value]) => (
               <option key={value} value={value}>
                 {ROLE_LABELS[value]}
               </option>

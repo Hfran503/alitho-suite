@@ -24,7 +24,7 @@ export async function PATCH(
     const { name, email, memberships } = body
 
     // Update user basic info
-    const updatedUser = await db.user.update({
+    await db.user.update({
       where: { id: userId },
       data: {
         name,
@@ -68,7 +68,7 @@ export async function PATCH(
 
 // DELETE /api/admin/users/[userId] - Delete user (optional)
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {

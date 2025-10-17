@@ -5,7 +5,7 @@ import { db } from '@repo/database'
 
 // DELETE /api/admin/users/[userId]/sessions - Delete all sessions for a user (sign out all)
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {

@@ -12,7 +12,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, email, phone, company, bio } = body
+    const { name, email } = body
+    // Note: phone, company, bio fields would need to be added to your Prisma schema
 
     // Update user in database
     const updatedUser = await db.user.update({
@@ -20,8 +21,6 @@ export async function PATCH(request: NextRequest) {
       data: {
         name: name || undefined,
         email: email || undefined,
-        // Note: phone, company, bio fields would need to be added to your Prisma schema
-        // For now, we'll just update name and email
       },
     })
 
@@ -42,7 +41,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 

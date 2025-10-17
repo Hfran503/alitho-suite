@@ -95,7 +95,7 @@ export const authOptions: NextAuthOptions = {
     // Add more providers here (Google, GitHub, OIDC, SAML, etc.)
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
         token.email = user.email

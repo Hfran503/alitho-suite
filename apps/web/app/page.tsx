@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import Link from 'next/link'
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions)
@@ -28,18 +27,6 @@ export default async function HomePage() {
     )
   }
 
-  // Get stats
-  const [orderCount, recentOrders] = await Promise.all([
-    db.order.count({
-      where: { tenantId: membership.tenantId },
-    }),
-    db.order.findMany({
-      where: { tenantId: membership.tenantId },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: { items: true },
-    }),
-  ])
-
+  // Redirect to dashboard
   redirect('/dashboard')
 }

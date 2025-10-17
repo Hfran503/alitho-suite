@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+// import { db } from '@repo/database' // TODO: Uncomment when settings field is added to User model
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -71,7 +71,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 

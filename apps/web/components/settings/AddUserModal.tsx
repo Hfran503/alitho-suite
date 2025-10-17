@@ -11,7 +11,14 @@ interface AddUserModalProps {
 }
 
 export function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string
+    email: string
+    password: string
+    role: typeof USER_ROLES[keyof typeof USER_ROLES]
+    sendInvite: boolean
+    isTemporaryPassword: boolean
+  }>({
     name: '',
     email: '',
     password: '',
@@ -157,10 +164,10 @@ export function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) 
             <select
               id="role"
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value as typeof USER_ROLES[keyof typeof USER_ROLES] })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {Object.entries(USER_ROLES).map(([key, value]) => (
+              {Object.entries(USER_ROLES).map(([, value]) => (
                 <option key={value} value={value}>
                   {ROLE_LABELS[value]}
                 </option>

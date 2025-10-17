@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { ProfileModal } from './ProfileModal'
 import { ChangePasswordModal } from './ChangePasswordModal'
 import { AccountSettingsModal } from './AccountSettingsModal'

@@ -1,11 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { signOut, useSession } from 'next-auth/react'
+import { signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
 export default function ChangePasswordPage() {
-  const { data: session } = useSession()
   const router = useRouter()
   const [formData, setFormData] = useState({
     newPassword: '',
