@@ -44,6 +44,7 @@ model User {
   name          String?
   image         String?
   password      String?   // hashed, nullable for SSO-only users
+  passwordResetRequired Boolean @default(false) // Force password change on next login
 
   // Timestamps
   createdAt DateTime @default(now())

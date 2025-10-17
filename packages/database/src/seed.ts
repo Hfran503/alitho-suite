@@ -20,37 +20,71 @@ async function main() {
 
   console.log('✅ Created tenant:', tenant.slug)
 
-  // Create demo user
-  const passwordHash = await hash('password123', 10)
-  const user = await prisma.user.upsert({
-    where: { email: 'demo@example.com' },
+  // Create admin user
+  const adminPasswordHash = await hash('password123', 10)
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'admin@example.com' },
     update: {},
     create: {
-      email: 'demo@example.com',
-      name: 'Demo User',
-      password: passwordHash,
+      email: 'admin@example.com',
+      name: 'Admin User',
+      password: adminPasswordHash,
+      passwordResetRequired: false,
     },
   })
 
-  console.log('✅ Created user:', user.email)
+  console.log('✅ Created admin user:', adminUser.email)
 
-  // Create membership
+  // Create admin membership
   await prisma.membership.upsert({
     where: {
       userId_tenantId: {
-        userId: user.id,
+        userId: adminUser.id,
         tenantId: tenant.id,
       },
     },
     update: {},
     create: {
-      userId: user.id,
+      userId: adminUser.id,
       tenantId: tenant.id,
-      role: 'owner',
+      role: 'full_admin',
     },
   })
 
-  console.log('✅ Created membership')
+  console.log('✅ Created admin membership')
+
+  // Create test user with temporary password
+  const tempPasswordHash = await hash('temp123', 10)
+  const tempUser = await prisma.user.upsert({
+    where: { email: 'testuser@example.com' },
+    update: {},
+    create: {
+      email: 'testuser@example.com',
+      name: 'Test User',
+      password: tempPasswordHash,
+      passwordResetRequired: true, // ← This forces password change
+    },
+  })
+
+  console.log('✅ Created test user with temporary password:', tempUser.email)
+
+  // Create test user membership
+  await prisma.membership.upsert({
+    where: {
+      userId_tenantId: {
+        userId: tempUser.id,
+        tenantId: tenant.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: tempUser.id,
+      tenantId: tenant.id,
+      role: 'customer_service',
+    },
+  })
+
+  console.log('✅ Created test user membership')
 
   // Create sample orders
   for (let i = 1; i <= 5; i++) {
