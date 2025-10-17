@@ -1,5 +1,4 @@
 import 'dotenv/config'
-import { Worker } from 'bullmq'
 import Redis from 'ioredis'
 import { exportWorker } from './jobs/export'
 import { pdfWorker } from './jobs/pdf'

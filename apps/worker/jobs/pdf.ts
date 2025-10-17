@@ -33,7 +33,7 @@ interface PdfJobData {
 }
 
 async function processPdfGeneration(job: Job<PdfJobData>) {
-  const { tenantId, entityType, entityId, templateName } = job.data
+  const { tenantId, entityType, entityId } = job.data
 
   console.log(`Generating PDF for ${entityType}:${entityId}`)
 

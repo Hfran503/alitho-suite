@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "module": "commonjs",
+    "moduleResolution": "node"
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]
