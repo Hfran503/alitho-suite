@@ -131,7 +131,6 @@ export async function POST(req: NextRequest) {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             total: item.total,
-            metadata: item.metadata,
           })),
         },
       },

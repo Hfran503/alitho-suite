@@ -6,7 +6,7 @@ import { createAuditLog } from '@/lib/audit'
 
 // GET /api/orders/[id] - Get single order
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -126,7 +126,7 @@ export async function PATCH(
 
 // DELETE /api/orders/[id] - Delete order
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
