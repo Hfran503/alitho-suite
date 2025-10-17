@@ -112,6 +112,12 @@ echo "  PACE_PASSWORD: ${PACE_PASSWORD:+SET}"
 
 # Start web server using standalone mode (correct way for Next.js standalone)
 cd /app/apps/web
+
+# Set port and hostname for Docker/Dokploy
+export PORT=3000
+export HOSTNAME="0.0.0.0"
+
+echo "Starting Next.js standalone server on 0.0.0.0:3000..."
 node .next/standalone/apps/web/server.js &
 WEB_PID=$!
 
