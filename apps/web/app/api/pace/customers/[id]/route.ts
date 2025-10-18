@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import type { JobShipment } from '@repo/types'
 import { getPaceApiCredentials } from '@/lib/secrets'
 
-// GET /api/pace/shipments/[id] - Get a single job shipment by primary key
+// GET /api/pace/customers/[id] - Get a single customer by primary key
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -26,11 +25,11 @@ export async function GET(
     }
 
     // Await params before accessing properties
-    const { id: shipmentId } = await params
+    const { id: customerId } = await params
 
-    if (!shipmentId) {
+    if (!customerId) {
       return NextResponse.json(
-        { error: 'Shipment ID is required' },
+        { error: 'Customer ID is required' },
         { status: 400 }
       )
     }
@@ -59,13 +58,8 @@ export async function GET(
     // Prepare Basic Auth header
     const authHeader = `Basic ${Buffer.from(`${paceUsername}:${pacePassword}`).toString('base64')}`
 
-    // Call PACE API to get shipment details
-    const paceUrl = `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${shipmentId}`
-
-    console.log('Fetching shipment from PACE:', {
-      url: paceUrl,
-      shipmentId,
-    })
+    // Call PACE API to get customer details
+    const paceUrl = `${paceApiUrl}/ReadObject/readCustomer?primaryKey=${encodeURIComponent(customerId)}`
 
     const response = await fetch(paceUrl, {
       method: 'POST',
@@ -85,20 +79,9 @@ export async function GET(
         response: errorText,
       })
 
-      // Try to parse error message
-      let errorMessage = `Failed to fetch shipment from PACE API (${response.status} ${response.statusText})`
-      try {
-        const errorJson = JSON.parse(errorText)
-        if (errorJson.message === 'System License Expired') {
-          errorMessage = 'PACE System License Expired. Please contact your PACE administrator to renew the license.'
-        }
-      } catch (e) {
-        // Error text is not JSON, use default message
-      }
-
       return NextResponse.json(
         {
-          error: errorMessage,
+          error: `Failed to fetch customer from PACE API (${response.status} ${response.statusText})`,
           details: errorText,
           status: response.status,
         },
@@ -106,14 +89,14 @@ export async function GET(
       )
     }
 
-    const shipment: JobShipment = await response.json()
+    const customer = await response.json()
 
     return NextResponse.json({
       success: true,
-      data: shipment,
+      data: customer,
     })
   } catch (error) {
-    console.error('Get job shipment error:', error)
+    console.error('Get customer error:', error)
 
     if (error instanceof Error) {
       return NextResponse.json(

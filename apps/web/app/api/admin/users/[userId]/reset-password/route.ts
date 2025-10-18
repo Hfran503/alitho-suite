@@ -4,6 +4,11 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import bcrypt from 'bcryptjs'
 
+// GET handler for build compatibility
+export async function GET() {
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 })
+}
+
 // POST /api/admin/users/[userId]/reset-password - Reset user password
 export async function POST(
   request: Request,

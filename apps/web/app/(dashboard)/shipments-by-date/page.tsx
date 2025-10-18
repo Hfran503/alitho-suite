@@ -1,12 +1,22 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { JobShipment } from '@repo/types'
+import {
+  formatDateTimePT,
+  getTodayRangePT,
+  getLastSevenDaysRangePT,
+  getThisMonthRangePT,
+  dateInputToStartOfDayISO,
+  dateInputToEndOfDayISO,
+} from '@/lib/dateUtils'
+import { getCachedShipments, setCachedShipments } from '@/lib/shipmentsCache'
 
 export default function ShipmentsByDatePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [shipments, setShipments] = useState<JobShipment[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -18,14 +28,33 @@ export default function ShipmentsByDatePage() {
     hasMore: false,
   })
 
-  // Filter state
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  // Filter state - initialize from URL params
+  const [startDate, setStartDate] = useState(searchParams.get('startDate') || '')
+  const [endDate, setEndDate] = useState(searchParams.get('endDate') || '')
 
   const fetchShipments = async (page = 1) => {
     // Require date filters for this page
     if (!startDate || !endDate) {
       setError('Please select both start and end dates')
+      return
+    }
+
+    // Check cache first
+    const cached = getCachedShipments({
+      startDate,
+      endDate,
+      page,
+    })
+
+    if (cached) {
+      setShipments(cached.items)
+      setPagination({
+        page: cached.page,
+        pageSize: cached.pageSize,
+        total: cached.total,
+        totalPages: cached.totalPages,
+        hasMore: cached.hasMore || false,
+      })
       return
     }
 
@@ -37,25 +66,29 @@ export default function ShipmentsByDatePage() {
       params.set('page', page.toString())
       params.set('pageSize', pagination.pageSize.toString())
 
-      // Convert to ISO datetime for API
-      const startDateTime = new Date(startDate + 'T00:00:00')
-      params.set('startDate', startDateTime.toISOString())
-
-      const endDateTime = new Date(endDate + 'T23:59:59.999')
-      params.set('endDate', endDateTime.toISOString())
+      // Convert to ISO datetime for API (using Pacific Time)
+      params.set('startDate', dateInputToStartOfDayISO(startDate))
+      params.set('endDate', dateInputToEndOfDayISO(endDate))
 
       const response = await fetch(`/api/pace/shipments/by-date?${params.toString()}`)
 
       if (!response.ok) {
-        const errorData = await response.json()
+        let errorData: any = {}
+        try {
+          errorData = await response.json()
+        } catch (e) {
+          console.error('Failed to parse error response:', e)
+        }
+
         console.error('API Error Response:', errorData)
+        console.error('Response status:', response.status, response.statusText)
 
         // Check for specific PACE errors
         if (errorData.details?.response?.message === 'System License Expired') {
           throw new Error('PACE System License Expired. Please contact your PACE administrator to renew the license.')
         }
 
-        throw new Error(errorData.error || 'Failed to fetch shipments')
+        throw new Error(errorData.error || errorData.message || `API Error: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
@@ -69,6 +102,16 @@ export default function ShipmentsByDatePage() {
           totalPages: data.data.totalPages,
           hasMore: data.data.hasMore || false,
         })
+
+        // Cache the results
+        setCachedShipments(
+          {
+            startDate,
+            endDate,
+            page,
+          },
+          data.data
+        )
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -79,34 +122,42 @@ export default function ShipmentsByDatePage() {
   }
 
   const handleFilter = () => {
+    // Update URL params
+    const params = new URLSearchParams()
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
+
+    router.push(`/shipments-by-date?${params.toString()}`, { scroll: false })
     fetchShipments(1) // Reset to first page when filtering
   }
+
+  // Auto-fetch on mount if URL params exist
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchShipments(1)
+    }
+  }, [])
 
   const handlePageChange = (newPage: number) => {
     fetchShipments(newPage)
   }
 
   const setToday = () => {
-    const today = new Date().toISOString().split('T')[0]
-    setStartDate(today)
-    setEndDate(today)
+    const range = getTodayRangePT()
+    setStartDate(range.startDate)
+    setEndDate(range.endDate)
   }
 
   const setThisWeek = () => {
-    const today = new Date()
-    const weekAgo = new Date(today)
-    weekAgo.setDate(today.getDate() - 7)
-
-    setStartDate(weekAgo.toISOString().split('T')[0])
-    setEndDate(today.toISOString().split('T')[0])
+    const range = getLastSevenDaysRangePT()
+    setStartDate(range.startDate)
+    setEndDate(range.endDate)
   }
 
   const setThisMonth = () => {
-    const today = new Date()
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-
-    setStartDate(firstDay.toISOString().split('T')[0])
-    setEndDate(today.toISOString().split('T')[0])
+    const range = getThisMonthRangePT()
+    setStartDate(range.startDate)
+    setEndDate(range.endDate)
   }
 
   return (
@@ -180,6 +231,7 @@ export default function ShipmentsByDatePage() {
               setStartDate('')
               setEndDate('')
               setShipments([])
+              router.push('/shipments-by-date', { scroll: false })
             }}
             className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
           >
@@ -296,9 +348,7 @@ export default function ShipmentsByDatePage() {
                         {shipment.id || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {shipment.dateTime
-                          ? new Date(shipment.dateTime).toLocaleString()
-                          : '-'}
+                        {formatDateTimePT(shipment.dateTime)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {shipment.job || '-'}
@@ -348,25 +398,73 @@ export default function ShipmentsByDatePage() {
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className="px-6 py-4 border-t flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Page {pagination.page} {pagination.hasMore && `of ${pagination.totalPages}+`}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handlePageChange(pagination.page - 1)}
-                    disabled={pagination.page === 1 || loading}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(pagination.page + 1)}
-                    disabled={!pagination.hasMore || loading}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
+              <div className="px-6 py-4 border-t">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-gray-700">
+                    Showing {((pagination.page - 1) * pagination.pageSize) + 1} to {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      disabled={pagination.page === 1 || loading}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      First
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(pagination.page - 1)}
+                      disabled={pagination.page === 1 || loading}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      Previous
+                    </button>
+
+                    {/* Page numbers */}
+                    <div className="flex gap-1">
+                      {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                        let pageNum: number
+                        if (pagination.totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (pagination.page <= 3) {
+                          pageNum = i + 1
+                        } else if (pagination.page >= pagination.totalPages - 2) {
+                          pageNum = pagination.totalPages - 4 + i
+                        } else {
+                          pageNum = pagination.page - 2 + i
+                        }
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            disabled={loading}
+                            className={`px-3 py-2 border rounded-md text-sm font-medium ${
+                              pagination.page === pageNum
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                            } disabled:cursor-not-allowed`}
+                          >
+                            {pageNum}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => handlePageChange(pagination.page + 1)}
+                      disabled={pagination.page === pagination.totalPages || loading}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      Next
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(pagination.totalPages)}
+                      disabled={pagination.page === pagination.totalPages || loading}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      Last
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

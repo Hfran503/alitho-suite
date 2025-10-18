@@ -130,14 +130,66 @@ export async function getRedisUrl(): Promise<string> {
 }
 
 /**
+ * Get PACE API credentials from AWS Secrets Manager
+ * Falls back to environment variables if AWS Secrets Manager is not configured
+ */
+export async function getPaceApiCredentials(): Promise<{
+  url: string
+  username: string
+  password: string
+}> {
+  // If using local development, use env vars
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.PACE_API_URL &&
+    process.env.PACE_USERNAME &&
+    process.env.PACE_PASSWORD
+  ) {
+    return {
+      url: process.env.PACE_API_URL,
+      username: process.env.PACE_USERNAME,
+      password: process.env.PACE_PASSWORD,
+    }
+  }
+
+  // Try to fetch from AWS Secrets Manager
+  try {
+    const secretName = process.env.AWS_SECRET_PACE || 'calitho-suite/pace'
+    const secret = await getSecret(secretName)
+
+    const url = secret.PACE_API_URL || secret.url || secret.apiUrl
+    const username = secret.PACE_USERNAME || secret.username
+    const password = secret.PACE_PASSWORD || secret.password
+
+    if (!url || !username || !password) {
+      throw new Error('PACE API credentials incomplete in Secrets Manager')
+    }
+
+    return { url, username, password }
+  } catch (error) {
+    // Fallback to env vars if Secrets Manager fails
+    if (process.env.PACE_API_URL && process.env.PACE_USERNAME && process.env.PACE_PASSWORD) {
+      console.warn('Failed to fetch PACE API secret, using env vars')
+      return {
+        url: process.env.PACE_API_URL,
+        username: process.env.PACE_USERNAME,
+        password: process.env.PACE_PASSWORD,
+      }
+    }
+    throw new Error('PACE API credentials not found in Secrets Manager or environment')
+  }
+}
+
+/**
  * Get all application secrets from AWS Secrets Manager
  * This is useful for initializing the application with all secrets at once
  */
 export async function getAllSecrets() {
-  const [databaseUrl, nextAuthSecret, redisUrl] = await Promise.allSettled([
+  const [databaseUrl, nextAuthSecret, redisUrl, paceApi] = await Promise.allSettled([
     getDatabaseUrl(),
     getNextAuthSecret(),
     getRedisUrl(),
+    getPaceApiCredentials(),
   ])
 
   return {
@@ -148,6 +200,14 @@ export async function getAllSecrets() {
         ? nextAuthSecret.value
         : process.env.NEXTAUTH_SECRET,
     redisUrl: redisUrl.status === 'fulfilled' ? redisUrl.value : process.env.REDIS_URL,
+    paceApi:
+      paceApi.status === 'fulfilled'
+        ? paceApi.value
+        : {
+            url: process.env.PACE_API_URL,
+            username: process.env.PACE_USERNAME,
+            password: process.env.PACE_PASSWORD,
+          },
   }
 }
 

@@ -109,6 +109,25 @@ else
     echo ""
 fi
 
+# 4. PACE API SECRET
+echo -e "${YELLOW}========================================${NC}"
+echo -e "${YELLOW}4. Setting up PACE API secret${NC}"
+echo -e "${YELLOW}========================================${NC}"
+echo "PACE API URL example: http://192.168.1.218/rpc/rest/services"
+read -p "Enter your PACE_API_URL (or press Enter to skip): " PACE_API_URL
+
+if [ ! -z "$PACE_API_URL" ]; then
+    read -p "Enter your PACE_USERNAME: " PACE_USERNAME
+    read -sp "Enter your PACE_PASSWORD: " PACE_PASSWORD
+    echo ""
+
+    SECRET_VALUE="{\"PACE_API_URL\":\"$PACE_API_URL\",\"PACE_USERNAME\":\"$PACE_USERNAME\",\"PACE_PASSWORD\":\"$PACE_PASSWORD\"}"
+    create_secret "calitho-suite/pace" "$SECRET_VALUE" "Calitho Suite PACE API credentials"
+else
+    echo -e "${YELLOW}Skipped PACE API secret${NC}"
+    echo ""
+fi
+
 # Summary
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}✓ AWS Secrets Manager setup complete!${NC}"

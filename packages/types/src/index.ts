@@ -203,15 +203,20 @@ export const jobShipmentSchema = z.object({
   jobPart: z.string().optional(),
   jobPartKey: z.string().optional(),
   customer: z.string().optional(),
+  customerName: z.string().optional(), // Customer name from Customer object
   quantity: z.number().optional(),
   quantityRemaining: z.number().optional(),
   dateTime: z.string().optional(), // ISO date-time from PACE
   shipVia: z.number().optional(),
+  shipViaDescription: z.string().optional(), // Ship Via lookup description
+  shipViaProvider: z.string().optional(), // Ship Provider lookup description
   shipViaNote: z.string().optional(),
   trackingNumber: z.string().optional(),
+  trackingLink: z.string().optional(),
   description: z.string().optional(),
   weight: z.number().optional(),
   cost: z.number().optional(),
+  charges: z.union([z.number(), z.string()]).optional(), // Can be number or string like "Prepaid/Shipper"
   quotedPrice: z.number().optional(),
   shipmentType: z.number().optional(),
   // Contact info
@@ -256,3 +261,51 @@ export const jobShipmentFilterSchema = z.object({
 
 export type JobShipment = z.infer<typeof jobShipmentSchema>
 export type JobShipmentFilter = z.infer<typeof jobShipmentFilterSchema>
+
+// ============================================
+// PACE API - CARTON SCHEMAS
+// ============================================
+
+export const cartonContentSchema = z.object({
+  id: z.number().optional(),
+  content: z.string().optional(),
+  sequence: z.number().optional(),
+  job: z.string().optional(),
+  jobPart: z.string().optional(),
+  jobPartKey: z.string().optional(),
+  quantity: z.number().optional(),
+  contentDescription: z.string().optional(),
+  jobComponent: z.number().optional(),
+  jobProduct: z.number().optional(),
+  jobPartItem: z.number().optional(),
+  u_contentitem: z.string().optional(),
+  note: z.string().optional(),
+  // Lookup descriptions (populated by API)
+  jobDescription: z.string().optional(),
+  jobComponentDescription: z.string().optional(),
+  jobProductDescription: z.string().optional(),
+  // JobComponent specific fields
+  jobComponentItemNumber: z.string().optional(),
+  jobComponentPO: z.string().optional(),
+})
+
+export const cartonSchema = z.object({
+  id: z.number().optional(),
+  count: z.number().optional(),
+  weight: z.number().optional(),
+  quantity: z.number().optional(),
+  totalQuantity: z.number().optional(),
+  trackingNumber: z.string().optional(),
+  trackingLink: z.string().optional(),
+  shipment: z.number().optional(),
+  note: z.string().optional(),
+  skid: z.number().optional(),
+  skidCount: z.number().optional(),
+  totalSkidQuantity: z.number().optional(),
+  actualDateTime: z.string().optional(),
+  // Nested content items
+  contents: z.array(cartonContentSchema).optional(),
+})
+
+export type Carton = z.infer<typeof cartonSchema>
+export type CartonContent = z.infer<typeof cartonContentSchema>

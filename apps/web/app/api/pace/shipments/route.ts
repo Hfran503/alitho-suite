@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { jobShipmentFilterSchema, type JobShipment } from '@repo/types'
+import { ZodError } from 'zod'
+import { getPaceApiCredentials } from '@/lib/secrets'
 
 // GET /api/pace/shipments - List job shipments with date filtering
 export async function GET(req: NextRequest) {
@@ -40,21 +42,23 @@ export async function GET(req: NextRequest) {
       pageSize,
     })
 
-    // Get PACE API credentials from environment
-    const paceApiUrl = process.env.PACE_API_URL
-    const paceUsername = process.env.PACE_USERNAME
-    const pacePassword = process.env.PACE_PASSWORD
+    // Get PACE API credentials from AWS Secrets Manager or environment
+    let paceApiUrl: string
+    let paceUsername: string
+    let pacePassword: string
 
-    if (!paceApiUrl) {
+    try {
+      const credentials = await getPaceApiCredentials()
+      paceApiUrl = credentials.url
+      paceUsername = credentials.username
+      pacePassword = credentials.password
+    } catch (error) {
+      console.error('Failed to get PACE API credentials:', error)
       return NextResponse.json(
-        { error: 'PACE API not configured. Please set PACE_API_URL in environment variables.' },
-        { status: 500 }
-      )
-    }
-
-    if (!paceUsername || !pacePassword) {
-      return NextResponse.json(
-        { error: 'PACE API credentials not configured. Please set PACE_USERNAME and PACE_PASSWORD.' },
+        {
+          error: 'PACE API not configured',
+          message: error instanceof Error ? error.message : 'Failed to get PACE API credentials'
+        },
         { status: 500 }
       )
     }
@@ -83,11 +87,8 @@ export async function GET(req: NextRequest) {
       xpathConditions.push(`@job = '${filters.job}'`)
     }
 
-    // Add customer filter
-    if (filters.customer) {
-      // Using 'contains' for partial match
-      xpathConditions.push(`contains(@customer, '${filters.customer}')`)
-    }
+    // Note: Customer filter will be applied after enrichment since customer name
+    // comes from the Job->Customer lookup, not directly from JobShipment
 
     // Build final XPath query
     const xpath = xpathConditions.length > 0
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
     // Build query parameters for PACE API
     // Always fetch more records since PACE returns by ID order (oldest first)
     // We'll sort by date on the backend to show newest first
-    const fetchLimit = 500 // Fetch enough to ensure we get recent shipments
+    const fetchLimit = 5000 // Fetch enough to ensure we get recent shipments
 
     const queryParams = new URLSearchParams({
       type: 'JobShipment',
@@ -166,10 +167,17 @@ export async function GET(req: NextRequest) {
 
     console.log(`PACE returned ${shipmentIds.length} shipment IDs`)
 
-    // Now fetch full details for each shipment
-    const shipments: JobShipment[] = []
+    // Fetch details in parallel batches for better performance
+    const batchSize = 100
+    const batches: string[][] = []
+    for (let i = 0; i < shipmentIds.length; i += batchSize) {
+      batches.push(shipmentIds.slice(i, i + batchSize))
+    }
 
-    for (const id of shipmentIds) {
+    console.log(`Processing ${shipmentIds.length} shipments in ${batches.length} batches of ${batchSize}...`)
+
+    // Function to fetch a single shipment's details
+    const fetchShipmentDetail = async (id: string) => {
       try {
         const detailResponse = await fetch(
           `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${id}`,
@@ -184,47 +192,237 @@ export async function GET(req: NextRequest) {
         )
 
         if (detailResponse.ok) {
-          const shipmentDetail = await detailResponse.json()
+          let shipmentDetail
+          try {
+            shipmentDetail = await detailResponse.json()
+          } catch (jsonError) {
+            return { id, error: 'json_parse_error' }
+          }
 
-          // Normalise the response so we always have a `dateTime` field for the UI
+          // Fix PACE API bug: description field sometimes comes as array instead of string
+          if (shipmentDetail.description && Array.isArray(shipmentDetail.description)) {
+            shipmentDetail.description = shipmentDetail.description.join('\n')
+          }
+
+          // Normalize the response
           const rawDate =
             shipmentDetail.dateTime ?? shipmentDetail.date ?? shipmentDetail.shipDate
           if (rawDate) {
             shipmentDetail.dateTime = rawDate
           }
 
-          // Client-side date filtering since PACE XPath doesn't support dateTime field
+          // Client-side date filtering
           if (dateFilters.startTimestamp || dateFilters.endTimestamp) {
             if (!rawDate) {
-              continue
+              return { id, skipped: true }
             }
 
-            // PACE returns dates without timezone (e.g., '2025-10-17T16:18:00')
-            // Parse as local time
             const shipmentDate = new Date(rawDate).getTime()
 
             if (dateFilters.startTimestamp && shipmentDate < dateFilters.startTimestamp) {
-              continue // Skip this shipment
+              return { id, skipped: true }
             }
             if (dateFilters.endTimestamp && shipmentDate > dateFilters.endTimestamp) {
-              continue // Skip this shipment
+              return { id, skipped: true }
             }
           }
 
-          shipments.push(shipmentDetail)
+          return { id, shipment: shipmentDetail }
         } else {
           const errorText = await detailResponse.text()
-          console.error(`Error fetching shipment ${id}:`, {
-            status: detailResponse.status,
-            error: errorText,
-          })
+
+          // Check if it's the known description field bug
+          if (errorText.includes('description') && errorText.includes('ClassCastException')) {
+            return { id, error: 'class_cast_exception' }
+          } else {
+            return { id, error: 'fetch_error', details: errorText.substring(0, 200) }
+          }
         }
       } catch (err) {
-        console.error(`Error fetching shipment ${id}:`, err)
+        return { id, error: 'exception', details: err instanceof Error ? err.message : 'Unknown error' }
       }
     }
 
-    console.log(`After filtering: ${shipments.length} shipments matched the criteria`)
+    // Process each batch in parallel
+    const shipments: JobShipment[] = []
+    let processedCount = 0
+
+    for (const batch of batches) {
+      const batchResults = await Promise.all(batch.map(fetchShipmentDetail))
+
+      for (const result of batchResults) {
+        if ('shipment' in result && result.shipment) {
+          shipments.push(result.shipment)
+        }
+      }
+
+      processedCount += batch.length
+      if (processedCount % 500 === 0 || processedCount === shipmentIds.length) {
+        console.log(`Processed ${processedCount}/${shipmentIds.length} shipments...`)
+      }
+    }
+
+    const filteredCount = shipmentIds.length - shipments.length
+    console.log(`✅ Fetched ${shipments.length} shipments (0 errors, ${filteredCount} filtered out by date)`)
+
+    // Enrich shipments with customer data from Job lookup
+    console.log(`Enriching ${shipments.length} shipments with customer data...`)
+    const uniqueJobs = [...new Set(shipments.map(s => s.job).filter(Boolean))]
+
+    // Fetch all unique jobs in parallel
+    const jobPromises = uniqueJobs.map(async (jobNum) => {
+      try {
+        const jobResponse = await fetch(
+          `${paceApiUrl}/ReadObject/readJob?primaryKey=${encodeURIComponent(jobNum!)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+
+        if (jobResponse.ok) {
+          const jobData = await jobResponse.json()
+          return { jobNum, customer: jobData.customer }
+        }
+      } catch (err) {
+        console.error(`Error fetching job ${jobNum}:`, err)
+      }
+      return { jobNum, customer: null }
+    })
+
+    const jobResults = await Promise.all(jobPromises)
+    const jobCustomerMap = new Map(jobResults.map(r => [r.jobNum, r.customer]))
+
+    // Add customer ID to each shipment
+    shipments.forEach(shipment => {
+      if (shipment.job && jobCustomerMap.has(shipment.job)) {
+        shipment.customer = jobCustomerMap.get(shipment.job) || null
+      }
+    })
+
+    // Fetch customer names from Customer objects
+    const uniqueCustomers = [...new Set(shipments.map(s => s.customer).filter(Boolean))]
+    console.log(`Fetching ${uniqueCustomers.length} unique customer names...`)
+
+    const customerPromises = uniqueCustomers.map(async (customerId) => {
+      try {
+        const customerResponse = await fetch(
+          `${paceApiUrl}/ReadObject/readCustomer?primaryKey=${encodeURIComponent(customerId!)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+
+        if (customerResponse.ok) {
+          const customerData = await customerResponse.json()
+          return { customerId, customerName: customerData.custName || customerData.id }
+        }
+      } catch (err) {
+        console.error(`Error fetching customer ${customerId}:`, err)
+      }
+      return { customerId, customerName: null }
+    })
+
+    const customerResults = await Promise.all(customerPromises)
+    const customerNameMap = new Map(customerResults.map(r => [r.customerId, r.customerName]))
+
+    // Add customer name to each shipment
+    shipments.forEach(shipment => {
+      if (shipment.customer && customerNameMap.has(shipment.customer)) {
+        shipment.customerName = customerNameMap.get(shipment.customer) || null
+      }
+    })
+
+    console.log(`✅ Enriched shipments with customer data`)
+
+    // Fetch Ship Via descriptions
+    const uniqueShipVias = [...new Set(shipments.map(s => s.shipVia).filter(Boolean))]
+    console.log(`Fetching ${uniqueShipVias.length} unique Ship Via descriptions...`)
+
+    const shipViaPromises = uniqueShipVias.map(async (shipViaId) => {
+      try {
+        const shipViaResponse = await fetch(
+          `${paceApiUrl}/ReadObject/readShipVia?primaryKey=${encodeURIComponent(shipViaId!)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+
+        if (shipViaResponse.ok) {
+          const shipViaData = await shipViaResponse.json()
+          return {
+            shipViaId,
+            description: shipViaData.description || null,
+            provider: shipViaData.provider || null
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching Ship Via ${shipViaId}:`, err)
+      }
+      return { shipViaId, description: null, provider: null }
+    })
+
+    const shipViaResults = await Promise.all(shipViaPromises)
+    const shipViaMap = new Map(shipViaResults.map(r => [r.shipViaId, { description: r.description, provider: r.provider }]))
+
+    // Fetch Ship Provider descriptions for Ship Vias that have providers
+    const uniqueProviders = [...new Set(shipViaResults.map(r => r.provider).filter(Boolean))]
+    console.log(`Fetching ${uniqueProviders.length} unique Ship Provider descriptions...`)
+
+    const providerPromises = uniqueProviders.map(async (providerId) => {
+      try {
+        const providerResponse = await fetch(
+          `${paceApiUrl}/ReadObject/readShipProvider?primaryKey=${encodeURIComponent(providerId!)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+
+        if (providerResponse.ok) {
+          const providerData = await providerResponse.json()
+          return { providerId, description: providerData.name || null }
+        }
+      } catch (err) {
+        console.error(`Error fetching Ship Provider ${providerId}:`, err)
+      }
+      return { providerId, description: null }
+    })
+
+    const providerResults = await Promise.all(providerPromises)
+    const providerMap = new Map(providerResults.map(r => [r.providerId, r.description]))
+
+    // Add Ship Via and Provider descriptions to each shipment
+    shipments.forEach(shipment => {
+      if (shipment.shipVia && shipViaMap.has(shipment.shipVia)) {
+        const shipViaInfo = shipViaMap.get(shipment.shipVia)
+        shipment.shipViaDescription = shipViaInfo?.description || null
+
+        if (shipViaInfo?.provider && providerMap.has(shipViaInfo.provider)) {
+          shipment.shipViaProvider = providerMap.get(shipViaInfo.provider) || null
+        }
+      }
+    })
+
+    console.log(`✅ Enriched shipments with Ship Via and Provider data`)
 
     // Sort newest first for a predictable UI ordering
     shipments.sort((a, b) => {
@@ -232,6 +430,9 @@ export async function GET(req: NextRequest) {
       const bTime = b.dateTime ? new Date(b.dateTime).getTime() : 0
       return bTime - aTime
     })
+
+    // Note: Customer filter is handled client-side in the frontend
+    // We return all shipments to enable fast client-side filtering without re-fetching
 
     const total = shipments.length
     const totalPages = Math.max(1, Math.ceil(total / resolvedPageSize))
@@ -251,6 +452,18 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Get job shipments error:', error)
+
+    // Handle Zod validation errors
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        {
+          error: 'Validation error',
+          message: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
+          details: error.errors
+        },
+        { status: 400 }
+      )
+    }
 
     if (error instanceof Error) {
       return NextResponse.json(

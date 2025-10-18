@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 
+// GET handler for build compatibility
+export async function GET() {
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 })
+}
+
 // DELETE /api/admin/users/[userId]/sessions - Delete all sessions for a user (sign out all)
 export async function DELETE(
   _request: Request,

@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { jobShipmentFilterSchema, type JobShipment } from '@repo/types'
+import { ZodError } from 'zod'
+import { getPaceApiCredentials } from '@/lib/secrets'
 
 // GET /api/pace/shipments/by-date - List job shipments with date filtering in XPath
 export async function GET(req: NextRequest) {
@@ -36,21 +38,23 @@ export async function GET(req: NextRequest) {
       pageSize,
     })
 
-    // Get PACE API credentials from environment
-    const paceApiUrl = process.env.PACE_API_URL
-    const paceUsername = process.env.PACE_USERNAME
-    const pacePassword = process.env.PACE_PASSWORD
+    // Get PACE API credentials from AWS Secrets Manager or environment
+    let paceApiUrl: string
+    let paceUsername: string
+    let pacePassword: string
 
-    if (!paceApiUrl) {
+    try {
+      const credentials = await getPaceApiCredentials()
+      paceApiUrl = credentials.url
+      paceUsername = credentials.username
+      pacePassword = credentials.password
+    } catch (error) {
+      console.error('Failed to get PACE API credentials:', error)
       return NextResponse.json(
-        { error: 'PACE API not configured. Please set PACE_API_URL in environment variables.' },
-        { status: 500 }
-      )
-    }
-
-    if (!paceUsername || !pacePassword) {
-      return NextResponse.json(
-        { error: 'PACE API credentials not configured. Please set PACE_USERNAME and PACE_PASSWORD.' },
+        {
+          error: 'PACE API not configured',
+          message: error instanceof Error ? error.message : 'Failed to get PACE API credentials'
+        },
         { status: 500 }
       )
     }
@@ -169,7 +173,7 @@ export async function GET(req: NextRequest) {
     const failedShipmentIds: string[] = []
 
     // Process shipments in parallel batches for better performance
-    const BATCH_SIZE = 50 // Fetch 50 shipments at a time in parallel
+    const BATCH_SIZE = 100 // Fetch 100 shipments at a time in parallel
     const batches: string[][] = []
 
     for (let i = 0; i < shipmentIds.length; i += BATCH_SIZE) {
@@ -364,6 +368,47 @@ export async function GET(req: NextRequest) {
       console.error(`   These shipments are excluded from results until fixed in PACE database\n`)
     }
 
+    // Enrich shipments with customer data from Job lookup
+    console.log(`Enriching ${shipments.length} shipments with customer data...`)
+    const uniqueJobs = [...new Set(shipments.map(s => s.job).filter(Boolean))]
+
+    // Fetch all unique jobs in parallel
+    const jobPromises = uniqueJobs.map(async (jobNum) => {
+      try {
+        const jobResponse = await fetch(
+          `${paceApiUrl}/ReadObject/readJob?primaryKey=${encodeURIComponent(jobNum!)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+
+        if (jobResponse.ok) {
+          const jobData = await jobResponse.json()
+          return { jobNum, customer: jobData.customer }
+        }
+      } catch (err) {
+        console.error(`Error fetching job ${jobNum}:`, err)
+      }
+      return { jobNum, customer: null }
+    })
+
+    const jobResults = await Promise.all(jobPromises)
+    const jobCustomerMap = new Map(jobResults.map(r => [r.jobNum, r.customer]))
+
+    // Add customer to each shipment
+    shipments.forEach(shipment => {
+      if (shipment.job && jobCustomerMap.has(shipment.job)) {
+        shipment.customer = jobCustomerMap.get(shipment.job) || null
+      }
+    })
+
+    console.log(`✅ Enriched shipments with customer data`)
+
     // Sort by dateTime descending for consistent ordering
     shipments.sort((a, b) => {
       const aTime = a.dateTime ? new Date(a.dateTime).getTime() : 0
@@ -390,6 +435,18 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Get job shipments error:', error)
+
+    // Handle Zod validation errors
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        {
+          error: 'Validation error',
+          message: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
+          details: error.errors
+        },
+        { status: 400 }
+      )
+    }
 
     if (error instanceof Error) {
       return NextResponse.json(

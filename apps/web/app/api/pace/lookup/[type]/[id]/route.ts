@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
+import { getPaceApiCredentials } from '@/lib/secrets'
 
 // Allowed lookup types for security
 const ALLOWED_TYPES = ['ShipVia', 'ShipmentType', 'ShipProvider', 'Job', 'SalesPerson', 'JobContact', 'Contact'] as const
@@ -66,21 +67,23 @@ export async function GET(
       )
     }
 
-    // Get PACE API credentials from environment
-    const paceApiUrl = process.env.PACE_API_URL
-    const paceUsername = process.env.PACE_USERNAME
-    const pacePassword = process.env.PACE_PASSWORD
+    // Get PACE API credentials from AWS Secrets Manager or environment
+    let paceApiUrl: string
+    let paceUsername: string
+    let pacePassword: string
 
-    if (!paceApiUrl) {
+    try {
+      const credentials = await getPaceApiCredentials()
+      paceApiUrl = credentials.url
+      paceUsername = credentials.username
+      pacePassword = credentials.password
+    } catch (error) {
+      console.error('Failed to get PACE API credentials:', error)
       return NextResponse.json(
-        { error: 'PACE API not configured' },
-        { status: 500 }
-      )
-    }
-
-    if (!paceUsername || !pacePassword) {
-      return NextResponse.json(
-        { error: 'PACE API credentials not configured' },
+        {
+          error: 'PACE API not configured',
+          message: error instanceof Error ? error.message : 'Failed to get PACE API credentials'
+        },
         { status: 500 }
       )
     }
