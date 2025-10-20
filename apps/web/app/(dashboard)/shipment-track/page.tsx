@@ -82,7 +82,7 @@ export default function LabelsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="w-full p-6">
         <div className="text-center py-12 text-gray-500">
           Loading shipping labels...
         </div>
@@ -92,7 +92,7 @@ export default function LabelsPage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="w-full p-6">
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
           {error}
         </div>
@@ -101,12 +101,12 @@ export default function LabelsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="w-full p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Shipping Labels</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Shipment Track</h1>
         <p className="text-sm text-gray-600 mt-1">
-          Track all shipping labels created with EasyPost and ShipStation
+          Track and manage all shipping labels
         </p>
       </div>
 
@@ -284,13 +284,34 @@ export default function LabelsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {label.shipTo && (
-                        <div className="text-sm">
+                        <div className="text-sm max-w-xs">
                           <div className="font-medium text-gray-900">
                             {label.shipTo.name || label.shipTo.company_name}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {label.shipTo.city_locality}, {label.shipTo.state_province} {label.shipTo.postal_code}
-                          </div>
+                          {label.shipTo.street1 && (
+                            <div className="text-xs text-gray-600">
+                              {label.shipTo.street1}
+                            </div>
+                          )}
+                          {label.shipTo.street2 && (
+                            <div className="text-xs text-gray-600">
+                              {label.shipTo.street2}
+                            </div>
+                          )}
+                          {(label.shipTo.city_locality || label.shipTo.city || label.shipTo.state_province || label.shipTo.state || label.shipTo.postal_code || label.shipTo.zip) && (
+                            <div className="text-xs text-gray-500">
+                              {[
+                                label.shipTo.city_locality || label.shipTo.city,
+                                label.shipTo.state_province || label.shipTo.state,
+                                label.shipTo.postal_code || label.shipTo.zip
+                              ].filter(Boolean).join(', ')}
+                            </div>
+                          )}
+                          {(label.shipTo.country_code || label.shipTo.country) && (
+                            <div className="text-xs text-gray-500">
+                              {label.shipTo.country_code || label.shipTo.country}
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
