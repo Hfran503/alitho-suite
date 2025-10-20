@@ -187,6 +187,59 @@ async function main() {
     console.log(`✅ Sample orders already exist (${existingOrders} found)`)
   }
 
+  // Create sample shipment type mappings (only if they don't exist)
+  const existingMappings = await prisma.shipmentTypeMapping.count({
+    where: { tenantId: tenant.id }
+  })
+
+  if (existingMappings === 0) {
+    // Example mappings - adjust IDs based on your PACE ShipmentType table
+    const mappings = [
+      {
+        plannedTypeId: 1,
+        plannedTypeName: 'UPS Ground - Planned',
+        completedTypeId: 2,
+        completedTypeName: 'UPS Ground - Completed',
+      },
+      {
+        plannedTypeId: 3,
+        plannedTypeName: 'UPS 2nd Day Air - Planned',
+        completedTypeId: 4,
+        completedTypeName: 'UPS 2nd Day Air - Completed',
+      },
+      {
+        plannedTypeId: 5,
+        plannedTypeName: 'UPS Next Day Air - Planned',
+        completedTypeId: 6,
+        completedTypeName: 'UPS Next Day Air - Completed',
+      },
+      {
+        plannedTypeId: 7,
+        plannedTypeName: 'FedEx Ground - Planned',
+        completedTypeId: 8,
+        completedTypeName: 'FedEx Ground - Completed',
+      },
+      {
+        plannedTypeId: 9,
+        plannedTypeName: 'USPS Priority - Planned',
+        completedTypeId: 10,
+        completedTypeName: 'USPS Priority - Completed',
+      },
+    ]
+
+    for (const mapping of mappings) {
+      await prisma.shipmentTypeMapping.create({
+        data: {
+          ...mapping,
+          tenantId: tenant.id,
+        },
+      })
+    }
+    console.log(`✅ Created ${mappings.length} shipment type mappings`)
+  } else {
+    console.log(`✅ Shipment type mappings already exist (${existingMappings} found)`)
+  }
+
   console.log('🎉 Seeding complete!')
 }
 

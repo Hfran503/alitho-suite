@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev",
+    "dev:secrets": "./scripts/dev-with-secrets.sh",
     "build": "turbo run build",
     "start": "./start.sh",
     "start:dev": "turbo run start",

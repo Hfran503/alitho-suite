@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { JobShipment, Carton } from '@repo/types'
 import { formatDateOnlyPT } from '@/lib/dateUtils'
+import { ProcessShipmentParcelModal } from '@/components/shipments/ProcessShipmentParcelModal'
+import { ProcessShipmentShipStationModal } from '@/components/shipments/ProcessShipmentShipStationModal'
 
 export default function ShipmentDetailsPage() {
   const params = useParams()
@@ -17,7 +19,15 @@ export default function ShipmentDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'details' | 'special' | 'other'>('details')
   const [showProcessModal, setShowProcessModal] = useState(false)
+  const [showProcessParcelModal, setShowProcessParcelModal] = useState(false)
   const [editingCarton, setEditingCarton] = useState<Carton | null>(null)
+  const [cancelingLabels, setCancelingLabels] = useState(false)
+  const [reprintingLabel, setReprintingLabel] = useState(false)
+
+  // Integration detection state
+  const [activeIntegration, setActiveIntegration] = useState<'easypost' | 'shipstation' | null>(null)
+  const [integrationLoading, setIntegrationLoading] = useState(false)
+  const [integrationCheckRequested, setIntegrationCheckRequested] = useState(false)
 
   // Lookup descriptions
   const [shipViaDescription, setShipViaDescription] = useState<string | null>(null)
@@ -222,6 +232,174 @@ export default function ShipmentDetailsPage() {
       alert('Failed to delete all cartons. Please try again.')
     } finally {
       setLoadingCartons(false)
+    }
+  }
+
+  // Check which shipping integration is active
+  const checkActiveIntegration = async () => {
+    setIntegrationLoading(true)
+    try {
+      // Check both integrations in parallel
+      const [easypostRes, shipstationRes] = await Promise.all([
+        fetch('/api/integrations/easypost'),
+        fetch('/api/integrations/shipstation'),
+      ])
+
+      const [easypostData, shipstationData] = await Promise.all([
+        easypostRes.json(),
+        shipstationRes.json(),
+      ])
+
+      // Determine which one is enabled AND configured (has API keys)
+      // Both conditions must be true: enabled in DB and has API keys in Secrets Manager
+      if (easypostData.data?.enabled && easypostData.data?.configured) {
+        setActiveIntegration('easypost')
+      } else if (shipstationData.data?.enabled && shipstationData.data?.configured) {
+        setActiveIntegration('shipstation')
+      } else {
+        setActiveIntegration(null)
+      }
+    } catch (err) {
+      console.error('Failed to check integrations:', err)
+      setActiveIntegration(null)
+    } finally {
+      setIntegrationLoading(false)
+    }
+  }
+
+  // Handle Process Parcel button click with integration detection
+  const handleProcessParcelClick = async () => {
+    setIntegrationCheckRequested(true)
+    await checkActiveIntegration()
+
+    // The actual modal opening will happen after integration is determined
+    // We'll use useEffect to watch for activeIntegration changes
+  }
+
+  // Open the appropriate modal based on active integration
+  useEffect(() => {
+    // Only run if user clicked the button
+    if (!integrationCheckRequested) return
+    if (integrationLoading) return // Still checking
+
+    // Only proceed if we just checked and have a result
+    if (activeIntegration === 'easypost') {
+      setShowProcessParcelModal(true)
+      setIntegrationCheckRequested(false) // Reset flag
+    } else if (activeIntegration === 'shipstation') {
+      setShowProcessParcelModal(true) // Will use ShipStation modal
+      setIntegrationCheckRequested(false) // Reset flag
+    } else if (activeIntegration === null && !integrationLoading) {
+      // Only show error if we explicitly checked and found nothing
+      const errorMsg =
+        'No shipping integration is configured. Please configure EasyPost or ShipStation in Settings before processing parcels.'
+      setError(errorMsg)
+      alert(errorMsg)
+      setIntegrationCheckRequested(false) // Reset flag
+    }
+  }, [activeIntegration, integrationLoading, integrationCheckRequested])
+
+  const handleReprintLabel = async (carton: Carton) => {
+    if (!carton.id || reprintingLabel) return
+
+    setReprintingLabel(true)
+
+    try {
+      // Get label from database
+      const response = await fetch('/api/labels/reprint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cartonId: carton.id,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to retrieve label')
+      }
+
+      const data = await response.json()
+
+      if (data.data.labelUrl) {
+        window.open(data.data.labelUrl, '_blank')
+      } else {
+        alert('No label URL found for this carton')
+      }
+    } catch (err) {
+      console.error('Reprint label error:', err)
+      alert(err instanceof Error ? err.message : 'Failed to reprint label. Please try again.')
+    } finally {
+      setReprintingLabel(false)
+    }
+  }
+
+  const handleReprintAllLabels = async () => {
+    const labelsToReprint = cartons.filter(c => c.trackingNumber)
+
+    if (labelsToReprint.length === 0) {
+      alert('No labels found to reprint')
+      return
+    }
+
+    // Just reprint the first carton's label (which contains all labels in one PDF)
+    const firstCarton = labelsToReprint[0]
+    await handleReprintLabel(firstCarton)
+  }
+
+  const handleCancelLabels = async () => {
+    if (!cartons || cartons.length === 0) return
+
+    // Check if any cartons have tracking numbers
+    const hasTracking = cartons.some(c => c.trackingNumber)
+
+    const message = hasTracking
+      ? `Are you sure you want to cancel ALL labels and delete ALL cartons?\n\nThis will:\n• Refund ${cartons.length} EasyPost label(s) (if applicable)\n• Delete all ${cartons.length} carton(s) and their contents\n• Clear tracking and cost data from the shipment\n\nThis action cannot be undone.`
+      : `Are you sure you want to delete ALL ${cartons.length} carton(s) and clear shipment data?\n\nThis action cannot be undone.`
+
+    const confirmed = window.confirm(message)
+    if (!confirmed) return
+
+    try {
+      setCancelingLabels(true)
+      setError(null)
+
+      const response = await fetch(`/api/pace/shipments/${shipmentId}/cancel-labels`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to cancel labels')
+      }
+
+      const result = await response.json()
+      console.log('Cancel labels result:', result)
+
+      // Show summary
+      let summary = `Successfully cancelled labels and cleaned up data.\n\n`
+      summary += `• Deleted cartons: ${result.data.deletedCartons}\n`
+      if (result.data.canceledLabels > 0) {
+        summary += `• Refunded labels: ${result.data.canceledLabels}\n`
+      }
+      if (result.data.failedCancellations > 0) {
+        summary += `• Failed label refunds: ${result.data.failedCancellations}\n`
+      }
+      if (result.data.failedDeletions > 0) {
+        summary += `• Failed deletions: ${result.data.failedDeletions}\n`
+      }
+
+      alert(summary)
+
+      // Refresh data
+      await fetchCartons()
+      await fetchShipment()
+    } catch (err) {
+      console.error('Cancel labels error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to cancel labels')
+      alert('Failed to cancel labels. Please try again.')
+    } finally {
+      setCancelingLabels(false)
     }
   }
 
@@ -541,40 +719,105 @@ export default function ShipmentDetailsPage() {
                 <div className="text-gray-400 text-6xl mb-4">📦</div>
                 <h3 className="text-xl font-semibold text-gray-600 mb-2">No Cartons Found</h3>
                 <p className="text-gray-500 mb-6">This shipment hasn't been processed yet.</p>
-                <button
-                  onClick={() => setShowProcessModal(true)}
-                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Process Shipment
-                </button>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => setShowProcessModal(true)}
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Process Shipment
+                  </button>
+                  <button
+                    onClick={handleProcessParcelClick}
+                    disabled={integrationLoading}
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    {integrationLoading ? 'Checking Integration...' : 'Process Shipment for Parcel'}
+                  </button>
+                </div>
               </div>
             ) : (
               <div>
                 {/* Action Buttons when cartons exist */}
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => setShowProcessModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Create More Cartons
-                  </button>
+                {(() => {
+                  // Check if any cartons have labels (processed via parcel modal)
+                  const hasLabels = cartons.some(c => c.trackingNumber)
 
-                  <button
-                    onClick={handleDeleteAllCartons}
-                    className="inline-flex items-center px-4 py-2 border border-red-600 text-sm font-medium rounded-md text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete All Cartons
-                  </button>
-                </div>
+                  return (
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex gap-3">
+                        {!hasLabels && (
+                          <>
+                            <button
+                              onClick={() => setShowProcessModal(true)}
+                              className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              Create More Cartons
+                            </button>
+
+                            <button
+                              onClick={handleProcessParcelClick}
+                              disabled={integrationLoading}
+                              className="inline-flex items-center px-4 py-2 border border-green-600 text-sm font-medium rounded-md text-green-600 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                              </svg>
+                              {integrationLoading ? 'Checking...' : 'Process Parcel'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3">
+                        {hasLabels && (
+                          <>
+                            <button
+                              onClick={handleReprintAllLabels}
+                              className="inline-flex items-center px-4 py-2 border border-green-600 text-sm font-medium rounded-md text-green-600 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              Reprint Labels
+                            </button>
+
+                            <button
+                              onClick={handleCancelLabels}
+                              disabled={cancelingLabels}
+                              className="inline-flex items-center px-4 py-2 border border-orange-600 text-sm font-medium rounded-md text-orange-600 bg-white hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              {cancelingLabels ? 'Canceling Labels...' : 'Cancel All Labels'}
+                            </button>
+                          </>
+                        )}
+
+                        {!hasLabels && (
+                          <button
+                            onClick={handleDeleteAllCartons}
+                            className="inline-flex items-center px-4 py-2 border border-red-600 text-sm font-medium rounded-md text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete All Cartons
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -594,6 +837,9 @@ export default function ShipmentDetailsPage() {
                       </th>
                       <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Weight
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cost
                       </th>
                       <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Tracking
@@ -711,6 +957,11 @@ export default function ShipmentDetailsPage() {
                             {carton.weight ? `${carton.weight} lbs` : '-'}
                           </span>
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <span className="text-sm font-semibold text-green-600">
+                            {carton.cost ? `$${typeof carton.cost === 'string' ? parseFloat(carton.cost).toFixed(2) : carton.cost.toFixed(2)}` : '-'}
+                          </span>
+                        </td>
                         <td className="px-4 py-3">
                           {carton.trackingNumber ? (
                             <span className="text-xs font-mono text-gray-900 block truncate max-w-xs" title={carton.trackingNumber}>
@@ -721,13 +972,47 @@ export default function ShipmentDetailsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-center">
-                          <button
-                            onClick={() => setEditingCarton(carton)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3"
-                            title="Edit carton"
-                          >
-                            Edit
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            {carton.trackingNumber ? (
+                              <>
+                                <span className="text-gray-400 text-sm font-medium cursor-not-allowed" title="Cannot edit cartons with labels">
+                                  Edit
+                                </span>
+                                <span className="text-gray-400 text-sm font-medium cursor-not-allowed" title="Cannot delete individual labeled cartons. Use 'Cancel All Labels' instead.">
+                                  Delete
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setEditingCarton(carton)}
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                  title="Edit carton"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`Delete carton #${carton.id}?`)) return
+                                    setLoadingCartons(true)
+                                    try {
+                                      await fetch(`/api/pace/cartons/${carton.id}`, { method: 'DELETE' })
+                                      await fetchCartons()
+                                      await fetchShipment()
+                                    } catch (err) {
+                                      alert('Failed to delete carton')
+                                    } finally {
+                                      setLoadingCartons(false)
+                                    }
+                                  }}
+                                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                  title="Delete carton"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -756,7 +1041,21 @@ export default function ShipmentDetailsPage() {
                             })()}
                           </span>
                         </td>
-                        <td colSpan={3} className="px-4 py-4">
+                        <td className="px-4 py-4 text-right">
+                          <span className="text-sm text-gray-500">-</span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="text-lg font-bold text-green-600">
+                            {(() => {
+                              const totalCost = cartons.reduce((sum, carton) => {
+                                const cost = carton.cost ? (typeof carton.cost === 'string' ? parseFloat(carton.cost) : carton.cost) : 0
+                                return sum + cost
+                              }, 0)
+                              return totalCost > 0 ? `$${totalCost.toFixed(2)}` : '-'
+                            })()}
+                          </span>
+                        </td>
+                        <td colSpan={2} className="px-4 py-4">
                           <div className="flex items-center gap-4">
                             <div className="text-sm text-gray-700">
                               <span className="font-semibold">
@@ -919,6 +1218,38 @@ export default function ShipmentDetailsPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* Process Shipment for Parcel Modal - Show appropriate modal based on active integration */}
+      {activeIntegration === 'easypost' && (
+        <ProcessShipmentParcelModal
+          isOpen={showProcessParcelModal}
+          onClose={() => {
+            setShowProcessParcelModal(false)
+            setActiveIntegration(null) // Reset for next time
+          }}
+          onSuccess={() => {
+            fetchCartons()
+            setActiveIntegration(null) // Reset for next time
+          }}
+          shipment={shipment}
+        />
+      )}
+
+      {activeIntegration === 'shipstation' && (
+        <ProcessShipmentShipStationModal
+          isOpen={showProcessParcelModal}
+          onClose={() => {
+            setShowProcessParcelModal(false)
+            setActiveIntegration(null) // Reset for next time
+          }}
+          onSuccess={() => {
+            fetchCartons()
+            setActiveIntegration(null) // Reset for next time
+          }}
+          shipment={shipment}
+          companyName={companyName}
+        />
       )}
 
       {/* Edit Carton Modal */}

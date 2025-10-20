@@ -209,9 +209,10 @@ export async function GET(
         }
         const data = await response.json()
         console.log('JobPart data received:', data)
-        // Use the composite primaryKey as the ID
+        // Format ID as "part:job:partNum" for consistent parsing in the frontend
+        // compositePrimaryKey is already in "job:partNum" format, so prepend "part:"
         return {
-          id: data.primaryKey || compositePrimaryKey,
+          id: `part:${data.primaryKey || compositePrimaryKey}`,
           description: data.description || `Part ${compositePrimaryKey}`,
           partName: data.partName,
           job: data.job,

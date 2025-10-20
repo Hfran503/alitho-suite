@@ -28,10 +28,13 @@ model Tenant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  memberships Membership[]
-  orders      Order[]
-  attachments Attachment[]
-  auditLogs   AuditLog[]
+  memberships          Membership[]
+  orders               Order[]
+  attachments          Attachment[]
+  auditLogs            AuditLog[]
+  integrations         Integration[]
+  shippingLabels       ShippingLabel[]
+  shipmentTypeMappings ShipmentTypeMapping[]
 
   @@index([slug])
   @@index([status])
@@ -271,6 +274,135 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([action])
   @@index([createdAt])
+}
+
+// ============================================
+// INTEGRATIONS
+// ============================================
+
+model Integration {
+  id          String   @id @default(cuid())
+
+  // Integration info
+  provider    String   // e.g., "easypost", "stripe", "sendgrid"
+  enabled     Boolean  @default(true)
+
+  // Configuration metadata (non-sensitive data only)
+  // Actual credentials are stored in AWS Secrets Manager
+  config      Json?    // e.g., {"mode": "test", "webhookUrl": "..."}
+
+  // AWS Secrets Manager reference
+  secretName  String?  // e.g., "calitho-suite/integrations/easypost/{tenantId}"
+
+  // Tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@index([provider])
+  @@index([enabled])
+}
+
+// ============================================
+// Shipment Type Mappings
+// Maps planned shipment types to their completed counterparts
+// ============================================
+
+model ShipmentTypeMapping {
+  id                    String   @id @default(cuid())
+
+  // PACE shipment type IDs
+  plannedTypeId         Int      // e.g., "1" for "UPS Ground - Planned"
+  plannedTypeName       String   // e.g., "UPS Ground - Planned" (for display)
+  completedTypeId       Int      // e.g., "2" for "UPS Ground - Completed"
+  completedTypeName     String   // e.g., "UPS Ground - Completed" (for display)
+
+  // Tenant
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([tenantId, plannedTypeId])
+  @@unique([tenantId, completedTypeId])
+  @@index([tenantId])
+}
+
+// ============================================
+// SHIPPING LABELS
+// ============================================
+
+model ShippingLabel {
+  id          String   @id @default(cuid())
+
+  // PACE references
+  paceShipmentId  Int      // PACE JobShipment ID
+  paceCartonId    Int?     // PACE Carton ID (optional, for multi-carton shipments)
+
+  // Shipping provider info
+  provider        String   // "easypost" or "shipstation"
+  providerShipmentId  String?  // External shipment ID from provider
+  providerLabelId     String?  // External label ID from provider
+
+  // Label details
+  trackingNumber  String
+  labelUrl        String   // URL to download the label PDF
+  labelFormat     String?  // e.g., "pdf", "zpl", "png"
+
+  // Carrier info
+  carrier         String   // e.g., "USPS", "UPS", "FedEx"
+  service         String   // e.g., "Priority Mail", "Ground"
+
+  // Shipping addresses (JSON for flexibility)
+  shipFrom        Json
+  shipTo          Json
+
+  // Package details
+  weight          Decimal? @db.Decimal(10, 2)
+  length          Decimal? @db.Decimal(10, 2)
+  width           Decimal? @db.Decimal(10, 2)
+  height          Decimal? @db.Decimal(10, 2)
+
+  // Cost details
+  cost            Decimal  @db.Decimal(10, 2)
+  currency        String   @default("USD")
+
+  // Status
+  status          String   @default("active") // active, voided, refunded
+  voidedAt        DateTime?
+  refundedAt      DateTime?
+
+  // Return label info
+  isReturnLabel   Boolean  @default(false)
+  outboundLabelId String?  // Reference to the outbound label ID if this is a return label
+  rmaNumber       String?  // Return Merchandise Authorization number
+
+  // Additional metadata
+  metadata        Json?    // Store any additional provider-specific data
+
+  // Tenant
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([paceShipmentId])
+  @@index([paceCartonId])
+  @@index([trackingNumber])
+  @@index([provider])
+  @@index([status])
+  @@index([createdAt])
+  @@index([isReturnLabel])
 }
 
 // ============================================

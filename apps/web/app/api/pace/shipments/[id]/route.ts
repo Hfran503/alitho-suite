@@ -128,3 +128,79 @@ export async function GET(
     )
   }
 }
+
+// PATCH /api/pace/shipments/[id] - Update shipment address
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const membership = await db.membership.findFirst({
+      where: { userId: session.user.id },
+    })
+
+    if (!membership) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
+    }
+
+    const { id: shipmentId } = await params
+    const body = await req.json()
+    const { address } = body
+
+    if (!address) {
+      return NextResponse.json({ error: 'Address data is required' }, { status: 400 })
+    }
+
+    const credentials = await getPaceApiCredentials()
+    const authHeader = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`
+
+    // Update the shipment in PACE
+    const updateData: any = {}
+    if (address.city) updateData.shipCity = address.city
+    if (address.state) updateData.shipState = address.state
+    if (address.zip) updateData.shipZip = address.zip
+    if (address.street1) updateData.shipStreet = address.street1
+    if (address.street2) updateData.shipStreet2 = address.street2
+
+    const paceUrl = `${credentials.url}/UpdateObject/updateJobShipment`
+    const response = await fetch(paceUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        id: parseInt(shipmentId),
+        ...updateData,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('PACE update shipment error:', errorText)
+      return NextResponse.json(
+        { error: 'Failed to update shipment in PACE', details: errorText },
+        { status: response.status }
+      )
+    }
+
+    const result = await response.json()
+
+    return NextResponse.json({
+      success: true,
+      data: result,
+    })
+  } catch (error: any) {
+    console.error('Update shipment error:', error)
+    return NextResponse.json(
+      { error: 'Failed to update shipment', message: error.message },
+      { status: 500 }
+    )
+  }
+}

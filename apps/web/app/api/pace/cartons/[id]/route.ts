@@ -76,7 +76,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/pace/cartons/[id] - Delete carton
+// DELETE /api/pace/cartons/[id] - Delete carton and refund label if applicable
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -101,7 +101,59 @@ export async function DELETE(
     const paceApiUrl = credentials.url
     const authHeader = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`
 
-    // Use PACE DeleteObject endpoint to delete the carton
+    // Step 1: Read the carton first to get shipment ID and check for EasyPost label
+    const readCartonUrl = `${paceApiUrl}/ReadObject/readCarton?primaryKey=${cartonId}`
+    const cartonResponse = await fetch(readCartonUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: authHeader,
+      },
+      body: '',
+    })
+
+    let shipmentId = null
+    let labelRefunded = false
+    let refundError = null
+
+    if (cartonResponse.ok) {
+      const carton = await cartonResponse.json()
+      shipmentId = carton.shipment
+
+      // Step 2: Try to refund EasyPost label if shipment ID exists
+      let easypostShipmentId = carton.u_easypost_shipment_id
+
+      // If not in custom field, try to extract from note
+      if (!easypostShipmentId && carton.note) {
+        const match = carton.note.match(/EasyPost:\s*([a-zA-Z0-9_]+)/)
+        if (match) {
+          easypostShipmentId = match[1]
+        }
+      }
+
+      if (easypostShipmentId) {
+        try {
+          const { getEasyPostClient } = await import('@/lib/easypost')
+          const easypost = await getEasyPostClient(membership.tenantId)
+
+          console.log(`Attempting to refund EasyPost label ${easypostShipmentId} for carton ${cartonId}`)
+
+          const shipment = await easypost.Shipment.retrieve(easypostShipmentId)
+
+          if (shipment.postage_label && shipment.postage_label.id) {
+            const refund = await easypost.Shipment.refund(easypostShipmentId)
+            labelRefunded = true
+            console.log(`Successfully refunded label for carton ${cartonId}, status: ${refund.refund_status}`)
+          }
+        } catch (error: any) {
+          console.error(`Failed to refund label for carton ${cartonId}:`, error)
+          refundError = error.message
+          // Continue with deletion even if refund fails
+        }
+      }
+    }
+
+    // Step 3: Delete the carton from PACE
     const deleteUrl = `${paceApiUrl}/DeleteObject/DeleteObject?${new URLSearchParams({
       type: 'Carton',
       key: cartonId,
@@ -132,7 +184,25 @@ export async function DELETE(
 
     console.log('Carton deleted successfully')
 
-    return NextResponse.json({ success: true, message: 'Carton deleted' })
+    // Step 4: Update shipment tracking if we have a shipment ID
+    if (shipmentId) {
+      try {
+        await fetch(`${paceApiUrl.replace('/rpc/rest/services', '')}/api/pace/shipments/${shipmentId}/update-tracking`, {
+          method: 'POST',
+        })
+        console.log('Updated shipment tracking after carton deletion')
+      } catch (error) {
+        console.error('Failed to update shipment tracking:', error)
+        // Don't fail the deletion if tracking update fails
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Carton deleted',
+      labelRefunded,
+      refundError,
+    })
   } catch (error) {
     console.error('Delete carton error:', error)
     return NextResponse.json(

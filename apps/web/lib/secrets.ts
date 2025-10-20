@@ -1,6 +1,9 @@
 import {
   SecretsManagerClient,
   GetSecretValueCommand,
+  CreateSecretCommand,
+  UpdateSecretCommand,
+  DeleteSecretCommand,
 } from '@aws-sdk/client-secrets-manager'
 
 // Initialize the Secrets Manager client
@@ -84,12 +87,7 @@ export async function getDatabaseUrl(): Promise<string> {
  * Falls back to environment variables if AWS Secrets Manager is not configured
  */
 export async function getNextAuthSecret(): Promise<string> {
-  // If using local development, use env var
-  if (process.env.NODE_ENV === 'development' && process.env.NEXTAUTH_SECRET) {
-    return process.env.NEXTAUTH_SECRET
-  }
-
-  // Try to fetch from AWS Secrets Manager
+  // Try to fetch from AWS Secrets Manager first (even in development)
   try {
     const secretName = process.env.AWS_SECRET_NEXTAUTH || 'calitho-suite/nextauth'
     const secret = await getSecret(secretName)
@@ -97,7 +95,7 @@ export async function getNextAuthSecret(): Promise<string> {
   } catch (error) {
     // Fallback to env var if Secrets Manager fails
     if (process.env.NEXTAUTH_SECRET) {
-      console.warn('Failed to fetch NextAuth secret, using env var')
+      console.warn('Failed to fetch NextAuth secret from AWS, using env var')
       return process.env.NEXTAUTH_SECRET
     }
     throw new Error('NEXTAUTH_SECRET not found in Secrets Manager or environment')
@@ -217,4 +215,241 @@ export async function getAllSecrets() {
  */
 export function clearSecretsCache() {
   secretsCache.clear()
+}
+
+// ============================================
+// INTEGRATION CREDENTIALS (EASYPOST, etc.)
+// ============================================
+
+/**
+ * Get EasyPost API key from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to get the API key for
+ * @returns The EasyPost API key
+ */
+export async function getEasyPostApiKey(
+  tenantId: string,
+  mode: 'test' | 'production' = 'test'
+): Promise<string> {
+  const secretName = `calitho-suite/integrations/easypost/${tenantId}`
+
+  try {
+    const secret = await getSecret(secretName, true) // Now stored as JSON
+    const apiKey = mode === 'test' ? secret.testApiKey : secret.productionApiKey
+
+    if (!apiKey) {
+      throw new Error(`EasyPost ${mode} API key not found for tenant ${tenantId}`)
+    }
+
+    return apiKey
+  } catch (error) {
+    throw new Error(`EasyPost API keys not found for tenant ${tenantId}`)
+  }
+}
+
+/**
+ * Save EasyPost API keys to AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to save the API keys for
+ * @param testApiKey - The EasyPost test API key (optional)
+ * @param productionApiKey - The EasyPost production API key (optional)
+ */
+export async function saveEasyPostApiKey(
+  tenantId: string,
+  testApiKey?: string,
+  productionApiKey?: string
+): Promise<void> {
+  const secretName = `calitho-suite/integrations/easypost/${tenantId}`
+
+  // Get existing keys if they exist
+  let existingSecret: any = {}
+  try {
+    existingSecret = await getSecret(secretName, true)
+  } catch (error) {
+    // Secret doesn't exist yet, will create new one
+  }
+
+  // Merge with new keys (only update provided keys)
+  const secretValue = {
+    testApiKey: testApiKey || existingSecret.testApiKey,
+    productionApiKey: productionApiKey || existingSecret.productionApiKey,
+  }
+
+  const secretString = JSON.stringify(secretValue)
+
+  try {
+    // Try to update existing secret first
+    const updateCommand = new UpdateSecretCommand({
+      SecretId: secretName,
+      SecretString: secretString,
+    })
+
+    await client.send(updateCommand)
+
+    // Update cache
+    secretsCache.set(secretName, secretValue)
+  } catch (error: any) {
+    // If secret doesn't exist, create it
+    if (error.name === 'ResourceNotFoundException') {
+      const createCommand = new CreateSecretCommand({
+        Name: secretName,
+        SecretString: secretString,
+        Description: `EasyPost API keys for tenant ${tenantId}`,
+        Tags: [
+          { Key: 'Application', Value: 'calitho-suite' },
+          { Key: 'Integration', Value: 'easypost' },
+          { Key: 'TenantId', Value: tenantId },
+        ],
+      })
+
+      await client.send(createCommand)
+
+      // Update cache
+      secretsCache.set(secretName, secretValue)
+    } else {
+      throw error
+    }
+  }
+}
+
+/**
+ * Delete EasyPost API key from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to delete the API key for
+ */
+export async function deleteEasyPostApiKey(tenantId: string): Promise<void> {
+  const secretName = `calitho-suite/integrations/easypost/${tenantId}`
+
+  try {
+    const deleteCommand = new DeleteSecretCommand({
+      SecretId: secretName,
+      ForceDeleteWithoutRecovery: false, // Allow 30-day recovery window
+    })
+
+    await client.send(deleteCommand)
+
+    // Clear from cache
+    secretsCache.delete(secretName)
+  } catch (error: any) {
+    // Ignore if secret doesn't exist
+    if (error.name !== 'ResourceNotFoundException') {
+      throw error
+    }
+  }
+}
+
+// ============================================
+// SHIPSTATION INTEGRATION CREDENTIALS
+// ============================================
+
+/**
+ * Get ShipStation API key from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to get the API key for
+ * @param mode - The mode (test or production)
+ * @returns The ShipStation API key
+ */
+export async function getShipStationApiKey(
+  tenantId: string,
+  mode: 'test' | 'production' = 'test'
+): Promise<string> {
+  const secretName = `calitho-suite/integrations/shipstation/${tenantId}`
+
+  try {
+    const secret = await getSecret(secretName, true) // Stored as JSON
+    const apiKey = mode === 'test' ? secret.testApiKey : secret.productionApiKey
+
+    if (!apiKey) {
+      throw new Error(`ShipStation ${mode} API key not found for tenant ${tenantId}`)
+    }
+
+    return apiKey
+  } catch (error) {
+    throw new Error(`ShipStation API keys not found for tenant ${tenantId}`)
+  }
+}
+
+/**
+ * Save ShipStation API keys to AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to save the API keys for
+ * @param testApiKey - The ShipStation test API key (optional)
+ * @param productionApiKey - The ShipStation production API key (optional)
+ */
+export async function saveShipStationApiKey(
+  tenantId: string,
+  testApiKey?: string,
+  productionApiKey?: string
+): Promise<void> {
+  const secretName = `calitho-suite/integrations/shipstation/${tenantId}`
+
+  // Get existing keys if they exist
+  let existingSecret: any = {}
+  try {
+    existingSecret = await getSecret(secretName, true)
+  } catch (error) {
+    // Secret doesn't exist yet, will create new one
+  }
+
+  // Merge with new keys (only update provided keys)
+  const secretValue = {
+    testApiKey: testApiKey || existingSecret.testApiKey,
+    productionApiKey: productionApiKey || existingSecret.productionApiKey,
+  }
+
+  const secretString = JSON.stringify(secretValue)
+
+  try {
+    // Try to update existing secret first
+    const updateCommand = new UpdateSecretCommand({
+      SecretId: secretName,
+      SecretString: secretString,
+    })
+
+    await client.send(updateCommand)
+
+    // Update cache
+    secretsCache.set(secretName, secretValue)
+  } catch (error: any) {
+    // If secret doesn't exist, create it
+    if (error.name === 'ResourceNotFoundException') {
+      const createCommand = new CreateSecretCommand({
+        Name: secretName,
+        SecretString: secretString,
+        Description: `ShipStation API keys for tenant ${tenantId}`,
+        Tags: [
+          { Key: 'Application', Value: 'calitho-suite' },
+          { Key: 'Integration', Value: 'shipstation' },
+          { Key: 'TenantId', Value: tenantId },
+        ],
+      })
+
+      await client.send(createCommand)
+
+      // Update cache
+      secretsCache.set(secretName, secretValue)
+    } else {
+      throw error
+    }
+  }
+}
+
+/**
+ * Delete ShipStation API key from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to delete the API key for
+ */
+export async function deleteShipStationApiKey(tenantId: string): Promise<void> {
+  const secretName = `calitho-suite/integrations/shipstation/${tenantId}`
+
+  try {
+    const deleteCommand = new DeleteSecretCommand({
+      SecretId: secretName,
+      ForceDeleteWithoutRecovery: false, // Allow 30-day recovery window
+    })
+
+    await client.send(deleteCommand)
+
+    // Clear from cache
+    secretsCache.delete(secretName)
+  } catch (error: any) {
+    // Ignore if secret doesn't exist
+    if (error.name !== 'ResourceNotFoundException') {
+      throw error
+    }
+  }
 }

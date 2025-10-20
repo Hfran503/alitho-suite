@@ -303,6 +303,10 @@ export const cartonSchema = z.object({
   skidCount: z.number().optional(),
   totalSkidQuantity: z.number().optional(),
   actualDateTime: z.string().optional(),
+  cost: z.union([z.number(), z.string()]).optional(), // Shipping cost for this carton
+  u_easypost_shipment_id: z.string().optional(), // EasyPost shipment ID for refund/reprint
+  u_shipstation_shipment_id: z.string().optional(), // ShipStation shipment ID for reprint
+  u_shipstation_label_id: z.string().optional(), // ShipStation label ID for reprint
   // Nested content items
   contents: z.array(cartonContentSchema).optional(),
 })
