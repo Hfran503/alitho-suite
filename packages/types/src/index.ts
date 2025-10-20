@@ -225,6 +225,8 @@ export const jobShipmentSchema = z.object({
   contactNumber: z.number().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
+  // Bill-to Contact (can be number ID or expanded Contact object)
+  shipBillToContact: z.union([z.number(), z.any()]).optional(),
   // Address info
   address1: z.string().optional(),
   address2: z.string().optional(),
