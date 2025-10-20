@@ -60,7 +60,8 @@ export async function GET(
     const authHeader = `Basic ${Buffer.from(`${paceUsername}:${pacePassword}`).toString('base64')}`
 
     // Call PACE API to get shipment details
-    const paceUrl = `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${shipmentId}`
+    // Expand shipBillToContact to get the full Contact object with zip code
+    const paceUrl = `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${shipmentId}&expand=shipBillToContact`
 
     console.log('Fetching shipment from PACE:', {
       url: paceUrl,
@@ -107,6 +108,72 @@ export async function GET(
     }
 
     const shipment: JobShipment = await response.json()
+
+    // If shipBillToContact is a number (Contact ID), fetch the Contact details
+    if (shipment.shipBillToContact && typeof shipment.shipBillToContact === 'number') {
+      try {
+        const contactUrl = `${paceApiUrl}/ReadObject/readContact?primaryKey=${shipment.shipBillToContact}`
+        console.log('Fetching shipBillToContact from PACE:', {
+          url: contactUrl,
+          contactId: shipment.shipBillToContact,
+        })
+
+        const contactResponse = await fetch(contactUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': authHeader,
+          },
+          body: '',
+        })
+
+        if (contactResponse.ok) {
+          const contact = await contactResponse.json()
+          console.log('Fetched contact:', contact)
+
+          // If contact.country is a number (Country ID), fetch the Country details to get isoCountry
+          if (contact.country && typeof contact.country === 'number') {
+            try {
+              const countryUrl = `${paceApiUrl}/ReadObject/readCountry?primaryKey=${contact.country}`
+              console.log('Fetching country from PACE:', {
+                url: countryUrl,
+                countryId: contact.country,
+              })
+
+              const countryResponse = await fetch(countryUrl, {
+                method: 'POST',
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': authHeader,
+                },
+                body: '',
+              })
+
+              if (countryResponse.ok) {
+                const countryData = await countryResponse.json()
+                console.log('Fetched country:', countryData)
+                // Add the ISO country code to the contact object
+                contact.countryCode = countryData.isoCountry || countryData.iso || 'US'
+              } else {
+                console.error('Failed to fetch country:', countryResponse.status, countryResponse.statusText)
+                contact.countryCode = 'US' // Default to US if fetch fails
+              }
+            } catch (err) {
+              console.error('Error fetching country:', err)
+              contact.countryCode = 'US' // Default to US if error
+            }
+          }
+
+          // Replace the ID with the full Contact object
+          shipment.shipBillToContact = contact as any
+        } else {
+          console.error('Failed to fetch contact:', contactResponse.status, contactResponse.statusText)
+        }
+      } catch (err) {
+        console.error('Error fetching shipBillToContact:', err)
+        // Keep the contact ID if fetching fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

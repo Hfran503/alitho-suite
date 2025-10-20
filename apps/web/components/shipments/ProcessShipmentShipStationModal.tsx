@@ -145,6 +145,18 @@ export function ProcessShipmentShipStationModal({
     reference3: '',
   })
 
+  // Advanced options state
+  const [advancedOptions, setAdvancedOptions] = useState({
+    billToAccount: '',
+    billToParty: 'sender' as 'sender' | 'recipient' | 'third_party',
+    billToCountryCode: 'US',
+    billToPostalCode: '',
+    containsAlcohol: false,
+    saturdayDelivery: false,
+    notificationsEmail: '',
+    confirmation: 'none' as 'none' | 'delivery' | 'signature' | 'adult_signature' | 'direct_signature',
+  })
+
   // Set default reference 1 when modal opens: Job# - CL{ShipmentID}
   useEffect(() => {
     if (isOpen && shipment?.job && shipment?.id) {
@@ -154,6 +166,37 @@ export function ProcessShipmentShipStationModal({
       }))
     }
   }, [isOpen, shipment?.job, shipment?.id])
+
+  // Auto-populate billing options from shipment data when modal opens
+  useEffect(() => {
+    if (isOpen && shipment) {
+      // Check if shipping charges is set to third party or ship bill to
+      // The field is 'charges' in PACE JobShipment
+      const shippingCharges = shipment.charges?.toLowerCase()
+      const isThirdPartyBilling = shippingCharges === 'third party/ship bill to' ||
+                                  shippingCharges === 'third party' ||
+                                  shippingCharges === 'ship bill to'
+
+      console.log('Checking billing options:', {
+        charges: shipment.charges,
+        isThirdPartyBilling,
+        accountNumber: shipment.accountNumber,
+        shipBillToContact: shipment.shipBillToContact,
+        shipBillToContactType: typeof shipment.shipBillToContact,
+        shipBillToContactKeys: shipment.shipBillToContact ? Object.keys(shipment.shipBillToContact) : null,
+      })
+
+      if (isThirdPartyBilling) {
+        setAdvancedOptions(prev => ({
+          ...prev,
+          billToParty: 'third_party',
+          billToAccount: shipment.accountNumber || prev.billToAccount,
+          billToCountryCode: shipment.shipBillToContact?.countryCode || prev.billToCountryCode,
+          billToPostalCode: shipment.shipBillToContact?.zip || prev.billToPostalCode,
+        }))
+      }
+    }
+  }, [isOpen, shipment])
 
   // Step 5 data - ShipStation creates outbound label and optionally return label
   const [labelData, setLabelData] = useState<{
@@ -365,6 +408,30 @@ export function ProcessShipmentShipStationModal({
           }
         }
 
+        // Build advanced options object (only include non-default values)
+        const advancedOptionsPayload: any = {}
+        if (advancedOptions.billToAccount) {
+          advancedOptionsPayload.bill_to_account = advancedOptions.billToAccount
+        }
+        if (advancedOptions.billToParty && advancedOptions.billToParty !== 'sender') {
+          advancedOptionsPayload.bill_to_party = advancedOptions.billToParty
+        }
+        if (advancedOptions.billToCountryCode && advancedOptions.billToParty === 'third_party') {
+          advancedOptionsPayload.bill_to_country_code = advancedOptions.billToCountryCode
+        }
+        if (advancedOptions.billToPostalCode && advancedOptions.billToParty === 'third_party') {
+          advancedOptionsPayload.bill_to_postal_code = advancedOptions.billToPostalCode
+        }
+        if (advancedOptions.containsAlcohol) {
+          advancedOptionsPayload.contains_alcohol = true
+        }
+        if (advancedOptions.saturdayDelivery) {
+          advancedOptionsPayload.saturday_delivery = true
+        }
+        if (advancedOptions.notificationsEmail) {
+          advancedOptionsPayload.NotificationsEmail = advancedOptions.notificationsEmail
+        }
+
         // Create outbound label with ShipStation
         const createResponse = await fetch('/api/shipstation/labels/create', {
           method: 'POST',
@@ -378,6 +445,8 @@ export function ProcessShipmentShipStationModal({
             packages,
             shipDate: shipDate ? new Date(shipDate).toISOString() : undefined,
             isReturnLabel: false, // Always create outbound first
+            advancedOptions: Object.keys(advancedOptionsPayload).length > 0 ? advancedOptionsPayload : undefined,
+            confirmation: advancedOptions.confirmation !== 'none' ? advancedOptions.confirmation : undefined,
           }),
         })
 
@@ -1321,6 +1390,202 @@ export function ProcessShipmentShipStationModal({
                     </div>
                   )}
                 </div>
+
+                {/* Advanced Options (Optional) */}
+                <details className="bg-white border-2 border-gray-200 rounded-lg shadow-sm">
+                  <summary className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors font-bold text-sm text-gray-900 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      </svg>
+                      Advanced Options
+                      <span className="text-xs font-normal text-gray-500">(Optional)</span>
+                    </span>
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+
+                  <div className="px-4 pb-4 pt-2 space-y-4 border-t border-gray-200">
+                    {/* Info banner about carrier-specific options */}
+                    <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-800">
+                      <strong>Note:</strong> Not all carriers support all advanced options. Options may vary based on the selected service: {selectedRate?.carrier} - {selectedRate?.service}
+                    </div>
+
+                    {/* Billing Options */}
+                    <div className="space-y-3">
+                      <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Billing Options</h5>
+
+                      {(() => {
+                        const shippingCharges = shipment?.charges?.toLowerCase()
+                        const isThirdPartyBilling = shippingCharges === 'third party/ship bill to' ||
+                                                    shippingCharges === 'third party' ||
+                                                    shippingCharges === 'ship bill to'
+
+                        return isThirdPartyBilling && (
+                          <div className="bg-green-50 border border-green-200 rounded p-2 text-xs text-green-800">
+                            <strong>✓ Auto-populated:</strong> Billing set to Third Party from shipment settings (Shipping Charges: {shipment?.charges})
+                          </div>
+                        )
+                      })()}
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Bill To Party</label>
+                        <select
+                          value={advancedOptions.billToParty}
+                          onChange={(e) => setAdvancedOptions({
+                            ...advancedOptions,
+                            billToParty: e.target.value as 'sender' | 'recipient' | 'third_party'
+                          })}
+                          className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="sender">Sender (Default)</option>
+                          <option value="recipient">Recipient (FedEx Ground Collect)</option>
+                          <option value="third_party">Third Party</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-0.5">Who pays for shipping costs</p>
+                      </div>
+
+                      {advancedOptions.billToParty === 'third_party' && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Bill To Account <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={advancedOptions.billToAccount}
+                              onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToAccount: e.target.value })}
+                              placeholder={shipment?.accountNumber || "Account number"}
+                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {shipment?.accountNumber ? `From shipment: ${shipment.accountNumber}` : 'Third party account number (from shipment.accountNumber)'}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Country Code <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={advancedOptions.billToCountryCode}
+                                onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToCountryCode: e.target.value.toUpperCase() })}
+                                placeholder={shipment?.shipBillToContact?.countryCode || "US"}
+                                maxLength={2}
+                                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {shipment?.shipBillToContact?.countryCode ? `From contact: ${shipment.shipBillToContact.countryCode}` : 'ISO 3166-1 alpha-2 (from shipBillToContact.countryCode)'}
+                              </p>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Postal Code <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={advancedOptions.billToPostalCode}
+                                onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToPostalCode: e.target.value })}
+                                placeholder={shipment?.shipBillToContact?.zip || "12345"}
+                                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {shipment?.shipBillToContact?.zip ? `From contact: ${shipment.shipBillToContact.zip}` : 'Validated for FedEx (from shipBillToContact)'}
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Delivery Options */}
+                    <div className="space-y-3 pt-3 border-t border-gray-200">
+                      <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Delivery Options</h5>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Signature Confirmation</label>
+                        <select
+                          value={advancedOptions.confirmation}
+                          onChange={(e) => setAdvancedOptions({
+                            ...advancedOptions,
+                            confirmation: e.target.value as 'none' | 'delivery' | 'signature' | 'adult_signature' | 'direct_signature'
+                          })}
+                          className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="none">No Signature Required</option>
+                          <option value="delivery">Delivery Confirmation (Signature Required)</option>
+                          <option value="signature">Signature Required</option>
+                          <option value="adult_signature">Adult Signature Required (21+)</option>
+                          <option value="direct_signature">Direct Signature (Recipient Only)</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Signature requirements (additional charges may apply)
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={advancedOptions.saturdayDelivery}
+                            onChange={(e) => setAdvancedOptions({ ...advancedOptions, saturdayDelivery: e.target.checked })}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-xs font-medium text-gray-700">Saturday Delivery</span>
+                        </label>
+                        <p className="text-xs text-gray-500 ml-6">Request Saturday delivery (additional charges may apply)</p>
+                      </div>
+                    </div>
+
+                    {/* Package Options */}
+                    <div className="space-y-3 pt-3 border-t border-gray-200">
+                      <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Package Options</h5>
+
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={advancedOptions.containsAlcohol}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setAdvancedOptions({
+                                ...advancedOptions,
+                                containsAlcohol: checked,
+                                // Auto-select adult signature if alcohol is checked
+                                confirmation: checked ? 'adult_signature' : advancedOptions.confirmation
+                              })
+                            }}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-xs font-medium text-gray-700">Contains Alcohol</span>
+                        </label>
+                        <p className="text-xs text-gray-500 ml-6">Package contains alcoholic beverages (automatically requires adult signature)</p>
+                      </div>
+                    </div>
+
+                    {/* Notification Options */}
+                    <div className="space-y-3 pt-3 border-t border-gray-200">
+                      <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Notifications</h5>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Tracking Notifications Email</label>
+                        <input
+                          type="email"
+                          value={advancedOptions.notificationsEmail}
+                          onChange={(e) => setAdvancedOptions({ ...advancedOptions, notificationsEmail: e.target.value })}
+                          placeholder="customer@example.com"
+                          className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Carrier will send tracking notifications (supported by Royal Mail, Parcelforce Worldwide)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </details>
               </div>
             )}
 
@@ -1550,10 +1815,12 @@ function Step2AddressesShipStation({
         // Auto-apply corrections if we have a matched address with differences
         if (data.data.matched_address) {
           const matched = data.data.matched_address
+          // Compare only first 5 digits of ZIP code (ignore +4 extension)
+          const matchedZip5 = matched.postal_code ? matched.postal_code.split('-')[0] : matched.postal_code
           const hasDifferences =
             matched.city_locality?.toLowerCase() !== toAddress.city.toLowerCase() ||
             matched.state_province !== toAddress.state ||
-            matched.postal_code !== toAddress.zip
+            matchedZip5 !== toAddress.zip
 
           console.log('Checking for address differences:', {
             hasDifferences,
@@ -1577,11 +1844,13 @@ function Step2AddressesShipStation({
             })
 
             // Auto-apply the corrections
+            // Only use first 5 digits of ZIP code (strip +4 extension)
+            const correctedZip = matched.postal_code ? matched.postal_code.split('-')[0] : toAddress.zip
             const updatedAddress = {
               ...toAddress,
               city: matched.city_locality || toAddress.city,
               state: matched.state_province || toAddress.state,
-              zip: matched.postal_code || toAddress.zip,
+              zip: correctedZip,
             }
             setToAddress(updatedAddress)
 
@@ -1861,7 +2130,9 @@ function Step2AddressesShipStation({
                     appliedChanges.push({ field: 'State', from: originalAddress.state, to: matched.state_province })
                   }
                   if (matched.postal_code && matched.postal_code !== originalAddress.zip) {
-                    appliedChanges.push({ field: 'ZIP', from: originalAddress.zip, to: matched.postal_code })
+                    // Only show first 5 digits of ZIP code
+                    const displayZip = matched.postal_code.split('-')[0]
+                    appliedChanges.push({ field: 'ZIP', from: originalAddress.zip, to: displayZip })
                   }
 
                   if (appliedChanges.length === 0) return null

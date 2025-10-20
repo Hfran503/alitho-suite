@@ -60,45 +60,73 @@ export async function POST(req: NextRequest) {
     const configCarrierIds = (integration.config as any)?.carrierIds || []
     const requestCarrierIds = carrierIds || configCarrierIds
 
+    // Helper to clean string values - convert empty strings to undefined
+    const cleanString = (value: any): string | undefined => {
+      if (!value || (typeof value === 'string' && value.trim() === '')) {
+        return undefined
+      }
+      return String(value).trim()
+    }
+
+    // Helper to ensure positive numeric value
+    const cleanNumber = (value: any): number => {
+      const num = parseFloat(value)
+      if (isNaN(num) || num <= 0) {
+        throw new Error(`Invalid numeric value: ${value}`)
+      }
+      return num
+    }
+
     // Build rate request
     const rateRequest = {
       shipment: {
         ship_from: {
-          name: shipFrom.name,
-          phone: shipFrom.phone,
-          company_name: shipFrom.company,
-          address_line1: shipFrom.street1,
-          address_line2: shipFrom.street2,
-          city_locality: shipFrom.city,
-          state_province: shipFrom.state,
-          postal_code: shipFrom.zip,
-          country_code: shipFrom.country || 'US',
+          name: cleanString(shipFrom.name) || 'Sender',
+          phone: cleanString(shipFrom.phone),
+          company_name: cleanString(shipFrom.company),
+          address_line1: cleanString(shipFrom.street1),
+          address_line2: cleanString(shipFrom.street2),
+          city_locality: cleanString(shipFrom.city),
+          state_province: cleanString(shipFrom.state),
+          postal_code: cleanString(shipFrom.zip),
+          country_code: cleanString(shipFrom.country) || 'US',
         },
         ship_to: {
-          name: shipTo.name,
-          phone: shipTo.phone,
-          company_name: shipTo.company,
-          address_line1: shipTo.street1,
-          address_line2: shipTo.street2,
-          city_locality: shipTo.city,
-          state_province: shipTo.state,
-          postal_code: shipTo.zip,
-          country_code: shipTo.country || 'US',
+          name: cleanString(shipTo.name) || 'Recipient',
+          phone: cleanString(shipTo.phone),
+          company_name: cleanString(shipTo.company),
+          address_line1: cleanString(shipTo.street1),
+          address_line2: cleanString(shipTo.street2),
+          city_locality: cleanString(shipTo.city),
+          state_province: cleanString(shipTo.state),
+          postal_code: cleanString(shipTo.zip),
+          country_code: cleanString(shipTo.country) || 'US',
         },
-        packages: packages.map((pkg: any) => ({
-          weight: {
-            value: pkg.weight,
-            unit: pkg.weightUnit || 'pound',
-          },
-          dimensions: pkg.length &&
-            pkg.width &&
-            pkg.height && {
-              length: pkg.length,
-              width: pkg.width,
-              height: pkg.height,
-              unit: pkg.dimensionUnit || 'inch',
+        packages: packages.map((pkg: any) => {
+          const packageData: any = {
+            weight: {
+              value: cleanNumber(pkg.weight),
+              unit: pkg.weightUnit || 'pound',
             },
-        })),
+          }
+
+          // Only include dimensions if all three are provided and valid
+          if (pkg.length && pkg.width && pkg.height) {
+            try {
+              packageData.dimensions = {
+                length: cleanNumber(pkg.length),
+                width: cleanNumber(pkg.width),
+                height: cleanNumber(pkg.height),
+                unit: pkg.dimensionUnit || 'inch',
+              }
+            } catch (e) {
+              // Skip dimensions if any are invalid
+              console.warn('Skipping invalid dimensions:', e)
+            }
+          }
+
+          return packageData
+        }),
       },
       rate_options:
         requestCarrierIds.length > 0
@@ -107,6 +135,9 @@ export async function POST(req: NextRequest) {
             }
           : undefined,
     }
+
+    // Log the request for debugging
+    console.log('ShipStation rate request:', JSON.stringify(rateRequest, null, 2))
 
     // Get rates from ShipStation
     const ratesResponse = await client.getRates(rateRequest)
@@ -170,9 +201,31 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error('ShipStation get rates error:', error)
+
+    // Log more details about the error
+    if (error.response) {
+      console.error('ShipStation API response error:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+      })
+    }
+
+    // Extract meaningful error message
+    let errorMessage = 'Failed to get shipping rates'
+    if (error.response?.data?.errors) {
+      const errors = error.response.data.errors
+      errorMessage = errors.map((e: any) => e.message).join(', ')
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+
     return NextResponse.json(
-      { error: error.message || 'Failed to get shipping rates' },
-      { status: 500 }
+      {
+        error: `ShipStation API error: ${errorMessage}`,
+        details: error.response?.data
+      },
+      { status: error.response?.status || 500 }
     )
   }
 }

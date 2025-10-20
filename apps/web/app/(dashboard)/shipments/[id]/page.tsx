@@ -428,7 +428,7 @@ export default function ShipmentDetailsPage() {
 
   if (!shipment) {
     return (
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full px-6">
         <div className="mb-4">
           <Link href="/shipments" className="text-blue-600 hover:text-blue-800">
             ← Back to Shipments
@@ -442,7 +442,7 @@ export default function ShipmentDetailsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full px-6">
       {/* Header with Status Badge */}
       <div className="mb-6">
         <Link href="/shipments" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
