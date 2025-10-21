@@ -478,3 +478,106 @@ export async function GET(req: NextRequest) {
     )
   }
 }
+
+// POST /api/pace/shipments - Create a new job shipment
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user's tenant
+    const membership = await db.membership.findFirst({
+      where: { userId: session.user.id },
+    })
+
+    if (!membership) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const { job, date, shipmentType, shipVia, description } = body
+
+    if (!job) {
+      return NextResponse.json({ error: 'Job number is required' }, { status: 400 })
+    }
+
+    // Get PACE API credentials
+    let paceApiUrl: string
+    let paceUsername: string
+    let pacePassword: string
+
+    try {
+      const credentials = await getPaceApiCredentials()
+      paceApiUrl = credentials.url
+      paceUsername = credentials.username
+      pacePassword = credentials.password
+    } catch (error) {
+      console.error('Failed to get PACE API credentials:', error)
+      return NextResponse.json(
+        { error: 'PACE API not configured' },
+        { status: 500 }
+      )
+    }
+
+    const authHeader = `Basic ${Buffer.from(`${paceUsername}:${pacePassword}`).toString('base64')}`
+
+    // Prepare JobShipment data
+    const shipmentData: any = {
+      job: job,
+    }
+
+    // Add optional fields
+    if (date) {
+      shipmentData.dateTime = new Date(date).toISOString().substring(0, 19)
+    }
+
+    if (shipmentType) {
+      shipmentData.shipmentType = shipmentType
+    }
+
+    if (shipVia) {
+      shipmentData.shipVia = shipVia
+    }
+
+    if (description) {
+      shipmentData.description = description
+    }
+
+    // Create JobShipment in PACE
+    const response = await fetch(`${paceApiUrl}/CreateObject/createJobShipment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(shipmentData),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('PACE createJobShipment error:', errorText)
+      return NextResponse.json(
+        { error: 'Failed to create JobShipment in PACE', details: errorText },
+        { status: response.status }
+      )
+    }
+
+    const result = await response.json()
+
+    console.log('Created JobShipment in PACE:', result.id)
+
+    return NextResponse.json({
+      success: true,
+      data: result,
+    })
+  } catch (error: any) {
+    console.error('Create job shipment error:', error)
+    return NextResponse.json(
+      { error: 'Failed to create job shipment', message: error.message },
+      { status: 500 }
+    )
+  }
+}

@@ -35,6 +35,7 @@ model Tenant {
   integrations         Integration[]
   shippingLabels       ShippingLabel[]
   shipmentTypeMappings ShipmentTypeMapping[]
+  batchImports         BatchImport[]
 
   @@index([slug])
   @@index([status])
@@ -432,4 +433,173 @@ model Job {
   @@index([type])
   @@index([status])
   @@index([createdAt])
+}
+
+// ============================================
+// BATCH IMPORT FOR SHIPMENTS
+// ============================================
+
+model BatchImport {
+  id                String              @id @default(cuid())
+
+  // File info
+  fileName          String
+  fileUrl           String?             // S3 URL if you want to store original file
+  sheetName         String?             // Excel sheet name
+
+  // Status tracking
+  status            BatchImportStatus   @default(PENDING)
+  totalRows         Int                 @default(0)
+  processedRows     Int                 @default(0)
+  successfulRows    Int                 @default(0)
+  failedRows        Int                 @default(0)
+
+  // Shipping configuration (ShipStation only)
+  carrierId         String?
+  carrierCode       String?
+  serviceCode       String?
+  carrier           String?             // Display name (e.g., "UPS")
+  service           String?             // Display name (e.g., "Ground")
+
+  // Billing configuration
+  billToParty       String              @default("sender") // sender, recipient, third_party
+  billToAccount     String?
+  billToCountryCode String              @default("US")
+  billToPostalCode  String?
+
+  // Advanced options
+  containsAlcohol   Boolean             @default(false)
+  saturdayDelivery  Boolean             @default(false)
+  confirmation      String              @default("none") // none, delivery, signature, adult_signature, direct_signature
+  notificationsEmail String?
+
+  // From address (stored as JSON)
+  fromAddress       Json?
+
+  // Column mapping used (for reference/debugging)
+  columnMapping     Json?               // { "csvColumn": "systemField" }
+
+  // Tenant relation
+  tenantId          String
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdBy         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  // Relations
+  rows              BatchImportRow[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model BatchImportRow {
+  id                String              @id @default(cuid())
+  batchImportId     String
+  batchImport       BatchImport         @relation(fields: [batchImportId], references: [id], onDelete: Cascade)
+
+  rowNumber         Int                 // Original row number in spreadsheet
+  status            BatchRowStatus      @default(PENDING)
+
+  // Grouping key (for multi-parcel shipments)
+  // Hash of Job# + Address to group cartons into single shipments
+  groupKey          String?
+
+  // Parsed data from CSV
+  shipDate          DateTime?
+  jobNumber         String?
+  totalPackages     Int?
+  packageNumber     Int?                // 1, 2, 3... for ordering within shipment
+
+  // Ship To Address
+  shipToName        String?
+  shipToCompany     String?
+  shipToAddress1    String?
+  shipToAddress2    String?
+  shipToCity        String?
+  shipToState       String?
+  shipToZip         String?
+  shipToCountry     String              @default("US")
+  shipToPhone       String?
+
+  // Package details
+  weight            Float?
+  length            Float?
+  width             Float?
+  height            Float?
+
+  // References (for label messages)
+  reference1        String?
+  reference2        String?
+  reference3        String?
+
+  // Item/Contents (always JobProduct for now)
+  itemNumber        String?             // JobProduct identifier
+  itemQuantity      Int?
+
+  // Processing results
+  trackingNumber    String?
+  trackingUrl       String?
+  labelUrl          String?
+  shippingCost      Float?              // Individual carton cost
+  errorMessage      String?             // Error details if failed
+
+  // PACE record IDs
+  paceJobShipmentId Int?                // Created JobShipment.id
+  paceCartonId      Int?                // Created Carton.id
+
+  // ShipStation IDs (for voiding)
+  shipstationShipmentId String?
+  shipstationLabelId    String?
+
+  // Timestamps
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  processedAt       DateTime?
+
+  @@index([batchImportId])
+  @@index([batchImportId, status])
+  @@index([groupKey])
+  @@index([jobNumber])
+  @@index([status])
+}
+
+model BatchImportMapping {
+  id              String    @id @default(cuid())
+
+  // User/Tenant
+  userId          String?
+  tenantId        String?
+
+  // Mapping info
+  mappingName     String
+  columnMappings  Json      // { "CSV Column Name": "systemFieldName" }
+  isDefault       Boolean   @default(false)
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([tenantId])
+}
+
+enum BatchImportStatus {
+  PENDING         // Upload complete, not started
+  PROCESSING      // Worker is processing
+  COMPLETE        // All rows processed (some may have failed)
+  CANCELLED       // User cancelled
+}
+
+enum BatchRowStatus {
+  PENDING         // Not yet processed
+  PROCESSING      // Currently being processed
+  SUCCESS         // Label created, JobShipment + Carton created
+  FAILED          // Processing failed (bad address, API error, etc.)
+  CANCELLED       // User cancelled/voided this row
 }
