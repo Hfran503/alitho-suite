@@ -35,6 +35,9 @@ export async function POST(
       shipFrom, // Ship from address
       shipTo, // Ship to address
       provider, // "easypost" or "shipstation"
+      reference1, // Label reference 1
+      reference2, // Label reference 2
+      reference3, // Label reference 3
     } = body
 
     // Validate required fields
@@ -225,6 +228,11 @@ export async function POST(
                 cost: shippingCost ? parseFloat(shippingCost.toString()) : 0,
                 currency: 'USD',
                 status: 'active',
+                metadata: {
+                  reference1: reference1 || null,
+                  reference2: reference2 || null,
+                  reference3: reference3 || null,
+                },
               },
             })
             console.log('Saved shipping label to database for carton:', cartonId)

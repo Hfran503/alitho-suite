@@ -39,6 +39,7 @@ export default async function DashboardPage() {
     activeLabels,
     labelsByCarrier,
     activityLogs,
+    carrierMappings,
   ] = await Promise.all([
     // Total labels
     db.shippingLabel.count({
@@ -86,7 +87,26 @@ export default async function DashboardPage() {
       take: 10,
       include: { user: true },
     }),
+    // Carrier mappings
+    db.carrierServiceMapping.findMany({
+      where: { tenantId: membership.tenantId },
+      select: {
+        shipstationCarrierId: true,
+        carrierName: true,
+      },
+    }),
   ])
+
+  // Build carrier ID to name map
+  const carrierIdToName: Record<string, string> = {}
+  carrierMappings.forEach((mapping) => {
+    carrierIdToName[mapping.shipstationCarrierId] = mapping.carrierName
+  })
+
+  // Helper function to format carrier names
+  const formatCarrierName = (carrierId: string): string => {
+    return carrierIdToName[carrierId] || carrierId
+  }
 
   // Format currency
   const formatCurrency = (amount: number | null | undefined) => {
@@ -167,7 +187,7 @@ export default async function DashboardPage() {
           </div>
           <p className="text-3xl font-bold text-gray-900">{labelsByCarrier.length}</p>
           <p className="text-sm text-gray-500 mt-2">
-            {labelsByCarrier.map((p: any) => p.carrier).join(', ') || 'None'}
+            {labelsByCarrier.map((p: any) => formatCarrierName(p.carrier)).join(', ') || 'None'}
           </p>
         </div>
       </div>
@@ -185,17 +205,19 @@ export default async function DashboardPage() {
               <div className="text-center text-gray-500">No labels created yet</div>
             ) : (
               <div className="space-y-4">
-                {labelsByCarrier.map((carrier: any) => (
+                {labelsByCarrier.map((carrier: any) => {
+                  const carrierName = formatCarrierName(carrier.carrier)
+                  return (
                   <div key={carrier.carrier} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                         <span className="text-blue-600 font-semibold text-sm">
-                          {carrier.carrier?.substring(0, 2).toUpperCase() || '??'}
+                          {carrierName?.substring(0, 2).toUpperCase() || '??'}
                         </span>
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">
-                          {carrier.carrier || 'Unknown'}
+                          {carrierName || 'Unknown'}
                         </p>
                         <p className="text-sm text-gray-500">Shipping Carrier</p>
                       </div>
@@ -205,7 +227,8 @@ export default async function DashboardPage() {
                       <p className="text-xs text-gray-500">labels</p>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -235,7 +258,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="font-medium text-sm">
-                        {label.carrier || 'Unknown Carrier'}
+                        {formatCarrierName(label.carrier) || 'Unknown Carrier'}
                       </p>
                       <p className="text-xs text-gray-600 font-mono">
                         {label.trackingNumber || 'No tracking'}

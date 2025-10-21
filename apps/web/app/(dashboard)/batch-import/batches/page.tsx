@@ -11,6 +11,7 @@ interface BatchImport {
   totalRows: number
   successfulRows: number
   failedRows: number
+  voidedRows: number
   createdAt: string
   updatedAt: string
 }
@@ -190,6 +191,9 @@ export default function BatchesPage() {
                         <span className="text-green-600">✓ {batch.successfulRows} successful</span>
                         {batch.failedRows > 0 && (
                           <span className="text-red-600">✗ {batch.failedRows} failed</span>
+                        )}
+                        {batch.voidedRows > 0 && (
+                          <span className="text-orange-600">⊗ {batch.voidedRows} voided</span>
                         )}
                         <span className="text-gray-500">/ {batch.totalRows} total</span>
                       </div>

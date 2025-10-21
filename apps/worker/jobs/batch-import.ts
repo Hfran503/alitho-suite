@@ -1057,6 +1057,9 @@ async function processShipmentGroup(
                 jobNumber: matchingRow.jobNumber,
                 packageNumber: matchingRow.packageNumber,
                 totalPackages: matchingRow.totalPackages,
+                reference1: matchingRow.reference1,
+                reference2: matchingRow.reference2,
+                reference3: matchingRow.reference3,
               },
             },
           })

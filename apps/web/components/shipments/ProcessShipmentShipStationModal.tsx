@@ -630,6 +630,10 @@ export function ProcessShipmentShipStationModal({
                   width: parseFloat(carton.width),
                   height: parseFloat(carton.height),
                   contents: mappedContents,
+                  // Include label references
+                  reference1: labelMessages.reference1 || null,
+                  reference2: labelMessages.reference2 || null,
+                  reference3: labelMessages.reference3 || null,
                 }),
               }
             )

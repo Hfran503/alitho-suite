@@ -20,6 +20,12 @@ interface ShippingLabel {
   isReturnLabel: boolean
   rmaNumber: string | null
   outboundLabelId: string | null
+  metadata?: {
+    reference1?: string | null
+    reference2?: string | null
+    reference3?: string | null
+    [key: string]: any
+  }
 }
 
 export default function LabelsPage() {
@@ -28,12 +34,18 @@ export default function LabelsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('active') // Default to active only
-  const [filterProvider, setFilterProvider] = useState<string>('all')
+  const [filterCarrier, setFilterCarrier] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [carrierMappings, setCarrierMappings] = useState<Record<string, string>>({})
+
+  // Fetch carrier mappings on mount
+  useEffect(() => {
+    fetchCarrierMappings()
+  }, [])
 
   useEffect(() => {
     fetchLabels()
-  }, [filterStatus, filterProvider])
+  }, [filterStatus])
 
   // Auto-refresh when window regains focus (e.g., after voiding labels in another tab/page)
   useEffect(() => {
@@ -44,7 +56,29 @@ export default function LabelsPage() {
 
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [filterStatus, filterProvider])
+  }, [filterStatus])
+
+  const fetchCarrierMappings = async () => {
+    try {
+      const response = await fetch('/api/settings/carrier-services')
+      if (response.ok) {
+        const data = await response.json()
+        // Build a map of carrierId -> carrierName
+        const mappings: Record<string, string> = {}
+        data.data.forEach((mapping: any) => {
+          mappings[mapping.shipstationCarrierId] = mapping.carrierName
+        })
+        setCarrierMappings(mappings)
+      }
+    } catch (err) {
+      console.error('Error fetching carrier mappings:', err)
+    }
+  }
+
+  const formatCarrierName = (carrierId: string): string => {
+    // Use mapping if available, otherwise return the ID as-is
+    return carrierMappings[carrierId] || carrierId
+  }
 
   const fetchLabels = async () => {
     try {
@@ -53,10 +87,6 @@ export default function LabelsPage() {
 
       if (filterStatus !== 'all') {
         params.append('status', filterStatus)
-      }
-
-      if (filterProvider !== 'all') {
-        params.append('provider', filterProvider)
       }
 
       const response = await fetch(`/api/labels?${params.toString()}`)
@@ -80,6 +110,12 @@ export default function LabelsPage() {
   }
 
   const filteredLabels = labels.filter(label => {
+    // Filter by carrier
+    if (filterCarrier !== 'all' && label.carrier !== filterCarrier) {
+      return false
+    }
+
+    // Filter by search term
     if (!searchTerm) return true
     const term = searchTerm.toLowerCase()
     return (
@@ -155,26 +191,29 @@ export default function LabelsPage() {
             </select>
           </div>
 
-          {/* Provider Filter */}
+          {/* Carrier Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Provider
+              Carrier
             </label>
             <select
-              value={filterProvider}
-              onChange={(e) => setFilterProvider(e.target.value)}
+              value={filterCarrier}
+              onChange={(e) => setFilterCarrier(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="all">All Providers</option>
-              <option value="easypost">EasyPost</option>
-              <option value="shipstation">ShipStation</option>
+              <option value="all">All Carriers</option>
+              {Object.entries(carrierMappings).map(([carrierId, carrierName]) => (
+                <option key={carrierId} value={carrierId}>
+                  {carrierName}
+                </option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="text-sm font-medium text-gray-600">Total Labels</div>
           <div className="text-2xl font-bold text-gray-900 mt-1">
@@ -185,18 +224,6 @@ export default function LabelsPage() {
           <div className="text-sm font-medium text-gray-600">Total Cost</div>
           <div className="text-2xl font-bold text-green-600 mt-1">
             ${filteredLabels.reduce((sum, label) => sum + Number(label.cost), 0).toFixed(2)}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-sm font-medium text-gray-600">EasyPost</div>
-          <div className="text-2xl font-bold text-blue-600 mt-1">
-            {filteredLabels.filter(l => l.provider === 'easypost').length}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-sm font-medium text-gray-600">ShipStation</div>
-          <div className="text-2xl font-bold text-purple-600 mt-1">
-            {filteredLabels.filter(l => l.provider === 'shipstation').length}
           </div>
         </div>
       </div>
@@ -223,7 +250,7 @@ export default function LabelsPage() {
                   Destination
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Provider
+                  References
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Cost
@@ -287,7 +314,7 @@ export default function LabelsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm font-medium text-gray-900">
-                        {label.carrier}
+                        {formatCarrierName(label.carrier)}
                       </div>
                       <div className="text-xs text-gray-500">
                         {label.service}
@@ -327,13 +354,26 @@ export default function LabelsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        label.provider === 'easypost'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-purple-100 text-purple-700'
-                      }`}>
-                        {label.provider === 'easypost' ? 'EasyPost' : 'ShipStation'}
-                      </span>
+                      <div className="text-xs space-y-0.5">
+                        {label.metadata?.reference1 && (
+                          <div className="text-gray-700">
+                            <span className="font-medium">1:</span> {label.metadata.reference1}
+                          </div>
+                        )}
+                        {label.metadata?.reference2 && (
+                          <div className="text-gray-700">
+                            <span className="font-medium">2:</span> {label.metadata.reference2}
+                          </div>
+                        )}
+                        {label.metadata?.reference3 && (
+                          <div className="text-gray-700">
+                            <span className="font-medium">3:</span> {label.metadata.reference3}
+                          </div>
+                        )}
+                        {!label.metadata?.reference1 && !label.metadata?.reference2 && !label.metadata?.reference3 && (
+                          <div className="text-gray-400">—</div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-sm font-semibold text-green-600">

@@ -45,6 +45,10 @@ export async function GET(req: NextRequest) {
           failedRows: true,
           createdAt: true,
           updatedAt: true,
+          rows: {
+            where: { status: 'CANCELLED' },
+            select: { id: true },
+          },
         },
       }),
       db.batchImport.count({
@@ -52,10 +56,24 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
+    // Calculate voided count for each batch
+    const batchesWithVoidedCount = batches.map(batch => ({
+      id: batch.id,
+      fileName: batch.fileName,
+      sheetName: batch.sheetName,
+      status: batch.status,
+      totalRows: batch.totalRows,
+      successfulRows: batch.successfulRows,
+      failedRows: batch.failedRows,
+      voidedRows: batch.rows.length,
+      createdAt: batch.createdAt,
+      updatedAt: batch.updatedAt,
+    }))
+
     return NextResponse.json({
       success: true,
       data: {
-        batches,
+        batches: batchesWithVoidedCount,
         pagination: {
           page,
           limit,
