@@ -208,6 +208,19 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
         throw new Error(errorData.error || 'Failed to void label')
       }
 
+      const result = await response.json()
+
+      // Clear shipments cache if needed
+      if (result.clearCache) {
+        try {
+          const { clearShipmentsCache } = await import('@/lib/shipmentsCache')
+          clearShipmentsCache()
+          console.log('✅ Cleared shipments cache after voiding label')
+        } catch (cacheError) {
+          console.warn('Failed to clear shipments cache:', cacheError)
+        }
+      }
+
       // Refresh status
       const statusResponse = await fetch(`/api/batch-import/${batchId}/status`)
       const statusData = await statusResponse.json()
@@ -302,6 +315,17 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to void labels')
+      }
+
+      // Clear shipments cache if needed
+      if (result.clearCache) {
+        try {
+          const { clearShipmentsCache } = await import('@/lib/shipmentsCache')
+          clearShipmentsCache()
+          console.log('✅ Cleared shipments cache after voiding all labels')
+        } catch (cacheError) {
+          console.warn('Failed to clear shipments cache:', cacheError)
+        }
       }
 
       alert(result.message || `Successfully voided ${result.voidedCount} label(s)`)

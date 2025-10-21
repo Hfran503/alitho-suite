@@ -129,6 +129,28 @@ export async function POST(
               },
             })
 
+            // Also update ShippingLabel record to voided status
+            if (row.trackingNumber) {
+              try {
+                const updateResult = await db.shippingLabel.updateMany({
+                  where: {
+                    trackingNumber: row.trackingNumber,
+                    tenantId: membership.tenantId,
+                  },
+                  data: {
+                    status: 'voided',
+                  },
+                })
+                console.log(`[VOID-ALL] ✅ Updated ${updateResult.count} ShippingLabel(s) to voided for tracking ${row.trackingNumber}`)
+
+                if (updateResult.count === 0) {
+                  console.warn(`[VOID-ALL] ⚠️  No ShippingLabel found for tracking ${row.trackingNumber}`)
+                }
+              } catch (labelError) {
+                console.error(`[VOID-ALL] ❌ Failed to update ShippingLabel:`, labelError)
+              }
+            }
+
             return {
               rowId: row.id,
               rowNumber: row.rowNumber,
@@ -291,6 +313,8 @@ export async function POST(
       paceCartonsDeleted: paceCartonIds.size,
       paceShipmentsDeleted: paceShipmentIds.size,
       details: voidResults.filter(r => !r.success), // Only return failures for debugging
+      // Signal to frontend to clear shipments cache
+      clearCache: true,
     })
   } catch (error: any) {
     console.error('[API] Batch void-all error:', error)

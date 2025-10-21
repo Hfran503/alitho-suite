@@ -27,12 +27,23 @@ export default function LabelsPage() {
   const [labels, setLabels] = useState<ShippingLabel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('active') // Default to active only
   const [filterProvider, setFilterProvider] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     fetchLabels()
+  }, [filterStatus, filterProvider])
+
+  // Auto-refresh when window regains focus (e.g., after voiding labels in another tab/page)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('Window focused, refreshing labels...')
+      fetchLabels()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }, [filterStatus, filterProvider])
 
   const fetchLabels = async () => {

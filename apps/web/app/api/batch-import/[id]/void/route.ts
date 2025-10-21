@@ -147,7 +147,7 @@ export async function POST(
         // Also update ShippingLabel record to voided status
         if (relatedRow.trackingNumber) {
           try {
-            await db.shippingLabel.updateMany({
+            const updateResult = await db.shippingLabel.updateMany({
               where: {
                 trackingNumber: relatedRow.trackingNumber,
                 tenantId: membership.tenantId,
@@ -156,10 +156,16 @@ export async function POST(
                 status: 'voided',
               },
             })
-            console.log(`[VOID] ✅ Updated ShippingLabel status to voided for tracking ${relatedRow.trackingNumber}`)
+            console.log(`[VOID] ✅ Updated ${updateResult.count} ShippingLabel(s) to voided for tracking ${relatedRow.trackingNumber}`)
+
+            if (updateResult.count === 0) {
+              console.warn(`[VOID] ⚠️  No ShippingLabel found for tracking ${relatedRow.trackingNumber} in tenant ${membership.tenantId}`)
+            }
           } catch (labelError) {
-            console.warn(`[VOID] ⚠️  Failed to update ShippingLabel:`, labelError)
+            console.error(`[VOID] ❌ Failed to update ShippingLabel:`, labelError)
           }
+        } else {
+          console.warn(`[VOID] ⚠️  No tracking number on row ${relatedRow.id}`)
         }
 
         voidedCount++
@@ -287,6 +293,8 @@ export async function POST(
       paceCartonsDeleted: paceCartonIds.size,
       paceShipmentsDeleted: paceShipmentIds.size,
       details: voidResults,
+      // Signal to frontend to clear shipments cache
+      clearCache: true,
     })
   } catch (error: any) {
     console.error('[API] Batch void error:', error)
