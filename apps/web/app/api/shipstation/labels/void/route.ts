@@ -58,18 +58,19 @@ export async function POST(req: NextRequest) {
 
     // If shipmentId provided instead of labelId, look up the label
     if (!labelId && shipmentId) {
-      // Find carton with this ShipStation shipment ID
-      const carton = await db.carton.findFirst({
+      // Find shipping label with this ShipStation shipment ID
+      const shippingLabel = await db.shippingLabel.findFirst({
         where: {
-          u_shipstation_shipment_id: shipmentId,
+          providerShipmentId: shipmentId,
+          provider: 'shipstation',
         },
         select: {
-          u_shipstation_label_id: true,
+          providerLabelId: true,
         },
       })
 
-      if (carton?.u_shipstation_label_id) {
-        voidedLabelId = carton.u_shipstation_label_id
+      if (shippingLabel?.providerLabelId) {
+        voidedLabelId = shippingLabel.providerLabelId
       } else {
         return NextResponse.json(
           { error: 'Label not found for shipment ID' },
@@ -80,29 +81,6 @@ export async function POST(req: NextRequest) {
 
     // Void the label in ShipStation
     const voidResponse = await client.voidLabel(voidedLabelId)
-
-    // Update cartons in database to mark as voided
-    if (shipmentId) {
-      await db.carton.updateMany({
-        where: {
-          u_shipstation_shipment_id: shipmentId,
-        },
-        data: {
-          u_label_voided: true,
-          u_label_voided_at: new Date(),
-        },
-      })
-    } else if (labelId) {
-      await db.carton.updateMany({
-        where: {
-          u_shipstation_label_id: labelId,
-        },
-        data: {
-          u_label_voided: true,
-          u_label_voided_at: new Date(),
-        },
-      })
-    }
 
     // Update ShippingLabel status in our tracking database
     try {
