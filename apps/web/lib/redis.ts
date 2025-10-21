@@ -1,45 +1,82 @@
 import Redis from 'ioredis'
+import { getRedisUrl as getRedisUrlFromSecrets } from './secrets'
 
-const getRedisUrl = () => {
+const getRedisUrl = async () => {
+  // Try to get from environment first (for development or when already loaded)
   if (process.env.REDIS_URL) {
     return process.env.REDIS_URL
   }
-  throw new Error('REDIS_URL environment variable is not set')
+
+  // Fetch from AWS Secrets Manager
+  try {
+    const url = await getRedisUrlFromSecrets()
+    // Cache it in the environment for subsequent calls
+    process.env.REDIS_URL = url
+    return url
+  } catch (error) {
+    console.error('Failed to fetch Redis URL from AWS Secrets Manager:', error)
+    throw new Error('REDIS_URL environment variable is not set and could not be fetched from AWS Secrets Manager')
+  }
 }
 
 let redisInstance: Redis | null = null
+let redisInitPromise: Promise<Redis> | null = null
 
-export const getRedisInstance = () => {
-  if (!redisInstance) {
-    redisInstance = new Redis(getRedisUrl(), {
+export const getRedisInstance = async (): Promise<Redis> => {
+  if (redisInstance) {
+    return redisInstance
+  }
+
+  // Prevent multiple concurrent initializations
+  if (redisInitPromise) {
+    return redisInitPromise
+  }
+
+  redisInitPromise = (async () => {
+    const redisUrl = await getRedisUrl()
+    redisInstance = new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      lazyConnect: true, // Don't connect immediately
     })
-  }
-  return redisInstance
+
+    // Connect now
+    await redisInstance.connect()
+
+    return redisInstance
+  })()
+
+  return redisInitPromise
 }
 
 export const redis = {
-  get ping() {
-    return getRedisInstance().ping.bind(getRedisInstance())
+  async ping() {
+    const instance = await getRedisInstance()
+    return instance.ping()
   },
-  get incr() {
-    return getRedisInstance().incr.bind(getRedisInstance())
+  async incr(key: string) {
+    const instance = await getRedisInstance()
+    return instance.incr(key)
   },
-  get expire() {
-    return getRedisInstance().expire.bind(getRedisInstance())
+  async expire(key: string, seconds: number) {
+    const instance = await getRedisInstance()
+    return instance.expire(key, seconds)
   },
-  get get() {
-    return getRedisInstance().get.bind(getRedisInstance())
+  async get(key: string) {
+    const instance = await getRedisInstance()
+    return instance.get(key)
   },
-  get setex() {
-    return getRedisInstance().setex.bind(getRedisInstance())
+  async setex(key: string, seconds: number, value: string) {
+    const instance = await getRedisInstance()
+    return instance.setex(key, seconds, value)
   },
-  get keys() {
-    return getRedisInstance().keys.bind(getRedisInstance())
+  async keys(pattern: string) {
+    const instance = await getRedisInstance()
+    return instance.keys(pattern)
   },
-  get del() {
-    return getRedisInstance().del.bind(getRedisInstance())
+  async del(...keys: string[]) {
+    const instance = await getRedisInstance()
+    return instance.del(...keys)
   },
 }
 

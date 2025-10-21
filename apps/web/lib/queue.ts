@@ -7,37 +7,41 @@ let _pdfQueue: Queue | null = null
 let _emailQueue: Queue | null = null
 let _webhookQueue: Queue | null = null
 
-export const getExportQueue = () => {
+export const getExportQueue = async () => {
   if (!_exportQueue) {
+    const redis = await getRedisInstance()
     _exportQueue = new Queue('exports', {
-      connection: getRedisInstance(),
+      connection: redis,
     })
   }
   return _exportQueue
 }
 
-export const getPdfQueue = () => {
+export const getPdfQueue = async () => {
   if (!_pdfQueue) {
+    const redis = await getRedisInstance()
     _pdfQueue = new Queue('pdfs', {
-      connection: getRedisInstance(),
+      connection: redis,
     })
   }
   return _pdfQueue
 }
 
-export const getEmailQueue = () => {
+export const getEmailQueue = async () => {
   if (!_emailQueue) {
+    const redis = await getRedisInstance()
     _emailQueue = new Queue('emails', {
-      connection: getRedisInstance(),
+      connection: redis,
     })
   }
   return _emailQueue
 }
 
-export const getWebhookQueue = () => {
+export const getWebhookQueue = async () => {
   if (!_webhookQueue) {
+    const redis = await getRedisInstance()
     _webhookQueue = new Queue('webhooks', {
-      connection: getRedisInstance(),
+      connection: redis,
     })
   }
   return _webhookQueue
@@ -45,19 +49,31 @@ export const getWebhookQueue = () => {
 
 // Backwards compatibility exports
 export const exportQueue = {
-  get add() { return getExportQueue().add.bind(getExportQueue()) }
+  async add(...args: Parameters<Queue['add']>) {
+    const queue = await getExportQueue()
+    return queue.add(...args)
+  }
 }
 
 export const pdfQueue = {
-  get add() { return getPdfQueue().add.bind(getPdfQueue()) }
+  async add(...args: Parameters<Queue['add']>) {
+    const queue = await getPdfQueue()
+    return queue.add(...args)
+  }
 }
 
 export const emailQueue = {
-  get add() { return getEmailQueue().add.bind(getEmailQueue()) }
+  async add(...args: Parameters<Queue['add']>) {
+    const queue = await getEmailQueue()
+    return queue.add(...args)
+  }
 }
 
 export const webhookQueue = {
-  get add() { return getWebhookQueue().add.bind(getWebhookQueue()) }
+  async add(...args: Parameters<Queue['add']>) {
+    const queue = await getWebhookQueue()
+    return queue.add(...args)
+  }
 }
 
 // Job enqueue helpers

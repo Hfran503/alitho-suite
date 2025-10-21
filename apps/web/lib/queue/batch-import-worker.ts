@@ -1,57 +1,76 @@
 import { Worker, Job } from 'bullmq'
-import Redis from 'ioredis'
 import { db } from '@repo/database'
+import { getRedisInstance } from '../redis'
 import type { BatchImportJobData } from './batch-import-queue'
 
-// Redis connection
-const connection = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD || undefined,
-  maxRetriesPerRequest: null,
-})
+// Create the worker - will be initialized async
+let _batchImportWorker: Worker<BatchImportJobData> | null = null
 
-// Create the worker
-export const batchImportWorker = new Worker<BatchImportJobData>(
-  'batch-import',
-  async (job: Job<BatchImportJobData>) => {
-    const { batchId, tenantId } = job.data
+async function initWorker() {
+  if (_batchImportWorker) return _batchImportWorker
 
-    console.log(`[Worker] Starting batch import: ${batchId}`)
+  const connection = await getRedisInstance()
 
-    try {
-      await processBatch(batchId, tenantId, (progress) => {
-        job.updateProgress(progress)
-      })
+  _batchImportWorker = new Worker<BatchImportJobData>(
+    'batch-import',
+    async (job: Job<BatchImportJobData>) => {
+      const { batchId, tenantId } = job.data
 
-      console.log(`[Worker] Completed batch import: ${batchId}`)
-      return { success: true, batchId }
-    } catch (error) {
-      console.error(`[Worker] Failed batch import: ${batchId}`, error)
-      throw error
-    }
-  },
-  {
-    connection,
-    concurrency: 5, // Process up to 5 batches simultaneously
-    limiter: {
-      max: 10, // Max 10 jobs
-      duration: 1000, // per second (to avoid rate limiting ShipStation)
+      console.log(`[Worker] Starting batch import: ${batchId}`)
+
+      try {
+        await processBatch(batchId, tenantId, (progress) => {
+          job.updateProgress(progress)
+        })
+
+        console.log(`[Worker] Completed batch import: ${batchId}`)
+        return { success: true, batchId }
+      } catch (error) {
+        console.error(`[Worker] Failed batch import: ${batchId}`, error)
+        throw error
+      }
     },
-  }
-)
+    {
+      connection,
+      concurrency: 5, // Process up to 5 batches simultaneously
+      limiter: {
+        max: 10, // Max 10 jobs
+        duration: 1000, // per second (to avoid rate limiting ShipStation)
+      },
+    }
+  )
 
-// Worker event handlers
-batchImportWorker.on('completed', (job) => {
-  console.log(`[Worker] Job ${job.id} completed`)
-})
+  return _batchImportWorker
+}
 
-batchImportWorker.on('failed', (job, err) => {
-  console.error(`[Worker] Job ${job?.id} failed:`, err.message)
-})
+// Initialize worker and get instance
+export const getBatchImportWorker = initWorker
 
-batchImportWorker.on('error', (err) => {
-  console.error('[Worker] Error:', err)
+// Export worker instance for backwards compatibility
+export const batchImportWorker = {
+  async on(event: string, handler: (...args: any[]) => void) {
+    const worker = await initWorker()
+    return worker.on(event, handler)
+  },
+  async close() {
+    const worker = await initWorker()
+    return worker.close()
+  },
+}
+
+// Initialize worker event handlers
+initWorker().then((worker) => {
+  worker.on('completed', (job) => {
+    console.log(`[Worker] Job ${job.id} completed`)
+  })
+
+  worker.on('failed', (job, err) => {
+    console.error(`[Worker] Job ${job?.id} failed:`, err.message)
+  })
+
+  worker.on('error', (err) => {
+    console.error('[Worker] Error:', err)
+  })
 })
 
 // Main batch processing function
@@ -388,7 +407,8 @@ async function markGroupAsFailed(rows: any[], errorMessage: string) {
 process.on('SIGTERM', async () => {
   console.log('[Worker] Shutting down gracefully...')
   await batchImportWorker.close()
-  await connection.quit()
+  const redis = await getRedisInstance()
+  await redis.quit()
   await db.$disconnect()
 })
 

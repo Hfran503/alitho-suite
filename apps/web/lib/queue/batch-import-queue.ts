@@ -1,32 +1,48 @@
 import { Queue } from 'bullmq'
-import Redis from 'ioredis'
+import { getRedisInstance } from '../redis'
 
-// Redis connection configuration
-const connection = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD || undefined,
-  maxRetriesPerRequest: null, // Required for BullMQ
-})
+let _batchImportQueue: Queue | null = null
 
-// Create the batch import queue
-export const batchImportQueue = new Queue('batch-import', {
-  connection,
-  defaultJobOptions: {
-    attempts: 3, // Retry failed jobs up to 3 times
-    backoff: {
-      type: 'exponential',
-      delay: 2000, // Start with 2 second delay, then exponential backoff
-    },
-    removeOnComplete: {
-      count: 100, // Keep last 100 completed jobs
-      age: 24 * 3600, // Keep completed jobs for 24 hours
-    },
-    removeOnFail: {
-      count: 1000, // Keep last 1000 failed jobs for debugging
-    },
+// Lazy-loaded queue to avoid Redis initialization during build
+const getBatchImportQueue = async () => {
+  if (!_batchImportQueue) {
+    const redis = await getRedisInstance()
+    _batchImportQueue = new Queue('batch-import', {
+      connection: redis,
+      defaultJobOptions: {
+        attempts: 3, // Retry failed jobs up to 3 times
+        backoff: {
+          type: 'exponential',
+          delay: 2000, // Start with 2 second delay, then exponential backoff
+        },
+        removeOnComplete: {
+          count: 100, // Keep last 100 completed jobs
+          age: 24 * 3600, // Keep completed jobs for 24 hours
+        },
+        removeOnFail: {
+          count: 1000, // Keep last 1000 failed jobs for debugging
+        },
+      },
+    })
+  }
+  return _batchImportQueue
+}
+
+// Export for backwards compatibility
+export const batchImportQueue = {
+  async add(...args: Parameters<Queue['add']>) {
+    const queue = await getBatchImportQueue()
+    return queue.add(...args)
   },
-})
+  async getJob(jobId: string) {
+    const queue = await getBatchImportQueue()
+    return queue.getJob(jobId)
+  },
+  async close() {
+    const queue = await getBatchImportQueue()
+    return queue.close()
+  },
+}
 
 // Job data interface
 export interface BatchImportJobData {
@@ -65,5 +81,6 @@ export async function getBatchJobStatus(batchId: string) {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   await batchImportQueue.close()
-  await connection.quit()
+  const redis = await getRedisInstance()
+  await redis.quit()
 })
