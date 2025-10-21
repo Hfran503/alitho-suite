@@ -1016,6 +1016,56 @@ async function processShipmentGroup(
             processedAt: new Date(),
           },
         })
+
+        // Also create ShippingLabel record for shipment tracking page
+        try {
+          await db.shippingLabel.create({
+            data: {
+              tenantId,
+              paceShipmentId: paceShipmentId!,
+              paceCartonId: paceCartonId,
+              provider: 'shipstation',
+              providerShipmentId: label.shipmentId,
+              providerLabelId: label.labelId,
+              trackingNumber: label.trackingNumber,
+              labelUrl: label.labelUrl,
+              carrier: batch.carrierId,
+              service: batch.serviceCode,
+              shipFrom: batch.fromAddress,
+              shipTo: {
+                name: matchingRow.shipToName,
+                company_name: matchingRow.shipToCompany,
+                address_line1: matchingRow.shipToAddress1,
+                address_line2: matchingRow.shipToAddress2,
+                city_locality: matchingRow.shipToCity,
+                state_province: matchingRow.shipToState,
+                postal_code: matchingRow.shipToZip,
+                country_code: matchingRow.shipToCountry || 'US',
+                phone: matchingRow.shipToPhone,
+              },
+              weight: matchingRow.weight,
+              length: matchingRow.length,
+              width: matchingRow.width,
+              height: matchingRow.height,
+              cost: label.cost,
+              currency: 'USD',
+              status: 'active',
+              isReturnLabel: false,
+              metadata: {
+                batchImportId: batch.id,
+                batchImportRowId: label.rowId,
+                jobNumber: matchingRow.jobNumber,
+                packageNumber: matchingRow.packageNumber,
+                totalPackages: matchingRow.totalPackages,
+              },
+            },
+          })
+          console.log(`[batch-import]    - Created ShippingLabel record for tracking`)
+        } catch (labelError) {
+          console.warn(`[batch-import] ⚠️  Failed to create ShippingLabel record:`, labelError)
+          // Don't fail the import if ShippingLabel creation fails
+        }
+
         successCount++
       } catch (error) {
         console.error(`[batch-import] ❌ Error updating row ${label.rowId}:`, error)

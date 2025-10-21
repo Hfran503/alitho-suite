@@ -15,6 +15,8 @@ export async function GET() {
     // TODO: Add role check to ensure only admins can access this
     // For now, we'll allow any authenticated user
 
+    const currentUserId = session.user.id
+
     // Get all active sessions (not expired)
     const sessions = await db.session.findMany({
       where: {
@@ -37,7 +39,14 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json({ sessions })
+    // Find the current user's most recent session (there should only be one now)
+    const currentSessionToken = sessions.find(s => s.userId === currentUserId)?.sessionToken
+
+    return NextResponse.json({
+      sessions,
+      currentUserId,
+      currentSessionToken,
+    })
   } catch (error) {
     console.error('Error fetching sessions:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

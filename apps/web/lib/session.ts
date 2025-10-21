@@ -3,7 +3,7 @@ import { db } from '@repo/database'
 import { nanoid } from 'nanoid'
 
 const SESSION_COOKIE_NAME = 'session_token'
-const SESSION_DURATION = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
+const SESSION_DURATION = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
 
 export interface SessionUser {
   id: string
@@ -130,4 +130,17 @@ export async function getUserSessions(userId: string) {
  */
 export async function deleteSessionByToken(sessionToken: string) {
   await db.session.delete({ where: { sessionToken } })
+}
+
+/**
+ * Clean up all expired sessions (run periodically)
+ */
+export async function cleanupExpiredSessions() {
+  const result = await db.session.deleteMany({
+    where: {
+      expires: { lt: new Date() },
+    },
+  })
+  console.log(`Cleaned up ${result.count} expired sessions`)
+  return result.count
 }

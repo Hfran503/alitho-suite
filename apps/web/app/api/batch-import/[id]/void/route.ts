@@ -144,6 +144,24 @@ export async function POST(
           },
         })
 
+        // Also update ShippingLabel record to voided status
+        if (relatedRow.trackingNumber) {
+          try {
+            await db.shippingLabel.updateMany({
+              where: {
+                trackingNumber: relatedRow.trackingNumber,
+                tenantId: membership.tenantId,
+              },
+              data: {
+                status: 'voided',
+              },
+            })
+            console.log(`[VOID] ✅ Updated ShippingLabel status to voided for tracking ${relatedRow.trackingNumber}`)
+          } catch (labelError) {
+            console.warn(`[VOID] ⚠️  Failed to update ShippingLabel:`, labelError)
+          }
+        }
+
         voidedCount++
       } catch (error: any) {
         console.error(`[VOID] Failed to void label for row ${relatedRow.id}:`, error)

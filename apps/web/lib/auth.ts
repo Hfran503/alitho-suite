@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 24 * 60 * 60, // 24 hours
   },
   pages: {
     signIn: '/auth/signin',
@@ -21,9 +21,14 @@ export const authOptions: NextAuthOptions = {
       // Create a session record for tracking (even though we use JWT)
       try {
         if (user?.id) {
-          // Create session record that expires in 30 days
+          // Delete all existing sessions for this user to prevent multiple sessions
+          await db.session.deleteMany({
+            where: { userId: user.id },
+          })
+
+          // Create session record that expires in 24 hours
           const expiresAt = new Date()
-          expiresAt.setDate(expiresAt.getDate() + 30)
+          expiresAt.setHours(expiresAt.getHours() + 24)
 
           await db.session.create({
             data: {

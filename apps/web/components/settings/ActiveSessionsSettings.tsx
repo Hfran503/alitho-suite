@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 
 interface Session {
   id: string
   userId: string
+  sessionToken: string
   expires: string
   user: {
     id: string
@@ -20,12 +20,11 @@ interface Session {
 }
 
 export function ActiveSessionsSettings() {
-  const { data: currentSession } = useSession()
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [signingOut, setSigningOut] = useState<string | null>(null)
-  const currentUserId = currentSession?.user?.id
+  const [currentSessionToken, setCurrentSessionToken] = useState<string | null>(null)
 
   useEffect(() => {
     fetchSessions()
@@ -37,6 +36,7 @@ export function ActiveSessionsSettings() {
       if (response.ok) {
         const data = await response.json()
         setSessions(data.sessions)
+        setCurrentSessionToken(data.currentSessionToken)
       }
     } catch (error) {
       console.error('Error fetching sessions:', error)
@@ -201,12 +201,12 @@ export function ActiveSessionsSettings() {
                 {/* Sessions */}
                 <div className="space-y-2 ml-16">
                   {userSessions.map((session) => {
-                    const isCurrentUser = session.userId === currentUserId
+                    const isCurrentSession = session.sessionToken === currentSessionToken
                     return (
                       <div
                         key={session.id}
                         className={`flex items-center justify-between p-3 rounded-lg ${
-                          isCurrentUser ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
+                          isCurrentSession ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
                         }`}
                       >
                         <div className="flex-1">
@@ -215,7 +215,7 @@ export function ActiveSessionsSettings() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                             <span className="text-gray-700">Session ID: {session.id.substring(0, 8)}...</span>
-                            {isCurrentUser && (
+                            {isCurrentSession && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600 text-white">
                                 Your Session
                               </span>
@@ -226,7 +226,7 @@ export function ActiveSessionsSettings() {
                           </div>
                         </div>
 
-                        {isCurrentUser ? (
+                        {isCurrentSession ? (
                           <div className="px-3 py-1.5 text-sm text-gray-500 italic">
                             Cannot sign out self
                           </div>

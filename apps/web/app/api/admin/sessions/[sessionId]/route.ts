@@ -37,10 +37,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })
     }
 
-    // Prevent admin from signing out themselves (could be confusing)
-    if (targetSession.userId === session.user.id) {
+    // Get the current user's active sessions to prevent deleting their current session
+    const currentUserSessions = await db.session.findMany({
+      where: {
+        userId: session.user.id,
+        expires: { gt: new Date() },
+      },
+      orderBy: { expires: 'desc' },
+      take: 1, // Get the most recent session (should be the current one)
+    })
+
+    // Prevent admin from signing out their current active session
+    // Allow deleting old sessions even if they belong to the current user
+    if (currentUserSessions.length > 0 && targetSession.id === currentUserSessions[0].id) {
       return NextResponse.json(
-        { error: 'You cannot sign out your own session. Use the logout button instead.' },
+        { error: 'You cannot sign out your current session. Use the logout button instead.' },
         { status: 400 }
       )
     }
