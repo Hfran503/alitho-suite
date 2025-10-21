@@ -48,9 +48,9 @@ export const getBatchImportWorker = initWorker
 
 // Export worker instance for backwards compatibility
 export const batchImportWorker = {
-  async on(event: string, handler: (...args: any[]) => void) {
+  async on(event: any, handler: (...args: any[]) => void) {
     const worker = await initWorker()
-    return worker.on(event, handler)
+    return worker.on(event as any, handler)
   },
   async close() {
     const worker = await initWorker()
