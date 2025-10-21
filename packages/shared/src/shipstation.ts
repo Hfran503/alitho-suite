@@ -1,4 +1,4 @@
-import { getShipStationApiKey } from './secrets'
+import { getShipStationApiKey } from './secrets.js'
 import { db } from '@repo/database'
 
 /**
