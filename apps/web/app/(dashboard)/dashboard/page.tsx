@@ -151,7 +151,7 @@ export default async function DashboardPage() {
             </span>
           </div>
           <p className="text-3xl font-bold text-gray-900">
-            {formatCurrency(labelCosts._sum.cost)}
+            {formatCurrency(labelCosts._sum.cost ? Number(labelCosts._sum.cost) : null)}
           </p>
           <p className="text-sm text-gray-500 mt-2">
             {labelCosts._count || 0} labels
