@@ -112,6 +112,7 @@ export function Step3ShippingConfig({ onComplete, onBack }: Step3ShippingConfigP
       }
 
       const data = await response.json()
+      console.log('📦 Rates received:', data.data.rates)
       setRates(data.data.rates || [])
     } catch (err: any) {
       setError(err.message || 'Failed to get shipping rates')
@@ -125,6 +126,15 @@ export function Step3ShippingConfig({ onComplete, onBack }: Step3ShippingConfigP
       setError('Please select a shipping service')
       return
     }
+
+    console.log('🚀 Selected rate:', selectedRate)
+    console.log('🚀 Shipping config being sent:', {
+      carrierId: selectedRate.carrierId,
+      carrierCode: selectedRate.carrierCode,
+      serviceCode: selectedRate.serviceCode,
+      carrier: selectedRate.carrier,
+      service: selectedRate.service,
+    })
 
     const config: ShippingConfig = {
       carrierId: selectedRate.carrierId,

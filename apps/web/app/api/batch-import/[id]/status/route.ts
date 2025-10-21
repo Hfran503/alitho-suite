@@ -79,8 +79,8 @@ export async function GET(
         trackingNumber: row.trackingNumber,
         labelUrl: row.labelUrl,
         errorMessage: row.errorMessage,
-        jobShipmentId: row.jobShipmentId,
-        cartonId: row.cartonId,
+        jobShipmentId: row.paceJobShipmentId,
+        cartonId: row.paceCartonId,
       })),
     }
 

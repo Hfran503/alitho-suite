@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 
 interface Step5ProcessingProps {
   batchId: string
-  onReset: () => void
+  onReset?: () => void
 }
 
 interface RowStatus {
@@ -43,6 +43,8 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
 
   // Poll for status updates
   useEffect(() => {
+    console.log(`[Batch Import] 🚀 Starting to monitor batch: ${batchId}`)
+
     const fetchStatus = async () => {
       try {
         const response = await fetch(`/api/batch-import/${batchId}/status`)
@@ -51,15 +53,37 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
         }
 
         const data = await response.json()
+        console.log(`[Batch Import] 📊 Status update:`, {
+          status: data.data.status,
+          totalRows: data.data.totalRows,
+          processedRows: data.data.rows.filter((r: any) => r.status !== 'PENDING').length,
+          successfulRows: data.data.successfulRows,
+          failedRows: data.data.failedRows,
+          progress: data.data.progress,
+        })
+
+        // Log each row's status
+        data.data.rows.forEach((row: any) => {
+          if (row.status === 'SUCCESS') {
+            console.log(`[Batch Import] ✅ Row ${row.rowNumber}: ${row.trackingNumber} - PACE: ${row.jobShipmentId || 'N/A'}`)
+          } else if (row.status === 'FAILED') {
+            console.error(`[Batch Import] ❌ Row ${row.rowNumber}: ${row.errorMessage}`)
+          } else if (row.status === 'PROCESSING') {
+            console.log(`[Batch Import] 🔄 Row ${row.rowNumber}: Processing...`)
+          }
+        })
+
         setBatchStatus(data.data)
         setIsLoading(false)
 
         // Stop polling if batch is complete or failed
         if (data.data.status === 'COMPLETED' || data.data.status === 'FAILED') {
+          console.log(`[Batch Import] 🏁 Batch completed with status: ${data.data.status}`)
           return true // Stop polling
         }
         return false
       } catch (err: any) {
+        console.error(`[Batch Import] ❌ Error fetching status:`, err)
         setError(err.message)
         setIsLoading(false)
         return true // Stop polling on error
@@ -77,7 +101,10 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
       }
     }, 2000)
 
-    return () => clearInterval(interval)
+    return () => {
+      console.log(`[Batch Import] 🛑 Stopped monitoring batch: ${batchId}`)
+      clearInterval(interval)
+    }
   }, [batchId])
 
   const handleRetryRow = async (rowId: string) => {
@@ -124,7 +151,8 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to void label')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to void label')
       }
 
       // Refresh status
@@ -171,11 +199,25 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
       return
     }
 
-    // Open each label in new tab (browsers may block multiple popups)
-    for (const row of successRows) {
-      if (row.labelUrl) {
-        window.open(row.labelUrl, '_blank')
+    try {
+      // Download merged PDF from API
+      const response = await fetch(`/api/batch-import/${batchId}/download-labels`)
+      if (!response.ok) {
+        throw new Error('Failed to download labels')
       }
+
+      // Create a blob from the response and download it
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `batch-${batchId}-labels.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`Failed to download labels: ${err.message}`)
     }
   }
 
@@ -246,12 +288,14 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
           </svg>
           <div>
             <p className="text-sm text-red-800">{error}</p>
-            <button
-              onClick={onReset}
-              className="mt-3 text-sm text-red-600 underline hover:no-underline"
-            >
-              Go back to start
-            </button>
+            {onReset && (
+              <button
+                onClick={onReset}
+                className="mt-3 text-sm text-red-600 underline hover:no-underline"
+              >
+                Go back to start
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -496,7 +540,7 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
       </div>
 
       {/* Reset Button */}
-      {!isProcessing && (
+      {!isProcessing && onReset && (
         <div className="flex justify-center pt-6 border-t border-gray-200">
           <button
             onClick={onReset}
