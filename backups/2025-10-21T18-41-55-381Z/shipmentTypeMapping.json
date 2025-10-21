@@ -1,0 +1,82 @@
+[
+  {
+    "id": "cmgzzl0qs0007w96n3a7xr51s",
+    "plannedTypeId": 201,
+    "plannedTypeName": "Planned | Billable",
+    "completedTypeId": 202,
+    "completedTypeName": "Completed | Billable",
+    "tenantId": "cmgzzea5200001vtaazq29pyk",
+    "createdAt": "2025-10-21T03:10:10.948Z",
+    "updatedAt": "2025-10-21T03:10:10.948Z"
+  },
+  {
+    "id": "cmgzzldna0009w96n49h24dek",
+    "plannedTypeId": 203,
+    "plannedTypeName": "Planned | Not Billable",
+    "completedTypeId": 204,
+    "completedTypeName": "Completed | Not Billable",
+    "tenantId": "cmgzzea5200001vtaazq29pyk",
+    "createdAt": "2025-10-21T03:10:27.670Z",
+    "updatedAt": "2025-10-21T03:10:27.670Z"
+  },
+  {
+    "id": "cmgzzlpis000bw96nlm30d4r3",
+    "plannedTypeId": 205,
+    "plannedTypeName": "Planned | Storefront| Billable",
+    "completedTypeId": 206,
+    "completedTypeName": "Completed|Storefront| Billable",
+    "tenantId": "cmgzzea5200001vtaazq29pyk",
+    "createdAt": "2025-10-21T03:10:43.060Z",
+    "updatedAt": "2025-10-21T03:10:43.060Z"
+  },
+  {
+    "id": "cmh00aff0000v10q0kt1568ph",
+    "plannedTypeId": 1,
+    "plannedTypeName": "UPS Ground - Planned",
+    "completedTypeId": 2,
+    "completedTypeName": "UPS Ground - Completed",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:56.365Z",
+    "updatedAt": "2025-10-21T03:29:56.365Z"
+  },
+  {
+    "id": "cmh00afi6000x10q07hq9r42j",
+    "plannedTypeId": 3,
+    "plannedTypeName": "UPS 2nd Day Air - Planned",
+    "completedTypeId": 4,
+    "completedTypeName": "UPS 2nd Day Air - Completed",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:56.478Z",
+    "updatedAt": "2025-10-21T03:29:56.478Z"
+  },
+  {
+    "id": "cmh00afjp000z10q0p4jfemg4",
+    "plannedTypeId": 5,
+    "plannedTypeName": "UPS Next Day Air - Planned",
+    "completedTypeId": 6,
+    "completedTypeName": "UPS Next Day Air - Completed",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:56.534Z",
+    "updatedAt": "2025-10-21T03:29:56.534Z"
+  },
+  {
+    "id": "cmh00afl9001110q06fbmks5t",
+    "plannedTypeId": 7,
+    "plannedTypeName": "FedEx Ground - Planned",
+    "completedTypeId": 8,
+    "completedTypeName": "FedEx Ground - Completed",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:56.589Z",
+    "updatedAt": "2025-10-21T03:29:56.589Z"
+  },
+  {
+    "id": "cmh00afms001310q0jhiz99oz",
+    "plannedTypeId": 9,
+    "plannedTypeName": "USPS Priority - Planned",
+    "completedTypeId": 10,
+    "completedTypeName": "USPS Priority - Completed",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:56.644Z",
+    "updatedAt": "2025-10-21T03:29:56.644Z"
+  }
+]

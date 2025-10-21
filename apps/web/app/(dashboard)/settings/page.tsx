@@ -15,7 +15,7 @@ export default function SettingsPage() {
     { id: 'users' as Tab, name: 'Users', icon: '👥' },
     { id: 'sessions' as Tab, name: 'Active Sessions', icon: '🔐' },
     { id: 'integrations' as Tab, name: 'Integrations', icon: '🔌' },
-    { id: 'shipment-types' as Tab, name: 'Shipment Types', icon: '📦' },
+    { id: 'shipment-types' as Tab, name: 'Shipment Settings', icon: '📦' },
     { id: 'teams' as Tab, name: 'Teams', icon: '🏢', disabled: true },
     { id: 'billing' as Tab, name: 'Billing', icon: '💳', disabled: true },
     { id: 'security' as Tab, name: 'Security', icon: '🔒', disabled: true },

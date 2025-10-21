@@ -76,20 +76,49 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
       reference1: ['reference1', 'ref1', 'reference 1'],
       reference2: ['reference2', 'ref2', 'reference 2'],
       reference3: ['reference3', 'ref3', 'reference 3'],
-      itemNumber: ['itemnumber', 'item number', 'item', 'product', 'sku'],
       itemQuantity: ['itemquantity', 'item quantity', 'quantity', 'qty'],
+      itemNumber: ['itemnumber', 'item number', 'itemno', 'item#', 'itemnbr', 'product', 'sku', 'productid', 'jobproduct'],
     }
 
     columns.forEach((column) => {
       const normalized = column.toLowerCase().trim().replace(/[_\s-]/g, '')
 
+      let bestMatch: { field: string; score: number } | null = null
+      let foundExactMatch = false
+
+      // First pass: Look for exact matches (highest priority)
       for (const [systemField, patterns] of Object.entries(fieldPatterns)) {
         for (const pattern of patterns) {
           const patternNormalized = pattern.replace(/[_\s-]/g, '')
-          if (normalized === patternNormalized || normalized.includes(patternNormalized)) {
+
+          if (normalized === patternNormalized) {
+            // Exact match - immediately assign and stop searching
             mapping[systemField] = column
+            foundExactMatch = true
             break
           }
+        }
+        if (foundExactMatch) break
+      }
+
+      // If no exact match found, look for partial matches
+      if (!foundExactMatch) {
+        for (const [systemField, patterns] of Object.entries(fieldPatterns)) {
+          for (const pattern of patterns) {
+            const patternNormalized = pattern.replace(/[_\s-]/g, '')
+
+            if (normalized.includes(patternNormalized)) {
+              // Score by pattern length (longer patterns are more specific)
+              const score = patternNormalized.length
+              if (!bestMatch || score > bestMatch.score) {
+                bestMatch = { field: systemField, score }
+              }
+            }
+          }
+        }
+
+        if (bestMatch) {
+          mapping[bestMatch.field] = column
         }
       }
     })

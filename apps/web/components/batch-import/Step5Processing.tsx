@@ -12,16 +12,31 @@ interface RowStatus {
   rowNumber: number
   jobNumber: string
   shipToName: string
+  shipToCompany?: string
+  shipToAddress1?: string
+  shipToAddress2?: string
   shipToCity: string
   shipToState: string
+  shipToZip?: string
+  shipToCountry?: string
+  shipToPhone?: string
+  shipDate?: string
   packageNumber: number
   totalPackages: number
-  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED'
+  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
   trackingNumber?: string
+  trackingUrl?: string
   labelUrl?: string
+  shippingCost?: number
   errorMessage?: string
+  notes?: string
   jobShipmentId?: string
   cartonId?: string
+  // Retry tracking
+  retryCount?: number
+  maxRetries?: number
+  isTransientError?: boolean
+  lastAttemptAt?: string
 }
 
 interface BatchStatus {
@@ -30,6 +45,7 @@ interface BatchStatus {
   totalRows: number
   successfulRows: number
   failedRows: number
+  voidedRows: number
   progress: number
   rows: RowStatus[]
 }
@@ -40,11 +56,14 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
   const [error, setError] = useState('')
   const [retryingRows, setRetryingRows] = useState<Set<string>>(new Set())
   const [voidingRows, setVoidingRows] = useState<Set<string>>(new Set())
+  const [voidingAll, setVoidingAll] = useState(false)
+  const [changingServiceRow, setChangingServiceRow] = useState<string | null>(null)
+  const [carriers, setCarriers] = useState<any[]>([])
+  const [selectedCarrier, setSelectedCarrier] = useState('')
+  const [selectedService, setSelectedService] = useState('')
 
   // Poll for status updates
   useEffect(() => {
-    console.log(`[Batch Import] 🚀 Starting to monitor batch: ${batchId}`)
-
     const fetchStatus = async () => {
       try {
         const response = await fetch(`/api/batch-import/${batchId}/status`)
@@ -53,25 +72,6 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
         }
 
         const data = await response.json()
-        console.log(`[Batch Import] 📊 Status update:`, {
-          status: data.data.status,
-          totalRows: data.data.totalRows,
-          processedRows: data.data.rows.filter((r: any) => r.status !== 'PENDING').length,
-          successfulRows: data.data.successfulRows,
-          failedRows: data.data.failedRows,
-          progress: data.data.progress,
-        })
-
-        // Log each row's status
-        data.data.rows.forEach((row: any) => {
-          if (row.status === 'SUCCESS') {
-            console.log(`[Batch Import] ✅ Row ${row.rowNumber}: ${row.trackingNumber} - PACE: ${row.jobShipmentId || 'N/A'}`)
-          } else if (row.status === 'FAILED') {
-            console.error(`[Batch Import] ❌ Row ${row.rowNumber}: ${row.errorMessage}`)
-          } else if (row.status === 'PROCESSING') {
-            console.log(`[Batch Import] 🔄 Row ${row.rowNumber}: Processing...`)
-          }
-        })
 
         setBatchStatus(data.data)
         setIsLoading(false)
@@ -102,10 +102,63 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
     }, 2000)
 
     return () => {
-      console.log(`[Batch Import] 🛑 Stopped monitoring batch: ${batchId}`)
+      // Stopped monitoring
       clearInterval(interval)
     }
   }, [batchId])
+
+  // Fetch carriers when opening service selector
+  const handleOpenServiceSelector = async (rowId: string) => {
+    setChangingServiceRow(rowId)
+
+    try {
+      const response = await fetch('/api/integrations/shipstation/carriers')
+      if (response.ok) {
+        const data = await response.json()
+        setCarriers(data.carriers || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch carriers:', err)
+    }
+  }
+
+  const handleChangeService = async () => {
+    if (!changingServiceRow || !selectedCarrier || !selectedService) {
+      alert('Please select both carrier and service')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/batch-import/${batchId}/change-service`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rowId: changingServiceRow,
+          carrierId: selectedCarrier,
+          serviceCode: selectedService,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to change service')
+      }
+
+      // Refresh status
+      const statusResponse = await fetch(`/api/batch-import/${batchId}/status`)
+      const statusData = await statusResponse.json()
+      setBatchStatus(statusData.data)
+
+      // Reset state
+      setChangingServiceRow(null)
+      setSelectedCarrier('')
+      setSelectedService('')
+
+      alert('Service changed successfully!')
+    } catch (err: any) {
+      alert(`Failed to change service: ${err.message}`)
+    }
+  }
 
   const handleRetryRow = async (rowId: string) => {
     setRetryingRows((prev) => new Set(prev).add(rowId))
@@ -181,12 +234,86 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
       return
     }
 
-    if (!confirm(`Retry all ${failedRows.length} failed rows?`)) {
+    const transientCount = failedRows.filter(r => r.isTransientError).length
+    const permanentCount = failedRows.length - transientCount
+
+    let message = `Retry ${failedRows.length} failed rows?\n\n`
+    if (transientCount > 0) {
+      message += `${transientCount} transient errors (will be retried)\n`
+    }
+    if (permanentCount > 0) {
+      message += `${permanentCount} permanent errors (unlikely to succeed)\n`
+    }
+
+    if (!confirm(message)) {
       return
     }
 
-    for (const row of failedRows) {
-      await handleRetryRow(row.id)
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/batch-import/${batchId}/retry-failed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onlyTransient: false }), // Retry all failed rows
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to retry batch')
+      }
+
+      alert(`Successfully queued ${result.retriedRows} rows for retry`)
+
+      // Refresh status
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (err: any) {
+      alert(`Error: ${err.message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVoidAllLabels = async () => {
+    if (!batchStatus) return
+
+    const successRows = batchStatus.rows.filter((r) => r.status === 'SUCCESS')
+    if (successRows.length === 0) {
+      alert('No successful labels to void')
+      return
+    }
+
+    const confirmMessage = `⚠️ WARNING: This will void ALL ${successRows.length} successful label(s) and delete their PACE records.\n\nThis action cannot be undone!\n\nAre you sure you want to continue?`
+
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    try {
+      setVoidingAll(true)
+      const response = await fetch(`/api/batch-import/${batchId}/void-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to void labels')
+      }
+
+      alert(result.message || `Successfully voided ${result.voidedCount} label(s)`)
+
+      // Refresh status
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (err: any) {
+      alert(`Error voiding labels: ${err.message}`)
+    } finally {
+      setVoidingAll(false)
     }
   }
 
@@ -228,23 +355,43 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
     const headers = [
       'Row',
       'Job#',
-      'Ship To',
+      'Ship To Name',
+      'Company',
+      'Address 1',
+      'Address 2',
       'City',
       'State',
+      'Zip',
+      'Phone',
       'Pkg',
       'Status',
       'Tracking',
+      'Tracking URL',
+      'Cost',
+      'PACE Shipment ID',
+      'PACE Carton ID',
+      'Notes',
       'Error',
     ]
     const rows = batchStatus.rows.map((row) => [
       row.rowNumber,
       row.jobNumber,
-      row.shipToName,
-      row.shipToCity,
-      row.shipToState,
+      row.shipToName || '',
+      row.shipToCompany || '',
+      row.shipToAddress1 || '',
+      row.shipToAddress2 || '',
+      row.shipToCity || '',
+      row.shipToState || '',
+      row.shipToZip || '',
+      row.shipToPhone || '',
       `${row.packageNumber}/${row.totalPackages}`,
       row.status,
       row.trackingNumber || '',
+      row.trackingUrl || '',
+      row.shippingCost ? `$${row.shippingCost.toFixed(2)}` : '',
+      row.jobShipmentId || '',
+      row.cartonId || '',
+      row.notes || '',
       row.errorMessage || '',
     ])
 
@@ -346,7 +493,7 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="text-3xl font-bold text-green-600">{batchStatus.successfulRows}</div>
           <div className="text-sm text-green-900 font-medium mt-1">Successful</div>
@@ -355,9 +502,13 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
           <div className="text-3xl font-bold text-red-600">{batchStatus.failedRows}</div>
           <div className="text-sm text-red-900 font-medium mt-1">Failed</div>
         </div>
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="text-3xl font-bold text-orange-600">{batchStatus.voidedRows || 0}</div>
+          <div className="text-sm text-orange-900 font-medium mt-1">Voided</div>
+        </div>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="text-3xl font-bold text-gray-600">
-            {batchStatus.totalRows - batchStatus.successfulRows - batchStatus.failedRows}
+            {batchStatus.totalRows - batchStatus.successfulRows - batchStatus.failedRows - (batchStatus.voidedRows || 0)}
           </div>
           <div className="text-sm text-gray-900 font-medium mt-1">Pending</div>
         </div>
@@ -365,7 +516,7 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
 
       {/* Bulk Actions */}
       {!isProcessing && (
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex items-center gap-3 pt-2 flex-wrap">
           <button
             onClick={handleRetryAllFailed}
             disabled={batchStatus.failedRows === 0}
@@ -379,6 +530,14 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
           >
             Download All Labels
+          </button>
+          <button
+            onClick={handleVoidAllLabels}
+            disabled={batchStatus.successfulRows === 0 || voidingAll}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
+            title="Void all successful labels and delete PACE records"
+          >
+            {voidingAll ? 'Voiding All...' : `Void All Labels (${batchStatus.successfulRows})`}
           </button>
           <button
             onClick={handleExportResults}
@@ -402,10 +561,7 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
                   Job#
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                  Ship To
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                  City, State
+                  Ship To Address
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
                   Pkg
@@ -414,7 +570,10 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
                   Status
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                  Tracking / Error
+                  Tracking / Cost
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                  PACE IDs
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
                   Actions
@@ -430,9 +589,23 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
                   <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                     {row.jobNumber}
                   </td>
-                  <td className="px-3 py-3 text-sm text-gray-600">{row.shipToName}</td>
-                  <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                    {row.shipToCity}, {row.shipToState}
+                  <td className="px-3 py-3 text-sm text-gray-600">
+                    <div className="max-w-xs">
+                      <div className="font-medium text-gray-900">{row.shipToName}</div>
+                      {row.shipToCompany && row.shipToCompany !== row.shipToName && (
+                        <div className="text-xs text-gray-600">{row.shipToCompany}</div>
+                      )}
+                      <div className="text-xs text-gray-500 mt-1">
+                        {row.shipToAddress1}
+                        {row.shipToAddress2 && <>, {row.shipToAddress2}</>}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {row.shipToCity}, {row.shipToState} {row.shipToZip}
+                      </div>
+                      {row.shipToPhone && (
+                        <div className="text-xs text-gray-500">📞 {row.shipToPhone}</div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
                     {row.packageNumber}/{row.totalPackages}
@@ -491,13 +664,85 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
                         Pending
                       </span>
                     )}
+                    {row.status === 'CANCELLED' && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        Voided
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-sm">
                     {row.status === 'SUCCESS' && row.trackingNumber && (
-                      <span className="font-mono text-gray-900">{row.trackingNumber}</span>
+                      <div className="space-y-1">
+                        {row.trackingUrl ? (
+                          <a
+                            href={row.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-blue-600 hover:text-blue-700 hover:underline text-xs"
+                          >
+                            {row.trackingNumber}
+                          </a>
+                        ) : (
+                          <div className="font-mono text-gray-900 text-xs">{row.trackingNumber}</div>
+                        )}
+                        {row.shippingCost != null && row.shippingCost > 0 && (
+                          <div className="text-xs text-green-700 font-semibold">
+                            ${row.shippingCost.toFixed(2)}
+                          </div>
+                        )}
+                        {row.notes && (
+                          <div className={`text-xs p-1 rounded border ${
+                            row.notes.includes('⚠️')
+                              ? 'text-orange-700 bg-orange-50 border-orange-200'
+                              : 'text-green-700 bg-green-50 border-green-200'
+                          }`}>
+                            {row.notes}
+                          </div>
+                        )}
+                      </div>
                     )}
-                    {row.status === 'FAILED' && row.errorMessage && (
-                      <span className="text-red-600 text-xs">{row.errorMessage}</span>
+                    {row.status === 'FAILED' && (
+                      <div className="space-y-1">
+                        {row.errorMessage && (
+                          <span className="text-red-600 text-xs block">{row.errorMessage}</span>
+                        )}
+                        {row.retryCount != null && row.retryCount > 0 && (
+                          <span className="text-amber-600 text-xs block">
+                            Retry {row.retryCount}/{row.maxRetries || 3} {row.isTransientError ? '(Transient)' : '(Permanent)'}
+                          </span>
+                        )}
+                        {row.retryCount != null && row.retryCount >= (row.maxRetries || 3) && (
+                          <span className="text-red-700 text-xs block font-semibold">
+                            ⚠ Max retries exceeded
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-sm">
+                    {row.status === 'SUCCESS' && (
+                      <div className="space-y-1 text-xs">
+                        {row.jobShipmentId && (
+                          <div className="text-gray-600">
+                            <span className="font-medium">Ship:</span> {row.jobShipmentId}
+                          </div>
+                        )}
+                        {row.cartonId && (
+                          <div className="text-gray-600">
+                            <span className="font-medium">Carton:</span> {row.cartonId}
+                          </div>
+                        )}
+                        {!row.jobShipmentId && !row.cartonId && (
+                          <span className="text-gray-400">N/A</span>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap text-sm">
@@ -522,13 +767,32 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
                         </>
                       )}
                       {row.status === 'FAILED' && (
-                        <button
-                          onClick={() => handleRetryRow(row.id)}
-                          disabled={retryingRows.has(row.id)}
-                          className="text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50"
-                        >
-                          {retryingRows.has(row.id) ? 'Retrying...' : 'Retry'}
-                        </button>
+                        <div className="flex gap-2">
+                          {row.errorMessage?.includes('Change service') ? (
+                            <button
+                              onClick={() => handleOpenServiceSelector(row.id)}
+                              className="text-blue-600 hover:text-blue-700 font-medium"
+                              title="Change shipping service"
+                            >
+                              Change Service
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRetryRow(row.id)}
+                              disabled={retryingRows.has(row.id) || (row.retryCount != null && row.retryCount >= (row.maxRetries || 3))}
+                              className="text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={
+                                row.retryCount != null && row.retryCount >= (row.maxRetries || 3)
+                                  ? 'Max retries exceeded'
+                                  : 'Retry this row'
+                              }
+                            >
+                              {retryingRows.has(row.id) ? 'Retrying...' :
+                              row.retryCount != null && row.retryCount >= (row.maxRetries || 3) ? 'Max Retries' :
+                              'Retry'}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>
@@ -548,6 +812,80 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
           >
             Start New Batch Import
           </button>
+        </div>
+      )}
+
+      {/* Service Selector Modal */}
+      {changingServiceRow && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Change Shipping Service</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Carrier
+                </label>
+                <select
+                  value={selectedCarrier}
+                  onChange={(e) => {
+                    setSelectedCarrier(e.target.value)
+                    setSelectedService('')
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Select carrier...</option>
+                  {carriers.map((carrier) => (
+                    <option key={carrier.carrier_id} value={carrier.carrier_id}>
+                      {carrier.friendly_name || carrier.carrier_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCarrier && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Service
+                  </label>
+                  <select
+                    value={selectedService}
+                    onChange={(e) => setSelectedService(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Select service...</option>
+                    {carriers
+                      .find((c) => c.carrier_id === selectedCarrier)
+                      ?.services?.map((service: any) => (
+                        <option key={service.service_code} value={service.service_code}>
+                          {service.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setChangingServiceRow(null)
+                  setSelectedCarrier('')
+                  setSelectedService('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangeService}
+                disabled={!selectedCarrier || !selectedService}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Change Service
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

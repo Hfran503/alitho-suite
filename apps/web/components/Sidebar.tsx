@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { signOut } from 'next-auth/react'
 
 interface NavItem {
   name: string
@@ -175,6 +176,26 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
     )
   }
 
+  const handleLogout = async () => {
+    try {
+      // Call logout API to clear server-side session
+      await fetch('/api/auth/logout', { method: 'POST' })
+
+      // Sign out using NextAuth
+      await signOut({
+        redirect: true,
+        callbackUrl: '/auth/signin'
+      })
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Still try to sign out even if API call fails
+      await signOut({
+        redirect: true,
+        callbackUrl: '/auth/signin'
+      })
+    }
+  }
+
   return (
     <aside
       onMouseEnter={() => setIsHovered(true)}
@@ -271,8 +292,8 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
           })}
         </ul>
 
-        {/* Pin Button - At Bottom */}
-        <div className="px-2 mt-4 border-t border-gray-800 pt-4">
+        {/* Pin Button and Logout - At Bottom */}
+        <div className="px-2 mt-4 border-t border-gray-800 pt-4 space-y-2">
           <button
             onClick={handlePinToggle}
             className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors w-full ${
@@ -302,6 +323,32 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
               }`}
             >
               {isPinned ? 'Unpin' : 'Pin'}
+            </span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors w-full text-gray-400 hover:bg-red-900 hover:text-white"
+            title="Logout"
+          >
+            <svg
+              className="w-5 h-5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              />
+            </svg>
+            <span
+              className={`whitespace-nowrap transition-opacity duration-300 text-sm ${
+                isExpanded ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              Logout
             </span>
           </button>
         </div>

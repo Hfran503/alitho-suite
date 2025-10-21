@@ -1,0 +1,22 @@
+[
+  {
+    "id": "cmgzzea5200001vtaazq29pyk",
+    "name": "Calitho",
+    "slug": "calitho",
+    "plan": "enterprise",
+    "status": "active",
+    "metadata": null,
+    "createdAt": "2025-10-21T03:04:56.534Z",
+    "updatedAt": "2025-10-21T03:04:56.534Z"
+  },
+  {
+    "id": "cmh00abda000010q001zanzlt",
+    "name": "Demo Company",
+    "slug": "demo",
+    "plan": "pro",
+    "status": "active",
+    "metadata": null,
+    "createdAt": "2025-10-21T03:29:51.118Z",
+    "updatedAt": "2025-10-21T03:29:51.118Z"
+  }
+]

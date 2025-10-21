@@ -1,0 +1,39 @@
+[
+  {
+    "id": "cmgzzflfv0001cqkboq8nvgvi",
+    "provider": "shipstation",
+    "enabled": true,
+    "config": {
+      "mode": "test",
+      "carriers": [
+        {
+          "id": "se-3682946",
+          "name": "UPS"
+        },
+        {
+          "id": "se-3683097",
+          "name": "FedEx"
+        }
+      ],
+      "carrierIds": [
+        "se-3682946",
+        "se-3683097"
+      ],
+      "defaultFromAddress": {
+        "zip": "94520",
+        "city": "Concord",
+        "name": "Shipping Manager",
+        "phone": "9256821111",
+        "state": "CA",
+        "company": "Calitho",
+        "country": "US",
+        "street1": "2312 Stanwell Dr",
+        "street2": ""
+      }
+    },
+    "secretName": "calitho-suite/integrations/shipstation/cmgzzea5200001vtaazq29pyk",
+    "tenantId": "cmgzzea5200001vtaazq29pyk",
+    "createdAt": "2025-10-21T03:05:57.834Z",
+    "updatedAt": "2025-10-21T03:09:23.722Z"
+  }
+]

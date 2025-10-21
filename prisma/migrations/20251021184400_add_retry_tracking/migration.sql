@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "BatchImportRow" ADD COLUMN "retryCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "BatchImportRow" ADD COLUMN "maxRetries" INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE "BatchImportRow" ADD COLUMN "lastAttemptAt" TIMESTAMP(3);
+ALTER TABLE "BatchImportRow" ADD COLUMN "isTransientError" BOOLEAN NOT NULL DEFAULT false;

@@ -8,6 +8,8 @@ import {
 } from '@/lib/secrets'
 import { createAuditLog } from '@/lib/audit'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/integrations/shipstation - Check if ShipStation is configured
 export async function GET(_req: NextRequest) {
   try {

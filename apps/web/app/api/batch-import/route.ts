@@ -14,6 +14,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { fileName, sheetName, rows, shippingConfig, columnMapping } = body
 
+    // Log first row's shipDate for debugging
+    if (rows && rows.length > 0 && rows[0].shipDate) {
+      console.log(`[API] First row shipDate received from frontend: "${rows[0].shipDate}" (Type: ${typeof rows[0].shipDate})`)
+    }
+
     if (!fileName || !rows || !shippingConfig) {
       return NextResponse.json(
         { error: 'Missing required fields: fileName, rows, shippingConfig' },
@@ -57,7 +62,13 @@ export async function POST(req: NextRequest) {
         notificationsEmail: shippingConfig.notificationsEmail,
         columnMapping: columnMapping || {},
         rows: {
-          create: rows.map((row: any) => ({
+          create: rows.map((row: any) => {
+            // Log shipDate conversion for debugging
+            if (row.shipDate) {
+              const parsedDate = new Date(row.shipDate)
+              console.log(`[API] Row ${row.rowNumber} shipDate: "${row.shipDate}" → ${parsedDate.toISOString()} (${parsedDate.toLocaleDateString()})`)
+            }
+            return {
             rowNumber: row.rowNumber,
             status: 'PENDING',
             shipDate: row.shipDate ? new Date(row.shipDate) : null,
@@ -82,7 +93,8 @@ export async function POST(req: NextRequest) {
             reference3: row.reference3,
             itemNumber: row.itemNumber,
             itemQuantity: row.itemQuantity,
-          })),
+          }
+          }),
         },
       },
     })

@@ -52,8 +52,9 @@ export async function GET(
       queueStatus = null
     }
 
-    // Calculate progress
-    const processedRows = batch.successfulRows + batch.failedRows
+    // Calculate progress and voided count
+    const voidedRows = batch.rows.filter((r: any) => r.status === 'CANCELLED').length
+    const processedRows = batch.successfulRows + batch.failedRows + voidedRows
     const progress = batch.totalRows > 0
       ? Math.round((processedRows / batch.totalRows) * 100)
       : 0
@@ -65,22 +66,38 @@ export async function GET(
       totalRows: batch.totalRows,
       successfulRows: batch.successfulRows,
       failedRows: batch.failedRows,
+      voidedRows: voidedRows,
       progress: queueStatus?.progress ?? progress,
       rows: batch.rows.map((row: any) => ({
         id: row.id,
         rowNumber: row.rowNumber,
         jobNumber: row.jobNumber,
         shipToName: row.shipToName || row.shipToCompany || '',
+        shipToCompany: row.shipToCompany,
+        shipToAddress1: row.shipToAddress1,
+        shipToAddress2: row.shipToAddress2,
         shipToCity: row.shipToCity || '',
         shipToState: row.shipToState || '',
+        shipToZip: row.shipToZip,
+        shipToCountry: row.shipToCountry,
+        shipToPhone: row.shipToPhone,
+        shipDate: row.shipDate,
         packageNumber: row.packageNumber,
         totalPackages: row.totalPackages,
         status: row.status,
         trackingNumber: row.trackingNumber,
+        trackingUrl: row.trackingUrl,
         labelUrl: row.labelUrl,
+        shippingCost: row.shippingCost,
         errorMessage: row.errorMessage,
+        notes: row.notes,
         jobShipmentId: row.paceJobShipmentId,
         cartonId: row.paceCartonId,
+        // Retry tracking
+        retryCount: row.retryCount,
+        maxRetries: row.maxRetries,
+        isTransientError: row.isTransientError,
+        lastAttemptAt: row.lastAttemptAt,
       })),
     }
 

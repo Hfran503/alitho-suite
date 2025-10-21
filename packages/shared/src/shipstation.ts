@@ -76,6 +76,31 @@ export class ShipStationClient {
   }
 
   /**
+   * Validate an address
+   */
+  async validateAddress(address: {
+    name?: string
+    phone?: string
+    company_name?: string
+    address_line1: string
+    address_line2?: string
+    city_locality: string
+    state_province: string
+    postal_code: string
+    country_code: string
+  }): Promise<{
+    status: string
+    original_address: any
+    matched_address?: any
+    messages?: Array<{ type: string; message: string }>
+  }> {
+    return this.request('/addresses/validate', {
+      method: 'POST',
+      body: JSON.stringify([address]),
+    }).then((results: any) => results[0])
+  }
+
+  /**
    * Get shipping rates for a shipment
    */
   async getRates(params: {

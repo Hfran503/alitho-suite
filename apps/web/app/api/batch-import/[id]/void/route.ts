@@ -59,6 +59,24 @@ export async function POST(
       return NextResponse.json({ error: 'Can only void successful labels' }, { status: 400 })
     }
 
+    // Find all rows in the same shipment group (same groupKey)
+    // For multi-package shipments, we need to void ALL packages together
+    const relatedRows = await db.batchImportRow.findMany({
+      where: {
+        batchImportId: id,
+        groupKey: row.groupKey,
+        status: 'SUCCESS',
+      },
+      orderBy: {
+        packageNumber: 'asc',
+      },
+    })
+
+    // If this is a multi-package shipment, warn the user
+    if (relatedRows.length > 1) {
+      console.log(`[VOID] Multi-package shipment detected: ${relatedRows.length} packages will be voided together`)
+    }
+
     // Get ShipStation client for this tenant
     const { getShipStationClient } = await import('@/lib/shipstation')
 
@@ -72,53 +90,185 @@ export async function POST(
       )
     }
 
-    // Check if we have the ShipStation shipment ID
-    if (!row.shipstationShipmentId) {
-      return NextResponse.json(
-        { error: 'ShipStation shipment ID not found for this row' },
-        { status: 400 }
-      )
-    }
-
-    // Void the label using ShipStation client
-    let voidData
+    // Get PACE API credentials for deleting shipments/cartons
+    const { getPaceApiCredentials } = await import('@repo/shared')
+    let paceCredentials
     try {
-      if (row.shipstationLabelId) {
-        voidData = await shipStationClient.voidLabel(row.shipstationLabelId)
-      } else {
-        throw new Error('No label ID available to void')
-      }
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to void label with ShipStation')
+      paceCredentials = await getPaceApiCredentials()
+    } catch (error) {
+      console.warn('[VOID] PACE not configured, skipping PACE cleanup')
     }
 
-    // Update row to mark as voided
-    await db.batchImportRow.update({
-      where: { id: rowId },
-      data: {
-        status: 'FAILED',
-        errorMessage: 'Label voided by user',
-        trackingNumber: null,
-        labelUrl: null,
-      },
+    // Collect unique PACE shipment IDs to delete
+    const paceShipmentIds = new Set<number>()
+    const paceCartonIds = new Set<number>()
+
+    relatedRows.forEach(r => {
+      if (r.paceJobShipmentId) paceShipmentIds.add(r.paceJobShipmentId)
+      if (r.paceCartonId) paceCartonIds.add(r.paceCartonId)
     })
+
+    // Void all labels in the shipment group
+    const voidResults = []
+    let voidedCount = 0
+
+    for (const relatedRow of relatedRows) {
+      try {
+        // Void the label using ShipStation client
+        if (relatedRow.shipstationLabelId) {
+          const voidData = await shipStationClient.voidLabel(relatedRow.shipstationLabelId)
+          voidResults.push({
+            rowId: relatedRow.id,
+            packageNumber: relatedRow.packageNumber,
+            success: true,
+            data: voidData,
+          })
+        } else {
+          voidResults.push({
+            rowId: relatedRow.id,
+            packageNumber: relatedRow.packageNumber,
+            success: false,
+            error: 'No label ID available',
+          })
+          continue
+        }
+
+        // Update row to mark as voided
+        await db.batchImportRow.update({
+          where: { id: relatedRow.id },
+          data: {
+            status: 'FAILED',
+            errorMessage: 'Label voided by user',
+            trackingNumber: null,
+            labelUrl: null,
+          },
+        })
+
+        voidedCount++
+      } catch (error: any) {
+        console.error(`[VOID] Failed to void label for row ${relatedRow.id}:`, error)
+        voidResults.push({
+          rowId: relatedRow.id,
+          packageNumber: relatedRow.packageNumber,
+          success: false,
+          error: error.message,
+        })
+      }
+    }
+
+    // Delete PACE cartons and shipments
+    if (paceCredentials) {
+      const authHeader = 'Basic ' + Buffer.from(`${paceCredentials.username}:${paceCredentials.password}`).toString('base64')
+
+      console.log(`[VOID] 🗑️  PACE Cleanup - Cartons: [${Array.from(paceCartonIds)}], Shipments: [${Array.from(paceShipmentIds)}]`)
+
+      // Step 1: Delete cartons first (should cascade delete CartonContent)
+      for (const cartonId of paceCartonIds) {
+        try {
+          const url = `${paceCredentials.url}/DeleteObject/DeleteObject?type=Carton&key=${cartonId}`
+          const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader,
+            },
+          })
+
+          const responseText = await response.text()
+          if (response.ok) {
+            console.log(`[VOID] ✅ Carton ${cartonId} deleted - Status: ${response.status}`)
+          } else {
+            console.error(`[VOID] ❌ Carton ${cartonId} DELETE FAILED - Status: ${response.status}, Response:`, responseText)
+          }
+        } catch (error: any) {
+          console.error(`[VOID] ❌ Exception deleting Carton ${cartonId}:`, error.message)
+        }
+      }
+
+      // Step 2: Update shipments to "planned" status, then delete them
+      for (const shipmentId of paceShipmentIds) {
+        try {
+          // First, update the shipment to mark it as "planned" (not "actual")
+          console.log(`[VOID] 🔄 Updating JobShipment ${shipmentId} to planned status`)
+          const updatePayload = {
+            id: shipmentId,
+            planned: true, // Mark as planned shipment
+            trackingNumber: null, // Clear tracking number
+          }
+
+          const updateResponse = await fetch(`${paceCredentials.url}/UpdateObject/updateJobShipment`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: JSON.stringify(updatePayload),
+          })
+
+          if (!updateResponse.ok) {
+            const updateError = await updateResponse.text()
+            console.error(`[VOID] ❌ Failed to update JobShipment ${shipmentId} to planned:`, updateError)
+            continue // Skip deletion if update fails
+          }
+
+          console.log(`[VOID] ✅ JobShipment ${shipmentId} updated to planned`)
+
+          // Now delete the shipment
+          const deleteUrl = `${paceCredentials.url}/DeleteObject/DeleteObject?type=JobShipment&key=${shipmentId}`
+          console.log(`[VOID] 🗑️  Deleting JobShipment ${shipmentId}`)
+
+          const deleteResponse = await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader,
+            },
+          })
+
+          if (deleteResponse.ok) {
+            console.log(`[VOID] ✅ JobShipment ${shipmentId} deleted successfully`)
+          } else {
+            const deleteError = await deleteResponse.text()
+            console.error(`[VOID] ❌ Failed to delete JobShipment ${shipmentId}:`, deleteError)
+          }
+        } catch (error: any) {
+          console.error(`[VOID] ❌ Exception processing JobShipment ${shipmentId}:`, error.message)
+        }
+      }
+
+      console.log(`[VOID] 🏁 PACE cleanup completed`)
+    } else {
+      console.log('[VOID] ⚠️  PACE credentials not available, skipping PACE cleanup')
+    }
 
     // Update batch stats
-    await db.batchImport.update({
-      where: { id },
-      data: {
-        successfulRows: { decrement: 1 },
-        failedRows: { increment: 1 },
-      },
-    })
+    if (voidedCount > 0) {
+      await db.batchImport.update({
+        where: { id },
+        data: {
+          successfulRows: { decrement: voidedCount },
+          failedRows: { increment: voidedCount },
+        },
+      })
+    }
 
-    // TODO: Also void/delete the Carton and potentially JobShipment in PACE
-    // This depends on business logic - do we keep the records or delete them?
+    // Build success message
+    let message = relatedRows.length > 1
+      ? `Voided ${voidedCount} package(s) in multi-package shipment`
+      : 'Label voided successfully'
+
+    if (paceCredentials) {
+      message += `. Deleted ${paceCartonIds.size} PACE carton(s) and ${paceShipmentIds.size} shipment(s).`
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Label voided successfully',
-      data: voidData,
+      message,
+      voidedCount,
+      totalPackages: relatedRows.length,
+      paceCartonsDeleted: paceCartonIds.size,
+      paceShipmentsDeleted: paceShipmentIds.size,
+      details: voidResults,
     })
   } catch (error: any) {
     console.error('[API] Batch void error:', error)

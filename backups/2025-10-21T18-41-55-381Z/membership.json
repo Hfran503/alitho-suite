@@ -1,0 +1,34 @@
+[
+  {
+    "id": "cmgzzeaf300031vta19297j75",
+    "role": "owner",
+    "userId": "cmgzzeaa500011vtanifj1f2k",
+    "tenantId": "cmgzzea5200001vtaazq29pyk",
+    "createdAt": "2025-10-21T03:04:56.896Z",
+    "updatedAt": "2025-10-21T03:04:56.896Z"
+  },
+  {
+    "id": "cmh00ac4e000310q07pynlwy8",
+    "role": "full_admin",
+    "userId": "cmh00absf000110q0p1ip6na3",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:52.094Z",
+    "updatedAt": "2025-10-21T03:29:52.094Z"
+  },
+  {
+    "id": "cmh00acpu000610q0bfjx2j9z",
+    "role": "full_admin",
+    "userId": "cmh00acib000410q0b27znmfv",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:52.866Z",
+    "updatedAt": "2025-10-21T03:29:52.866Z"
+  },
+  {
+    "id": "cmh00ad6p000910q0oaf4fwj7",
+    "role": "customer_service",
+    "userId": "cmh00acz8000710q0yhokvosp",
+    "tenantId": "cmh00abda000010q001zanzlt",
+    "createdAt": "2025-10-21T03:29:53.474Z",
+    "updatedAt": "2025-10-21T03:29:53.474Z"
+  }
+]

@@ -35,6 +35,7 @@ model Tenant {
   integrations         Integration[]
   shippingLabels       ShippingLabel[]
   shipmentTypeMappings ShipmentTypeMapping[]
+  carrierServiceMappings CarrierServiceMapping[]
   batchImports         BatchImport[]
 
   @@index([slug])
@@ -337,6 +338,39 @@ model ShipmentTypeMapping {
 }
 
 // ============================================
+// Carrier Service Mappings
+// Maps ShipStation carrier/service to PACE ShipVia
+// ============================================
+
+model CarrierServiceMapping {
+  id                    String   @id @default(cuid())
+
+  // ShipStation carrier/service info
+  shipstationCarrierId  String   // ShipStation carrier ID
+  shipstationCarrierCode String  // ShipStation carrier code (e.g., "ups", "fedex")
+  shipstationServiceCode String  // ShipStation service code (e.g., "ups_ground", "fedex_2day")
+  carrierName           String   // Display name (e.g., "UPS")
+  serviceName           String   // Display name (e.g., "Ground")
+
+  // PACE Ship Via ID
+  paceShipViaId         Int      // PACE ShipVia.id
+  paceShipViaName       String   // PACE ShipVia name for display
+
+  // Tenant
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([tenantId, shipstationCarrierId, shipstationServiceCode])
+  @@index([tenantId])
+  @@index([shipstationCarrierCode])
+  @@index([shipstationServiceCode])
+}
+
+// ============================================
 // SHIPPING LABELS
 // ============================================
 
@@ -548,6 +582,13 @@ model BatchImportRow {
   labelUrl          String?
   shippingCost      Float?              // Individual carton cost
   errorMessage      String?             // Error details if failed
+  notes             String?             // Processing notes (e.g., "Address auto-corrected by ShipStation")
+
+  // Retry tracking
+  retryCount        Int                 @default(0)
+  maxRetries        Int                 @default(3)
+  lastAttemptAt     DateTime?
+  isTransientError  Boolean             @default(false) // Distinguish retryable errors from permanent failures
 
   // PACE record IDs
   paceJobShipmentId Int?                // Created JobShipment.id

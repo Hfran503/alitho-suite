@@ -1,0 +1,46 @@
+[
+  {
+    "id": "cmgzzeaa500011vtanifj1f2k",
+    "email": "hector.franco@calitho.com",
+    "emailVerified": "2025-10-21T03:04:56.715Z",
+    "name": "Hector Franco",
+    "image": null,
+    "password": "$2a$10$taSId4Rn1.0zfxLnJpXK2.UgNMgqV7cNiDpB1hWLNEPNiwSk8e49W",
+    "passwordResetRequired": false,
+    "createdAt": "2025-10-21T03:04:56.717Z",
+    "updatedAt": "2025-10-21T03:04:56.717Z"
+  },
+  {
+    "id": "cmh00absf000110q0p1ip6na3",
+    "email": "demo@example.com",
+    "emailVerified": null,
+    "name": "Demo User",
+    "image": null,
+    "password": "$2a$10$UuogOt1o12q01Dk78Nb3vebz8DCj2GwSupIu4zo.1pptg0tgNvRf2",
+    "passwordResetRequired": false,
+    "createdAt": "2025-10-21T03:29:51.663Z",
+    "updatedAt": "2025-10-21T03:29:51.663Z"
+  },
+  {
+    "id": "cmh00acib000410q0b27znmfv",
+    "email": "admin@example.com",
+    "emailVerified": null,
+    "name": "Admin User",
+    "image": null,
+    "password": "$2a$10$QewB.3d13BEg4eeFmnogE.zBKGs3uKIPUGEFrwaCsQD0hry5FNW9K",
+    "passwordResetRequired": false,
+    "createdAt": "2025-10-21T03:29:52.596Z",
+    "updatedAt": "2025-10-21T03:29:52.596Z"
+  },
+  {
+    "id": "cmh00acz8000710q0yhokvosp",
+    "email": "testuser@example.com",
+    "emailVerified": null,
+    "name": "Test User",
+    "image": null,
+    "password": "$2a$10$fMJYEPZZ3VDSLqQxDWZmmONvfs4YpLbCO.ZU9b9TKcXlYJTijt07O",
+    "passwordResetRequired": true,
+    "createdAt": "2025-10-21T03:29:53.204Z",
+    "updatedAt": "2025-10-21T03:29:53.204Z"
+  }
+]

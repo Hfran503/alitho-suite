@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-10-21T18:43:30.222Z",
+  "tables": [
+    "tenant",
+    "user",
+    "membership",
+    "order",
+    "orderItem",
+    "integration",
+    "shipmentTypeMapping",
+    "shippingLabel",
+    "batchImport",
+    "batchImportRow",
+    "batchImportMapping",
+    "carrierServiceMapping",
+    "session",
+    "account",
+    "verificationToken"
+  ],
+  "prismaVersion": "^5.22.0"
+}
