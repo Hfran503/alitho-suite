@@ -73,9 +73,9 @@ export function Step4Review({
           else if (['weight', 'length', 'width', 'height'].includes(systemField) && value) {
             mappedRow[systemField] = parseFloat(value)
           }
-          // String fields
+          // String fields - ensure they're actually strings
           else {
-            mappedRow[systemField] = value || null
+            mappedRow[systemField] = value != null ? String(value) : null
           }
         })
 
