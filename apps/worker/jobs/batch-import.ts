@@ -636,10 +636,20 @@ async function processShipmentGroup(
 
     // Step 4: Update each row with its label information
     console.log(`[batch-import] 💾 Step 4: Updating database with label information...`)
+    console.log(`[batch-import]    - Labels count: ${labelsResult.labels.length}`)
+    console.log(`[batch-import]    - Label row IDs: ${labelsResult.labels.map(l => l.rowId).join(', ')}`)
+    console.log(`[batch-import]    - Group row IDs: ${group.rows.map(r => r.id).join(', ')}`)
+
     for (const label of labelsResult.labels) {
       try {
-        const rowNum = group.rows.find(r => r.id === label.rowId)?.rowNumber
-        console.log(`[batch-import]    - Updating row ${rowNum}: ${label.trackingNumber}`)
+        const matchingRow = group.rows.find(r => r.id === label.rowId)
+        if (!matchingRow) {
+          console.error(`[batch-import] ⚠️  Label rowId ${label.rowId} not found in group rows!`)
+          failCount++
+          continue
+        }
+
+        console.log(`[batch-import]    - Updating row ${matchingRow.rowNumber} (ID: ${label.rowId}): ${label.trackingNumber}`)
 
         const cartonIdStr = cartonIds.get(label.rowId)
         const paceCartonId = cartonIdStr ? parseInt(cartonIdStr) : null
@@ -662,14 +672,20 @@ async function processShipmentGroup(
         successCount++
       } catch (error) {
         console.error(`[batch-import] ❌ Error updating row ${label.rowId}:`, error)
-        await db.batchImportRow.update({
-          where: { id: label.rowId },
-          data: {
-            status: 'FAILED',
-            errorMessage: error instanceof Error ? error.message : 'Failed to update row',
-            processedAt: new Date(),
-          },
-        })
+        console.error(`[batch-import] ❌ Error details:`, JSON.stringify(error, null, 2))
+        try {
+          // Use updateMany to avoid errors if row doesn't exist
+          await db.batchImportRow.updateMany({
+            where: { id: label.rowId },
+            data: {
+              status: 'FAILED',
+              errorMessage: error instanceof Error ? error.message : 'Failed to update row',
+              processedAt: new Date(),
+            },
+          })
+        } catch (updateError) {
+          console.error(`[batch-import] ❌ Failed to mark row as failed:`, updateError)
+        }
         failCount++
       }
     }
