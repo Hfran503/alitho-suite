@@ -22,12 +22,12 @@ export async function POST(
     }
 
     // Get user's tenant
-    const user = await db.user.findUnique({
-      where: { id: session.user.id },
+    const membership = await db.membership.findFirst({
+      where: { userId: session.user.id },
       select: { tenantId: true },
     })
 
-    if (!user?.tenantId) {
+    if (!membership?.tenantId) {
       return NextResponse.json({ error: 'User has no tenant' }, { status: 400 })
     }
 
@@ -35,7 +35,7 @@ export async function POST(
     const batch = await db.batchImport.findFirst({
       where: {
         id,
-        tenantId: user.tenantId,
+        tenantId: membership.tenantId,
       },
     })
 
@@ -64,7 +64,7 @@ export async function POST(
 
     let shipStationClient
     try {
-      shipStationClient = await getShipStationClient(user.tenantId)
+      shipStationClient = await getShipStationClient(membership.tenantId)
     } catch (error: any) {
       return NextResponse.json(
         { error: 'ShipStation not configured for this tenant', details: error.message },

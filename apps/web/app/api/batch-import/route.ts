@@ -22,12 +22,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Get user's tenant
-    const user = await db.user.findUnique({
-      where: { id: session.user.id },
+    const membership = await db.membership.findFirst({
+      where: { userId: session.user.id },
       select: { tenantId: true },
     })
 
-    if (!user?.tenantId) {
+    if (!membership?.tenantId) {
       return NextResponse.json({ error: 'User has no tenant' }, { status: 400 })
     }
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         totalRows: rows.length,
         successfulRows: 0,
         failedRows: 0,
-        tenantId: user.tenantId,
+        tenantId: membership.tenantId,
         carrierId: shippingConfig.carrier,
         serviceCode: shippingConfig.service,
         billToParty: shippingConfig.billToParty || 'sender',
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Queue the batch for processing
-    await queueBatchImport(batchImport.id, user.tenantId)
+    await queueBatchImport(batchImport.id, membership.tenantId)
 
     return NextResponse.json({
       success: true,

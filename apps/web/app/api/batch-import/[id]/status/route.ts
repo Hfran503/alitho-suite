@@ -17,12 +17,12 @@ export async function GET(
     const { id } = await params
 
     // Get user's tenant
-    const user = await db.user.findUnique({
-      where: { id: session.user.id },
+    const membership = await db.membership.findFirst({
+      where: { userId: session.user.id },
       select: { tenantId: true },
     })
 
-    if (!user?.tenantId) {
+    if (!membership?.tenantId) {
       return NextResponse.json({ error: 'User has no tenant' }, { status: 400 })
     }
 
@@ -30,7 +30,7 @@ export async function GET(
     const batch = await db.batchImport.findFirst({
       where: {
         id,
-        tenantId: user.tenantId,
+        tenantId: membership.tenantId,
       },
       include: {
         rows: {
