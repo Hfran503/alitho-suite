@@ -54,6 +54,7 @@ export function Step3ShippingConfig({ onComplete, onBack }: Step3ShippingConfigP
   const [selectedRate, setSelectedRate] = useState<any>(null)
   const [loadingRates, setLoadingRates] = useState(false)
   const [error, setError] = useState('')
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
 
   // Load default from address from ShipStation integration
   useEffect(() => {
@@ -189,205 +190,215 @@ export function Step3ShippingConfig({ onComplete, onBack }: Step3ShippingConfigP
         </div>
       )}
 
-      {/* Ship From Address */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h3 className="font-semibold text-gray-900 mb-3">Ship From Address</h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+      {/* Ship From Address - Compact */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+        <h3 className="font-semibold text-gray-900 mb-2 text-sm">Ship From Address</h3>
+        <div className="grid grid-cols-4 gap-2 text-xs">
           <div>
-            <label className="block text-gray-700 font-medium mb-1">Company</label>
+            <label className="block text-gray-600 mb-1">Company</label>
             <input
               type="text"
               value={fromAddress.company}
               onChange={(e) => setFromAddress({ ...fromAddress, company: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
-            <label className="block text-gray-700 font-medium mb-1">Phone</label>
+            <label className="block text-gray-600 mb-1">Phone</label>
             <input
               type="text"
               value={fromAddress.phone}
               onChange={(e) => setFromAddress({ ...fromAddress, phone: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div className="col-span-2">
-            <label className="block text-gray-700 font-medium mb-1">Street Address</label>
+            <label className="block text-gray-600 mb-1">Street Address</label>
             <input
               type="text"
               value={fromAddress.street1}
               onChange={(e) => setFromAddress({ ...fromAddress, street1: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
-            <label className="block text-gray-700 font-medium mb-1">City</label>
+            <label className="block text-gray-600 mb-1">City</label>
             <input
               type="text"
               value={fromAddress.city}
               onChange={(e) => setFromAddress({ ...fromAddress, city: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-gray-700 font-medium mb-1">State</label>
-              <input
-                type="text"
-                value={fromAddress.state}
-                onChange={(e) => setFromAddress({ ...fromAddress, state: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 font-medium mb-1">ZIP</label>
-              <input
-                type="text"
-                value={fromAddress.zip}
-                onChange={(e) => setFromAddress({ ...fromAddress, zip: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+          <div>
+            <label className="block text-gray-600 mb-1">State</label>
+            <input
+              type="text"
+              value={fromAddress.state}
+              onChange={(e) => setFromAddress({ ...fromAddress, state: e.target.value })}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-600 mb-1">ZIP</label>
+            <input
+              type="text"
+              value={fromAddress.zip}
+              onChange={(e) => setFromAddress({ ...fromAddress, zip: e.target.value })}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
         </div>
       </div>
 
-      {/* Billing Options */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h3 className="font-semibold text-gray-900 mb-3">Billing Options</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-gray-700 font-medium mb-2">Who pays for shipping?</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="billToParty"
-                  value="sender"
-                  checked={billToParty === 'sender'}
-                  onChange={() => setBillToParty('sender')}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm font-medium text-gray-900">Sender (You)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="billToParty"
-                  value="third_party"
-                  checked={billToParty === 'third_party'}
-                  onChange={() => setBillToParty('third_party')}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm font-medium text-gray-900">Third Party</span>
-              </label>
-            </div>
-          </div>
+      {/* Advanced Options - Collapsible */}
+      <div className="border border-gray-200 rounded-lg">
+        <button
+          type="button"
+          onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+          className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors"
+        >
+          <h3 className="font-semibold text-gray-900 text-sm">Advanced Options (Optional)</h3>
+          <svg
+            className={`w-5 h-5 text-gray-500 transition-transform ${showAdvancedOptions ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
 
-          {billToParty === 'third_party' && (
-            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-200">
-              <div className="col-span-3">
-                <label className="block text-gray-700 font-medium mb-1">Account Number</label>
-                <input
-                  type="text"
-                  value={billToAccount}
-                  onChange={(e) => setBillToAccount(e.target.value)}
-                  placeholder="Third party account number"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+        {showAdvancedOptions && (
+          <div className="border-t border-gray-200 p-3 bg-gray-50 space-y-3">
+            {/* Billing Options */}
+            <div className="space-y-2">
+              <label className="block text-gray-700 font-medium text-xs">Who pays for shipping?</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="billToParty"
+                    value="sender"
+                    checked={billToParty === 'sender'}
+                    onChange={() => setBillToParty('sender')}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-xs text-gray-900">Sender (You)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="billToParty"
+                    value="third_party"
+                    checked={billToParty === 'third_party'}
+                    onChange={() => setBillToParty('third_party')}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-xs text-gray-900">Third Party</span>
+                </label>
               </div>
+
+              {billToParty === 'third_party' && (
+                <div className="grid grid-cols-3 gap-2 pt-2">
+                  <div className="col-span-3">
+                    <label className="block text-gray-600 mb-1 text-xs">Account Number</label>
+                    <input
+                      type="text"
+                      value={billToAccount}
+                      onChange={(e) => setBillToAccount(e.target.value)}
+                      placeholder="Third party account number"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 mb-1 text-xs">Country Code</label>
+                    <input
+                      type="text"
+                      value={billToCountryCode}
+                      onChange={(e) => setBillToCountryCode(e.target.value)}
+                      placeholder="US"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-gray-600 mb-1 text-xs">Postal Code</label>
+                    <input
+                      type="text"
+                      value={billToPostalCode}
+                      onChange={(e) => setBillToPostalCode(e.target.value)}
+                      placeholder="Postal code"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Package Options */}
+            <div className="space-y-2 pt-2 border-t border-gray-200">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={containsAlcohol}
+                  onChange={(e) => setContainsAlcohol(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-xs text-gray-900">Contains Alcohol</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={saturdayDelivery}
+                  onChange={(e) => setSaturdayDelivery(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-xs text-gray-900">Saturday Delivery</span>
+              </label>
+
               <div>
-                <label className="block text-gray-700 font-medium mb-1">Country Code</label>
+                <label className="block text-gray-600 mb-1 text-xs">Delivery Confirmation</label>
+                <select
+                  value={confirmation}
+                  onChange={(e) => setConfirmation(e.target.value)}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="none">None</option>
+                  <option value="delivery">Delivery Confirmation</option>
+                  <option value="signature">Signature Required</option>
+                  <option value="adult_signature">Adult Signature</option>
+                  <option value="direct_signature">Direct Signature</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-600 mb-1 text-xs">Notification Email (Optional)</label>
                 <input
-                  type="text"
-                  value={billToCountryCode}
-                  onChange={(e) => setBillToCountryCode(e.target.value)}
-                  placeholder="US"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  type="email"
+                  value={notificationsEmail}
+                  onChange={(e) => setNotificationsEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block text-gray-700 font-medium mb-1">Postal Code</label>
+
+              <div className="pt-2 border-t border-gray-200">
+                <label className="block text-gray-600 mb-1 text-xs">
+                  PACE Shipment Type ID
+                </label>
                 <input
-                  type="text"
-                  value={billToPostalCode}
-                  onChange={(e) => setBillToPostalCode(e.target.value)}
-                  placeholder="Postal code"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  type="number"
+                  value={paceShipmentTypeId}
+                  onChange={(e) => setPaceShipmentTypeId(parseInt(e.target.value) || 202)}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Default: 202 for creating shipments in PACE.
+                </p>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Advanced Options */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h3 className="font-semibold text-gray-900 mb-3">Advanced Options</h3>
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={containsAlcohol}
-              onChange={(e) => setContainsAlcohol(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded"
-            />
-            <span className="text-sm text-gray-900">Contains Alcohol</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={saturdayDelivery}
-              onChange={(e) => setSaturdayDelivery(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded"
-            />
-            <span className="text-sm text-gray-900">Saturday Delivery</span>
-          </label>
-
-          <div>
-            <label className="block text-gray-700 font-medium mb-2">Delivery Confirmation</label>
-            <select
-              value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="none">None</option>
-              <option value="delivery">Delivery Confirmation</option>
-              <option value="signature">Signature Required</option>
-              <option value="adult_signature">Adult Signature</option>
-              <option value="direct_signature">Direct Signature</option>
-            </select>
           </div>
-
-          <div>
-            <label className="block text-gray-700 font-medium mb-2">Notification Email (Optional)</label>
-            <input
-              type="email"
-              value={notificationsEmail}
-              onChange={(e) => setNotificationsEmail(e.target.value)}
-              placeholder="email@example.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div className="pt-3 border-t border-gray-300">
-            <label className="block text-gray-700 font-medium mb-2">
-              PACE Shipment Type ID
-              <span className="ml-2 text-xs text-gray-500 font-normal">
-                (Used when creating shipments in PACE)
-              </span>
-            </label>
-            <input
-              type="number"
-              value={paceShipmentTypeId}
-              onChange={(e) => setPaceShipmentTypeId(parseInt(e.target.value) || 202)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Default: 202. Change this if you need to use a different shipment type in PACE.
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Get Rates Button */}
@@ -422,53 +433,58 @@ export function Step3ShippingConfig({ onComplete, onBack }: Step3ShippingConfigP
         </button>
       )}
 
-      {/* Service Selection */}
+      {/* Service Selection - Grouped by Carrier */}
       {rates.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold text-gray-900">Select Service (applies to all shipments)</h3>
-          {rates.map((rate) => (
-            <div
-              key={rate.rateId}
-              onClick={() => setSelectedRate(rate)}
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                selectedRate?.rateId === rate.rateId
-                  ? 'border-blue-600 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        selectedRate?.rateId === rate.rateId
-                          ? 'border-blue-600 bg-blue-600'
-                          : 'border-gray-300'
-                      }`}
-                    >
-                      {selectedRate?.rateId === rate.rateId && (
-                        <div className="w-2 h-2 bg-white rounded-full"></div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900">{rate.carrier}</div>
-                      <div className="text-sm text-gray-600">{rate.service}</div>
-                    </div>
+          <div className="grid grid-cols-3 gap-4">
+            {/* Group rates by carrier */}
+            {Array.from(new Set(rates.map((r) => r.carrier))).map((carrierName) => {
+              const carrierRates = rates.filter((r) => r.carrier === carrierName)
+              return (
+                <div key={carrierName} className="border border-gray-200 rounded-lg p-3">
+                  <h4 className="font-semibold text-gray-900 mb-2 text-sm">{carrierName}</h4>
+                  <div className="space-y-2">
+                    {carrierRates.map((rate) => (
+                      <div
+                        key={rate.rateId}
+                        onClick={() => setSelectedRate(rate)}
+                        className={`p-2 border rounded cursor-pointer transition-all text-sm ${
+                          selectedRate?.rateId === rate.rateId
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                              selectedRate?.rateId === rate.rateId
+                                ? 'border-blue-600 bg-blue-600'
+                                : 'border-gray-300'
+                            }`}
+                          >
+                            {selectedRate?.rateId === rate.rateId && (
+                              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 text-xs leading-tight">
+                              {rate.service}
+                            </div>
+                            {rate.deliveryDays && (
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {rate.deliveryDays} {rate.deliveryDays === 1 ? 'day' : 'days'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {rate.deliveryDays && (
-                    <div className="mt-2 text-sm text-gray-500 ml-8">
-                      Estimated delivery: {rate.deliveryDays}{' '}
-                      {rate.deliveryDays === 1 ? 'day' : 'days'}
-                    </div>
-                  )}
                 </div>
-                <div className="text-right">
-                  <div className="text-xl font-bold text-gray-900">${rate.amount.toFixed(2)}</div>
-                  <div className="text-xs text-gray-500">{rate.currency}</div>
-                </div>
-              </div>
-            </div>
-          ))}
+              )
+            })}
+          </div>
         </div>
       )}
 
