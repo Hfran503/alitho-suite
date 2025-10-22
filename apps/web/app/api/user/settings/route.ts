@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-// import { db } from '@repo/database' // TODO: Uncomment when settings field is added to User model
+import { db } from '@repo/database'
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -79,6 +79,17 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Fetch user with membership to get role
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        memberships: true
+      }
+    })
+
+    // Get the user's role from their first membership
+    const role = user?.memberships[0]?.role || 'customer_service'
+
     // Return default settings for now
     // TODO: Fetch from database when settings field is added
     const defaultSettings = {
@@ -99,7 +110,10 @@ export async function GET(_request: NextRequest) {
       },
     }
 
-    return NextResponse.json({ settings: defaultSettings })
+    return NextResponse.json({
+      settings: defaultSettings,
+      role: role  // Add role to response
+    })
   } catch (error) {
     console.error('Error fetching settings:', error)
     return NextResponse.json(

@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 
 interface ShippingLabel {
   id: string
-  paceShipmentId: number
+  paceShipmentId: number | null
   paceCartonId: number | null
   provider: string
+  providerLabelId: string | null
   trackingNumber: string
   labelUrl: string
   carrier: string
@@ -109,6 +110,38 @@ export default function LabelsPage() {
     window.open(label.labelUrl, '_blank')
   }
 
+  const handleVoidLabel = async (label: ShippingLabel) => {
+    if (!confirm(`Are you sure you want to void this label?\n\nTracking: ${label.trackingNumber}\nCarrier: ${label.carrier}\n\nThis action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/shipstation/labels/void', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ labelId: label.providerLabelId || label.id }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to void label')
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Label voided successfully!\n\n${data.data.message || 'The label has been voided.'}`)
+        // Refresh the labels list
+        fetchLabels()
+      } else {
+        throw new Error(data.data?.message || 'Failed to void label')
+      }
+    } catch (error: any) {
+      alert(`Error voiding label: ${error.message}`)
+      console.error('Void label error:', error)
+    }
+  }
+
   const filteredLabels = labels.filter(label => {
     // Filter by carrier
     if (filterCarrier !== 'all' && label.carrier !== filterCarrier) {
@@ -121,9 +154,10 @@ export default function LabelsPage() {
     return (
       label.trackingNumber.toLowerCase().includes(term) ||
       label.carrier.toLowerCase().includes(term) ||
-      label.paceShipmentId.toString().includes(term) ||
+      (label.paceShipmentId && label.paceShipmentId.toString().includes(term)) ||
       (label.shipTo?.city && label.shipTo.city.toLowerCase().includes(term)) ||
-      (label.shipTo?.state && label.shipTo.state.toLowerCase().includes(term))
+      (label.shipTo?.state && label.shipTo.state.toLowerCase().includes(term)) ||
+      'manual'.includes(term) // Allow searching for "manual" labels
     )
   })
 
@@ -295,15 +329,25 @@ export default function LabelsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <button
-                        onClick={() => router.push(`/shipments/${label.paceShipmentId}`)}
-                        className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                      >
-                        #{label.paceShipmentId}
-                      </button>
-                      {label.paceCartonId && (
-                        <div className="text-xs text-gray-500">
-                          Carton #{label.paceCartonId}
+                      {label.paceShipmentId ? (
+                        <>
+                          <button
+                            onClick={() => router.push(`/shipments/${label.paceShipmentId}`)}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                          >
+                            #{label.paceShipmentId}
+                          </button>
+                          {label.paceCartonId && (
+                            <div className="text-xs text-gray-500">
+                              Carton #{label.paceCartonId}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                            ✍️ Manual
+                          </span>
                         </div>
                       )}
                     </td>
@@ -395,16 +439,30 @@ export default function LabelsPage() {
                       {new Date(label.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleReprintLabel(label)}
-                        className="inline-flex items-center gap-1 text-green-600 hover:text-green-800 text-sm font-medium"
-                        title="Reprint label"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Print
-                      </button>
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          onClick={() => handleReprintLabel(label)}
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          title="Reprint label"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                          Print
+                        </button>
+                        {label.status === 'active' && (
+                          <button
+                            onClick={() => handleVoidLabel(label)}
+                            className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 text-sm font-medium"
+                            title="Void label"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Void
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

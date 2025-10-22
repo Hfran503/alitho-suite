@@ -37,6 +37,7 @@ model Tenant {
   shipmentTypeMappings ShipmentTypeMapping[]
   carrierServiceMappings CarrierServiceMapping[]
   batchImports         BatchImport[]
+  menuConfigurations   MenuConfiguration[]
 
   @@index([slug])
   @@index([status])
@@ -66,7 +67,7 @@ model User {
 
 model Membership {
   id       String @id @default(cuid())
-  role     String @default("member") // owner, admin, member, viewer
+  role     String @default("customer_service") // full_admin, admin, customer_service, estimator, logistics, accounting
 
   // Relations
   userId   String
@@ -377,8 +378,8 @@ model CarrierServiceMapping {
 model ShippingLabel {
   id          String   @id @default(cuid())
 
-  // PACE references
-  paceShipmentId  Int      // PACE JobShipment ID
+  // PACE references (optional for manual labels)
+  paceShipmentId  Int?     // PACE JobShipment ID (null for manual labels)
   paceCartonId    Int?     // PACE Carton ID (optional, for multi-carton shipments)
 
   // Shipping provider info
@@ -643,4 +644,39 @@ enum BatchRowStatus {
   SUCCESS         // Label created, JobShipment + Carton created
   FAILED          // Processing failed (bad address, API error, etc.)
   CANCELLED       // User cancelled/voided this row
+}
+
+// ============================================
+// MENU CONFIGURATION (Role-Based Navigation)
+// ============================================
+
+model MenuConfiguration {
+  id          String   @id @default(cuid())
+
+  // Menu item details
+  menuKey     String   // Unique identifier: "dashboard", "shipments", "batch-import"
+  label       String   // Display name shown in sidebar
+  href        String   // Route path
+  icon        String?  // Icon identifier or SVG string
+  parentKey   String?  // For submenu items, references parent menuKey
+  order       Int      @default(0) // Display order (lower numbers appear first)
+
+  // Role-based visibility
+  visibleToRoles String[] // Array of roles: ["full_admin", "admin", "customer_service", "estimator", "logistics", "accounting"]
+
+  // Status
+  isActive    Boolean  @default(true) // Allow disabling without deleting
+
+  // Tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, menuKey])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([order])
 }

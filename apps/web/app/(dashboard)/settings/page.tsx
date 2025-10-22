@@ -5,8 +5,9 @@ import { UsersSettings } from '@/components/settings/UsersSettings'
 import { ActiveSessionsSettings } from '@/components/settings/ActiveSessionsSettings'
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings'
 import { ShipmentTypesSettings } from '@/components/settings/ShipmentTypesSettings'
+import { MenuConfigurationSettings } from '@/components/settings/MenuConfigurationSettings'
 
-type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'teams' | 'billing' | 'security'
+type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'teams' | 'billing' | 'security'
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('users')
@@ -16,6 +17,7 @@ export default function SettingsPage() {
     { id: 'sessions' as Tab, name: 'Active Sessions', icon: '🔐' },
     { id: 'integrations' as Tab, name: 'Integrations', icon: '🔌' },
     { id: 'shipment-types' as Tab, name: 'Shipment Settings', icon: '📦' },
+    { id: 'menu-config' as Tab, name: 'Navigation Menu', icon: '📋' },
     { id: 'teams' as Tab, name: 'Teams', icon: '🏢', disabled: true },
     { id: 'billing' as Tab, name: 'Billing', icon: '💳', disabled: true },
     { id: 'security' as Tab, name: 'Security', icon: '🔒', disabled: true },
@@ -65,6 +67,7 @@ export default function SettingsPage() {
         {activeTab === 'sessions' && <ActiveSessionsSettings />}
         {activeTab === 'integrations' && <IntegrationsSettings />}
         {activeTab === 'shipment-types' && <ShipmentTypesSettings />}
+        {activeTab === 'menu-config' && <MenuConfigurationSettings />}
         {activeTab === 'teams' && <div className="text-gray-500">Teams settings coming soon...</div>}
         {activeTab === 'billing' && <div className="text-gray-500">Billing settings coming soon...</div>}
         {activeTab === 'security' && <div className="text-gray-500">Security settings coming soon...</div>}

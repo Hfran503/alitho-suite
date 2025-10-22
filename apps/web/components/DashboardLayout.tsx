@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Sidebar } from './Sidebar'
+import { DynamicSidebar } from './DynamicSidebar'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -63,7 +63,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <>
-      <Sidebar onPinChange={setIsSidebarPinned} />
+      <DynamicSidebar onPinChange={setIsSidebarPinned} />
       <main
         className={`mt-16 p-8 transition-all duration-300 ${
           isSidebarPinned ? 'ml-64' : 'ml-16'
