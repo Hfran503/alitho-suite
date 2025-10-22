@@ -19,6 +19,14 @@ function scanAppDirectory(baseDir: string, currentPath: string = '', depth: numb
   const appDir = join(baseDir, 'app', currentPath)
 
   try {
+    // Check if directory exists before scanning
+    try {
+      statSync(appDir)
+    } catch {
+      console.error(`Directory does not exist: ${appDir}`)
+      return pages
+    }
+
     const entries = readdirSync(appDir)
 
     for (const entry of entries) {
@@ -118,7 +126,22 @@ export async function GET(_req: NextRequest) {
     const existingPaths = new Set(existingMenus.map(m => m.href))
 
     // Scan the app directory
-    const baseDir = process.cwd()
+    // In production standalone builds, the structure is different
+    let baseDir = process.cwd()
+
+    // Check if we're in a standalone build
+    if (baseDir.includes('.next/standalone')) {
+      // In standalone, the app code is not available for scanning
+      // Return empty result since we can't scan the filesystem in production
+      return NextResponse.json({
+        newPages: [],
+        existingPages: [],
+        totalDetected: 0,
+        totalNew: 0,
+        note: 'Page detection is only available in development mode'
+      })
+    }
+
     const detectedPages = scanAppDirectory(baseDir)
 
     // Mark which pages are already in menu
