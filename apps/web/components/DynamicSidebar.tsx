@@ -176,6 +176,15 @@ const IconMap: Record<string, React.ReactNode> = {
   ),
 }
 
+// Cache for menu data to avoid refetching on every navigation
+let menuCache: { items: MenuItem[]; role: string; timestamp: number } | null = null
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+// Function to clear menu cache (call this when menu settings are updated)
+export function clearMenuCache() {
+  menuCache = null
+}
+
 export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
   const [isHovered, setIsHovered] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
@@ -199,29 +208,46 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
     }
   }, [onPinChange])
 
-  // Fetch menu configuration and user role
+  // Fetch menu configuration and user role in parallel with caching
   useEffect(() => {
     async function fetchMenuConfig() {
       try {
         setLoading(true)
 
-        // Fetch user role
-        const userRes = await fetch('/api/user/settings')
-        if (userRes.ok) {
-          const userData = await userRes.json()
-          setUserRole(userData.role || 'customer_service')
+        // Check if we have valid cached data
+        const now = Date.now()
+        if (menuCache && (now - menuCache.timestamp) < CACHE_DURATION) {
+          setMenuItems(menuCache.items)
+          setUserRole(menuCache.role)
+          setLoading(false)
+          return
         }
 
-        // Fetch menu configuration
-        const menuRes = await fetch('/api/settings/menu-configuration')
+        // Fetch both user role and menu configuration in parallel
+        const [userRes, menuRes] = await Promise.all([
+          fetch('/api/user/settings'),
+          fetch('/api/settings/menu-configuration')
+        ])
+
+        let role = 'customer_service'
+        let items: MenuItem[] = []
+
+        // Process user role
+        if (userRes.ok) {
+          const userData = await userRes.json()
+          role = userData.role || 'customer_service'
+          setUserRole(role)
+        }
+
+        // Process menu configuration
         if (menuRes.ok) {
           const data = await menuRes.json()
           const configs = data.menuConfigs || []
 
           // If no menu configuration exists, use default menu for all users
           if (configs.length === 0) {
-            const defaultMenu = getDefaultMenu()
-            setMenuItems(defaultMenu)
+            items = getDefaultMenu()
+            setMenuItems(items)
           } else {
             // Organize menu items into parent-child structure
             const parents = configs
@@ -235,8 +261,16 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
                 .sort((a: any, b: any) => a.order - b.order)
             }))
 
+            items = organized
             setMenuItems(organized)
           }
+        }
+
+        // Update cache
+        menuCache = {
+          items,
+          role,
+          timestamp: Date.now()
         }
       } catch (error) {
         console.error('Error fetching menu config:', error)

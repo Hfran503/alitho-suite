@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import { clearMenuCache } from '../DynamicSidebar'
 
 interface MenuConfig {
   id: string
@@ -91,6 +92,7 @@ export function MenuConfigurationSettings() {
       })
 
       if (res.ok) {
+        clearMenuCache() // Clear cache so sidebar reloads with initialized config
         await fetchMenuConfigs()
         alert('Menu configuration initialized successfully!')
       } else {
@@ -116,6 +118,7 @@ export function MenuConfigurationSettings() {
 
       if (res.ok) {
         setHasChanges(false)
+        clearMenuCache() // Clear cache so sidebar reloads with new config
         alert('Menu configuration saved successfully!')
       } else {
         alert('Failed to save menu configuration')
@@ -221,6 +224,7 @@ export function MenuConfigurationSettings() {
       })
 
       if (res.ok) {
+        clearMenuCache() // Clear cache so sidebar reloads with new pages
         alert(`Successfully added ${selectedPages.length} page(s) to menu`)
         setShowDetectModal(false)
         setDetectedPages([])
