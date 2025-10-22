@@ -26,14 +26,20 @@ export async function GET(_req: NextRequest) {
     }
 
     const tenantId = user.memberships[0].tenantId
+    const userRole = user.memberships[0].role
 
-    // Get all menu configurations
+    // Get all menu configurations for tenant
     const menuConfigs = await prisma.menuConfiguration.findMany({
       where: { tenantId },
       orderBy: { order: 'asc' }
     })
 
-    return NextResponse.json({ menuConfigs })
+    // Filter menu items by user role
+    const visibleMenuConfigs = menuConfigs.filter(
+      (config) => config.isActive && config.visibleToRoles.includes(userRole)
+    )
+
+    return NextResponse.json({ menuConfigs: visibleMenuConfigs })
   } catch (error) {
     console.error('Error fetching menu configurations:', error)
     return NextResponse.json(

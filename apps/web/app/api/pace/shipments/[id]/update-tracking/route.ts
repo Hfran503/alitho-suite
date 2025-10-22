@@ -194,11 +194,13 @@ export async function POST(
     // Mark shipment as shipped and update shipment type from planned → completed
     if (primaryTrackingNumber) {
       shipmentUpdateData.shipped = true
-      console.log('Marking shipment as shipped (labels created)')
+      console.log('✅ Marking shipment as shipped (labels created)')
 
       // Change shipment type from planned to completed using already-fetched data
       if (currentShipment?.shipmentType) {
         try {
+          console.log(`🔍 Looking up shipment type mapping for tenantId=${membership.tenantId}, plannedTypeId=${currentShipment.shipmentType}`)
+
           const mapping = await db.shipmentTypeMapping.findFirst({
             where: {
               tenantId: membership.tenantId,
@@ -208,11 +210,16 @@ export async function POST(
 
           if (mapping) {
             shipmentUpdateData.shipmentType = mapping.completedTypeId
-            console.log(`Changing shipment type: ${mapping.plannedTypeName} (${currentShipment.shipmentType}) → ${mapping.completedTypeName} (${mapping.completedTypeId})`)
+            console.log(`✅ Changing shipment type: ${mapping.plannedTypeName} (${currentShipment.shipmentType}) → ${mapping.completedTypeName} (${mapping.completedTypeId})`)
+          } else {
+            console.warn(`⚠️ No shipment type mapping found for tenantId=${membership.tenantId}, plannedTypeId=${currentShipment.shipmentType}`)
+            console.warn('⚠️ ShipmentType will NOT be updated. Please configure ShipmentTypeMapping in database.')
           }
         } catch (error) {
-          console.error('Error looking up shipment type mapping:', error)
+          console.error('❌ Error looking up shipment type mapping:', error)
         }
+      } else {
+        console.warn('⚠️ Current shipment has no shipmentType field, cannot update shipmentType')
       }
     }
 
@@ -301,6 +308,8 @@ export async function POST(
     }
 
     // Step 7: Update shipment and contact in parallel (if contact update exists)
+    console.log('📤 Sending PACE API update with data:', JSON.stringify(shipmentUpdateData, null, 2))
+
     const shipmentUpdatePromise = fetch(`${paceApiUrl}/UpdateObject/updateJobShipment`, {
       method: 'POST',
       headers: {
@@ -319,17 +328,24 @@ export async function POST(
 
     if (!updateResponse.ok) {
       const errorText = await updateResponse.text()
-      console.error('Failed to update shipment:', errorText)
+      console.error('❌ PACE API update failed:', errorText)
+      console.error('❌ Status:', updateResponse.status, updateResponse.statusText)
+      console.error('❌ Data sent:', JSON.stringify(shipmentUpdateData, null, 2))
       return NextResponse.json(
         { error: 'Failed to update shipment', details: errorText },
         { status: updateResponse.status }
       )
     }
 
-    console.log('Updated shipment with aggregated tracking and cost:', {
+    const updateResult = await updateResponse.json()
+    console.log('✅ PACE API update successful!')
+    console.log('✅ Update result:', JSON.stringify(updateResult, null, 2))
+    console.log('✅ Updated shipment with aggregated tracking and cost:', {
       totalCost,
       primaryTracking: primaryTrackingNumber,
       totalBoxes: trackingNumbers.length,
+      shipped: shipmentUpdateData.shipped,
+      shipmentType: shipmentUpdateData.shipmentType,
     })
 
     return NextResponse.json({

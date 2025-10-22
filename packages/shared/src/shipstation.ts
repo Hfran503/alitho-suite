@@ -29,7 +29,7 @@ export class ShipStationClient {
   /**
    * Make a request to the ShipStation API
    */
-  private async request<T>(
+  public async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
@@ -230,6 +230,15 @@ export class ShipStationClient {
    */
   async listCarriers(): Promise<any> {
     return this.request('/carriers', {
+      method: 'GET',
+    })
+  }
+
+  /**
+   * Get package types for a specific carrier
+   */
+  async getCarrierPackages(carrierId: string): Promise<any> {
+    return this.request(`/carriers/${carrierId}/packages`, {
       method: 'GET',
     })
   }

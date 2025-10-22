@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
+    console.log('🔍 [API] Received request body:', JSON.stringify(body, null, 2))
+
     const {
       shipmentId,
       carrierId,
@@ -56,7 +58,12 @@ export async function POST(req: NextRequest) {
       rmaNumber,
       chargeEvent,
       outboundLabelId,
+      advancedOptions,
+      confirmation,
     } = body
+
+    console.log('🔍 [API] Extracted advancedOptions:', advancedOptions)
+    console.log('🔍 [API] Extracted confirmation:', confirmation)
 
     // Validate required fields
     if (
@@ -107,25 +114,40 @@ export async function POST(req: NextRequest) {
           postal_code: shipTo.zip,
           country_code: shipTo.country || 'US',
         },
-        packages: packages.map((pkg: any) => ({
-          weight: {
-            value: pkg.weight,
-            unit: pkg.weightUnit || 'pound',
-          },
-          dimensions: pkg.length &&
-            pkg.width &&
-            pkg.height && {
+        packages: packages.map((pkg: any) => {
+          const packageData: any = {
+            weight: {
+              value: pkg.weight,
+              unit: pkg.weightUnit || 'pound',
+            },
+          }
+
+          // Add package_code if provided (for carrier package types)
+          if (pkg.package_code) {
+            packageData.package_code = pkg.package_code
+          }
+
+          // Add dimensions if provided (for custom dimensions)
+          if (pkg.length && pkg.width && pkg.height) {
+            packageData.dimensions = {
               length: pkg.length,
               width: pkg.width,
               height: pkg.height,
               unit: pkg.dimensionUnit || 'inch',
-            },
-          label_messages: pkg.label_messages ? {
-            reference1: pkg.label_messages.reference1 || null,
-            reference2: pkg.label_messages.reference2 || null,
-            reference3: pkg.label_messages.reference3 || null,
-          } : undefined,
-        })),
+            }
+          }
+
+          // Add label messages if provided
+          if (pkg.label_messages) {
+            packageData.label_messages = {
+              reference1: pkg.label_messages.reference1 || null,
+              reference2: pkg.label_messages.reference2 || null,
+              reference3: pkg.label_messages.reference3 || null,
+            }
+          }
+
+          return packageData
+        }),
       },
       label_format: labelFormat || 'pdf',
       label_layout: labelLayout || '4x6',
@@ -134,6 +156,21 @@ export async function POST(req: NextRequest) {
     // Add ship date if provided
     if (shipDate) {
       labelRequest.shipment.ship_date = shipDate
+    }
+
+    // Add advanced options if provided
+    if (advancedOptions && Object.keys(advancedOptions).length > 0) {
+      console.log('🔍 [API] Adding advanced_options to shipment:', advancedOptions)
+      labelRequest.shipment.advanced_options = advancedOptions
+    }
+
+    // Add confirmation if provided
+    if (confirmation && confirmation !== 'none') {
+      console.log('🔍 [API] Adding confirmation to shipment:', confirmation)
+      if (!labelRequest.shipment.advanced_options) {
+        labelRequest.shipment.advanced_options = {}
+      }
+      labelRequest.shipment.advanced_options.confirmation = confirmation
     }
 
     // Add return label options if this is a return label
@@ -154,7 +191,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Log the request for debugging
-    console.log('ShipStation Label Request:', JSON.stringify(labelRequest, null, 2))
+    console.log('🔍 [API] Complete ShipStation Label Request:', JSON.stringify(labelRequest, null, 2))
+    console.log('🔍 [API] Advanced options in request:', labelRequest.shipment.advanced_options)
 
     // Create labels in ShipStation
     const labelResponse = await client.createLabels(labelRequest)

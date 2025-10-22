@@ -22,6 +22,29 @@ interface CartonConfig {
     itemId?: string
     quantity: number
   }>
+  useCarrierPackage: boolean
+  carrierPackageCode?: string
+  carrierPackageName?: string
+  carrierCode?: string // Track which carrier this package belongs to
+}
+
+interface CarrierPackage {
+  package_id: string | null
+  package_code: string
+  name: string
+  description: string
+  carrier_code: string
+  carrier_name: string
+}
+
+interface Carrier {
+  carrier_id: string
+  carrier_code: string
+  friendly_name: string
+  services: Array<{
+    service_code: string
+    name: string
+  }>
 }
 
 interface AddressData {
@@ -87,8 +110,13 @@ export function ProcessShipmentShipStationModal({
       weight: '',
       count: 1,
       contents: [{ itemId: '', quantity: 0 }],
+      useCarrierPackage: false,
     },
   ])
+
+  // Carriers and packages state
+  const [allCarrierPackages, setAllCarrierPackages] = useState<CarrierPackage[]>([])
+  const [loadingPackages, setLoadingPackages] = useState(false)
 
   // Job items for content selection
   const [jobItems, setJobItems] = useState<{
@@ -187,16 +215,25 @@ export function ProcessShipmentShipStationModal({
       })
 
       if (isThirdPartyBilling) {
+        const newOptions = {
+          billToParty: 'third_party' as const,
+          billToAccount: shipment.accountNumber || '',
+          billToCountryCode: shipment.shipBillToContact?.countryCode || 'US',
+          billToPostalCode: shipment.shipBillToContact?.zip || '',
+        }
+        console.log('🔍 [Auto-populate] Setting third party billing options:', newOptions)
         setAdvancedOptions(prev => ({
           ...prev,
-          billToParty: 'third_party',
-          billToAccount: shipment.accountNumber || prev.billToAccount,
-          billToCountryCode: shipment.shipBillToContact?.countryCode || prev.billToCountryCode,
-          billToPostalCode: shipment.shipBillToContact?.zip || prev.billToPostalCode,
+          ...newOptions
         }))
       }
     }
   }, [isOpen, shipment])
+
+  // Debug log whenever advancedOptions changes
+  useEffect(() => {
+    console.log('🔍 [State Change] advancedOptions updated:', advancedOptions)
+  }, [advancedOptions])
 
   // Step 5 data - ShipStation creates outbound label and optionally return label
   const [labelData, setLabelData] = useState<{
@@ -245,6 +282,52 @@ export function ProcessShipmentShipStationModal({
     }
   }, [isOpen])
 
+  // Load carriers and all their packages
+  useEffect(() => {
+    const loadCarriersAndPackages = async () => {
+      if (!isOpen) return
+
+      setLoadingPackages(true)
+      try {
+        // Load carriers
+        const carriersResponse = await fetch('/api/shipstation/carriers')
+        if (!carriersResponse.ok) {
+          console.error('Failed to load carriers')
+          return
+        }
+        const carriersData = await carriersResponse.json()
+        const loadedCarriers: Carrier[] = carriersData.data.carriers || []
+
+        // Load packages for all carriers
+        const allPackages: CarrierPackage[] = []
+        for (const carrier of loadedCarriers) {
+          try {
+            const packagesResponse = await fetch(`/api/shipstation/carriers/${carrier.carrier_id}/packages`)
+            if (packagesResponse.ok) {
+              const packagesData = await packagesResponse.json()
+              const packages = (packagesData.data.packages || []).map((pkg: any) => ({
+                ...pkg,
+                carrier_code: carrier.carrier_code,
+                carrier_name: carrier.friendly_name,
+              }))
+              allPackages.push(...packages)
+            }
+          } catch (err) {
+            console.error(`Failed to load packages for ${carrier.friendly_name}:`, err)
+          }
+        }
+        setAllCarrierPackages(allPackages)
+        console.log('📦 Loaded carrier packages:', allPackages)
+      } catch (error) {
+        console.error('Failed to load carriers and packages:', error)
+      } finally {
+        setLoadingPackages(false)
+      }
+    }
+
+    loadCarriersAndPackages()
+  }, [isOpen])
+
   // Load job items for carton contents selection
   useEffect(() => {
     const loadJobItems = async () => {
@@ -279,9 +362,21 @@ export function ProcessShipmentShipStationModal({
       for (let i = 0; i < cartons.length; i++) {
         const carton = cartons[i]
 
-        if (!carton.length || !carton.width || !carton.height || !carton.weight) {
-          setError(`Carton ${i + 1}: Please fill in all dimensions and weight`)
-          return
+        // Validate based on whether using carrier package or custom dimensions
+        if (carton.useCarrierPackage) {
+          if (!carton.carrierPackageCode) {
+            setError(`Carton ${i + 1}: Please select a carrier package`)
+            return
+          }
+          if (!carton.weight) {
+            setError(`Carton ${i + 1}: Please enter weight`)
+            return
+          }
+        } else {
+          if (!carton.length || !carton.width || !carton.height || !carton.weight) {
+            setError(`Carton ${i + 1}: Please fill in all dimensions and weight`)
+            return
+          }
         }
 
         if (carton.count < 1) {
@@ -323,14 +418,23 @@ export function ProcessShipmentShipStationModal({
         const packages = []
         for (const carton of cartons) {
           for (let i = 0; i < carton.count; i++) {
-            packages.push({
-              length: parseFloat(carton.length),
-              width: parseFloat(carton.width),
-              height: parseFloat(carton.height),
+            const pkg: any = {
               weight: parseFloat(carton.weight),
               weightUnit: 'pound',
-              dimensionUnit: 'inch',
-            })
+            }
+
+            if (carton.useCarrierPackage && carton.carrierPackageCode) {
+              // Use carrier package code
+              pkg.package_code = carton.carrierPackageCode
+            } else {
+              // Use custom dimensions
+              pkg.length = parseFloat(carton.length)
+              pkg.width = parseFloat(carton.width)
+              pkg.height = parseFloat(carton.height)
+              pkg.dimensionUnit = 'inch'
+            }
+
+            packages.push(pkg)
           }
         }
 
@@ -409,18 +513,27 @@ export function ProcessShipmentShipStationModal({
         }
 
         // Build advanced options object (only include non-default values)
+        console.log('🔍 [Label Creation] Building advancedOptionsPayload from:', advancedOptions)
         const advancedOptionsPayload: any = {}
         if (advancedOptions.billToAccount) {
+          console.log('🔍 [Label Creation] Adding bill_to_account:', advancedOptions.billToAccount)
           advancedOptionsPayload.bill_to_account = advancedOptions.billToAccount
         }
         if (advancedOptions.billToParty && advancedOptions.billToParty !== 'sender') {
+          console.log('🔍 [Label Creation] Adding bill_to_party:', advancedOptions.billToParty)
           advancedOptionsPayload.bill_to_party = advancedOptions.billToParty
         }
         if (advancedOptions.billToCountryCode && advancedOptions.billToParty === 'third_party') {
+          console.log('🔍 [Label Creation] Adding bill_to_country_code:', advancedOptions.billToCountryCode)
           advancedOptionsPayload.bill_to_country_code = advancedOptions.billToCountryCode
+        } else {
+          console.log('🔍 [Label Creation] Skipping bill_to_country_code. billToCountryCode:', advancedOptions.billToCountryCode, 'billToParty:', advancedOptions.billToParty)
         }
         if (advancedOptions.billToPostalCode && advancedOptions.billToParty === 'third_party') {
+          console.log('🔍 [Label Creation] Adding bill_to_postal_code:', advancedOptions.billToPostalCode)
           advancedOptionsPayload.bill_to_postal_code = advancedOptions.billToPostalCode
+        } else {
+          console.log('🔍 [Label Creation] Skipping bill_to_postal_code. billToPostalCode:', advancedOptions.billToPostalCode, 'billToParty:', advancedOptions.billToParty)
         }
         if (advancedOptions.containsAlcohol) {
           advancedOptionsPayload.contains_alcohol = true
@@ -431,6 +544,8 @@ export function ProcessShipmentShipStationModal({
         if (advancedOptions.notificationsEmail) {
           advancedOptionsPayload.NotificationsEmail = advancedOptions.notificationsEmail
         }
+
+        console.log('🔍 [Label Creation] Final advancedOptionsPayload:', advancedOptionsPayload)
 
         // Create outbound label with ShipStation
         const createResponse = await fetch('/api/shipstation/labels/create', {
@@ -648,6 +763,7 @@ export function ProcessShipmentShipStationModal({
 
         // Update shipment with aggregated tracking, total cost, and final address
         try {
+          console.log('📤 Calling update-tracking API to set shipped=true and update shipmentType...')
           const updateTrackingResponse = await fetch(
             `/api/pace/shipments/${shipment.id}/update-tracking`,
             {
@@ -667,13 +783,17 @@ export function ProcessShipmentShipStationModal({
           )
 
           if (!updateTrackingResponse.ok) {
-            console.error('Failed to update shipment tracking aggregation')
+            const errorData = await updateTrackingResponse.json().catch(() => null)
+            console.error('❌ Failed to update shipment tracking aggregation:', errorData)
           } else {
             const trackingData = await updateTrackingResponse.json()
-            console.log('Updated shipment with aggregated tracking and address:', trackingData)
+            console.log('✅ Updated shipment with aggregated tracking and address:', trackingData)
+            if (trackingData.success && trackingData.data) {
+              console.log('✅ Shipment marked as shipped with tracking:', trackingData.data.primaryTrackingNumber)
+            }
           }
         } catch (error) {
-          console.error('Error updating shipment tracking:', error)
+          console.error('❌ Error updating shipment tracking:', error)
           // Don't fail the whole process if this fails
         }
 
@@ -718,6 +838,7 @@ export function ProcessShipmentShipStationModal({
         weight: '',
         count: 1,
         contents: [{ itemId: '', quantity: 0 }],
+        useCarrierPackage: false,
       },
     ])
   }
@@ -729,9 +850,15 @@ export function ProcessShipmentShipStationModal({
   }
 
   // Helper function to update a carton field
-  const updateCarton = (index: number, field: keyof CartonConfig, value: any) => {
+  const updateCarton = (index: number, field: keyof CartonConfig | Record<string, any>, value?: any) => {
     const newCartons = [...cartons]
-    newCartons[index] = { ...newCartons[index], [field]: value }
+    if (typeof field === 'string') {
+      // Single field update
+      newCartons[index] = { ...newCartons[index], [field]: value }
+    } else {
+      // Multiple fields update (when field is an object)
+      newCartons[index] = { ...newCartons[index], ...field }
+    }
     setCartons(newCartons)
   }
 
@@ -1006,7 +1133,113 @@ export function ProcessShipmentShipStationModal({
 
                       {/* Dimensions, Weight, and Count */}
                       <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                        <div className="grid grid-cols-5 gap-2">
+                        {/* Package Type Toggle */}
+                        <div className="mb-3 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`useCarrierPackage-${cartonIndex}`}
+                            checked={carton.useCarrierPackage}
+                            onChange={(e) => updateCarton(cartonIndex, 'useCarrierPackage', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label htmlFor={`useCarrierPackage-${cartonIndex}`} className="text-xs font-medium text-gray-700">
+                            Use Carrier Package Type
+                          </label>
+                        </div>
+
+                        {carton.useCarrierPackage ? (
+                          /* Carrier Package Selection */
+                          <div className="space-y-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Package Type <span className="text-red-500">*</span>
+                              </label>
+                              {loadingPackages ? (
+                                <div className="px-3 py-2 text-xs text-gray-500">Loading packages...</div>
+                              ) : (
+                                <select
+                                  value={carton.carrierPackageCode || ''}
+                                  onChange={(e) => {
+                                    const selectedPackage = allCarrierPackages.find(pkg => pkg.package_code === e.target.value)
+                                    updateCarton(cartonIndex, {
+                                      carrierPackageCode: e.target.value,
+                                      carrierPackageName: selectedPackage?.name || '',
+                                      carrierCode: selectedPackage?.carrier_code || ''
+                                    } as any)
+                                  }}
+                                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  disabled={allCarrierPackages.length === 0}
+                                >
+                                  <option value="">
+                                    {allCarrierPackages.length === 0
+                                      ? 'No packages available'
+                                      : 'Select a package type...'}
+                                  </option>
+                                  {/* Group packages by carrier */}
+                                  {Object.entries(
+                                    allCarrierPackages.reduce((acc, pkg) => {
+                                      if (!acc[pkg.carrier_name]) {
+                                        acc[pkg.carrier_name] = []
+                                      }
+                                      acc[pkg.carrier_name].push(pkg)
+                                      return acc
+                                    }, {} as Record<string, CarrierPackage[]>)
+                                  ).map(([carrierName, packages]) => (
+                                    <optgroup key={carrierName} label={carrierName}>
+                                      {packages.map((pkg) => (
+                                        <option key={pkg.package_code} value={pkg.package_code}>
+                                          {pkg.name}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                              )}
+                              {carton.carrierPackageCode && (
+                                <div className="mt-1">
+                                  <p className="text-xs font-medium text-blue-600">
+                                    Selected: {carton.carrierPackageName || carton.carrierPackageCode}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {allCarrierPackages.find(pkg => pkg.package_code === carton.carrierPackageCode)?.description}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Wt(lb) <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={carton.weight}
+                                  onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
+                                  className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="1.0"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Qty <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={carton.count}
+                                  onChange={(e) =>
+                                    updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
+                                  }
+                                  className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="1"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Custom Dimensions */
+                          <div className="grid grid-cols-5 gap-2">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">
                               L(in) <span className="text-red-500">*</span>
@@ -1080,6 +1313,7 @@ export function ProcessShipmentShipStationModal({
                             />
                           </div>
                         </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1131,8 +1365,20 @@ export function ProcessShipmentShipStationModal({
                   <p className="text-gray-500 text-sm">No rates available</p>
                 ) : (
                   (() => {
+                    // Check if any carton uses a carrier package
+                    const cartonsWithCarrierPackages = cartons.filter(c => c.useCarrierPackage && c.carrierCode)
+                    const selectedCarrierCodes = [...new Set(cartonsWithCarrierPackages.map(c => c.carrierCode))]
+
+                    // Filter rates if carrier packages are selected
+                    let filteredRates = rates
+                    if (selectedCarrierCodes.length > 0) {
+                      console.log('📦 Filtering rates for carrier codes:', selectedCarrierCodes)
+                      filteredRates = rates.filter(rate => selectedCarrierCodes.includes(rate.carrierCode))
+                      console.log('📦 Filtered rates:', filteredRates.length, 'of', rates.length)
+                    }
+
                     // Group rates by carrier
-                    const ratesByCarrier = rates.reduce((acc, rate) => {
+                    const ratesByCarrier = filteredRates.reduce((acc, rate) => {
                       if (!acc[rate.carrier]) {
                         acc[rate.carrier] = []
                       }
@@ -1142,8 +1388,32 @@ export function ProcessShipmentShipStationModal({
 
                     const carriers = Object.keys(ratesByCarrier)
 
+                    // Show message if rates were filtered
+                    const showFilterMessage = selectedCarrierCodes.length > 0 && filteredRates.length < rates.length
+
                     return (
-                      <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                      <>
+                        {showFilterMessage && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div className="text-xs">
+                                <p className="font-semibold text-blue-900">
+                                  Rates filtered by selected carrier package
+                                </p>
+                                <p className="text-blue-700 mt-0.5">
+                                  Showing {filteredRates.length} of {rates.length} rates for {selectedCarrierCodes.map(code => {
+                                    const carrier = allCarrierPackages.find(p => p.carrier_code === code)
+                                    return carrier?.carrier_name
+                                  }).filter(Boolean).join(', ')}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                         {carriers.map((carrier) => (
                           <div key={carrier} className="space-y-2">
                             <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0">{carrier}</h4>
@@ -1247,7 +1517,8 @@ export function ProcessShipmentShipStationModal({
                             })}
                           </div>
                         ))}
-                      </div>
+                        </div>
+                      </>
                     )
                   })()
                 )}
@@ -1395,6 +1666,97 @@ export function ProcessShipmentShipStationModal({
                   )}
                 </div>
 
+                {/* Third Party Billing - Show prominently when selected */}
+                {advancedOptions.billToParty === 'third_party' && (
+                  <div className="bg-white border-2 border-blue-300 rounded-lg p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <h4 className="text-sm font-bold text-gray-900">Third Party Billing Information</h4>
+                    </div>
+
+                    {(() => {
+                      const shippingCharges = shipment?.charges?.toLowerCase()
+                      const isThirdPartyBilling = shippingCharges === 'third party/ship bill to' ||
+                                                  shippingCharges === 'third party' ||
+                                                  shippingCharges === 'ship bill to'
+
+                      return isThirdPartyBilling && (
+                        <div className="bg-green-50 border border-green-200 rounded p-2 text-xs text-green-800 mb-3">
+                          <strong>✓ Auto-populated:</strong> Billing set to Third Party from shipment settings (Shipping Charges: {shipment?.charges})
+                        </div>
+                      )
+                    })()}
+
+                    <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800 mb-4">
+                      <strong>Note:</strong> Third party billing selected. The shipping costs will be billed to the account specified below.
+                      {' '}Change billing option in <strong>Advanced Options</strong> if needed.
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Bill To Account <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={advancedOptions.billToAccount}
+                          onChange={(e) => {
+                            console.log('🔍 [Bill To Account] Changed to:', e.target.value)
+                            setAdvancedOptions({ ...advancedOptions, billToAccount: e.target.value })
+                          }}
+                          placeholder={shipment?.accountNumber || "Account number"}
+                          className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {shipment?.accountNumber ? `From shipment: ${shipment.accountNumber}` : 'Third party account number (from shipment.accountNumber)'}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Country Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={advancedOptions.billToCountryCode}
+                            onChange={(e) => {
+                              console.log('🔍 [Country Code] Changed to:', e.target.value.toUpperCase())
+                              setAdvancedOptions({ ...advancedOptions, billToCountryCode: e.target.value.toUpperCase() })
+                            }}
+                            placeholder={shipment?.shipBillToContact?.countryCode || "US"}
+                            maxLength={2}
+                            className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {shipment?.shipBillToContact?.countryCode ? `From contact: ${shipment.shipBillToContact.countryCode}` : 'ISO 3166-1 alpha-2 (from shipBillToContact.countryCode)'}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Postal Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={advancedOptions.billToPostalCode}
+                            onChange={(e) => {
+                              console.log('🔍 [Postal Code] Changed to:', e.target.value)
+                              setAdvancedOptions({ ...advancedOptions, billToPostalCode: e.target.value })
+                            }}
+                            placeholder={shipment?.shipBillToContact?.zip || "12345"}
+                            className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {shipment?.shipBillToContact?.zip ? `From contact: ${shipment.shipBillToContact.zip}` : 'Validated for FedEx (from shipBillToContact)'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Advanced Options (Optional) */}
                 <details className="bg-white border-2 border-gray-200 rounded-lg shadow-sm">
                   <summary className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors font-bold text-sm text-gray-900 flex items-center justify-between">
@@ -1420,27 +1782,18 @@ export function ProcessShipmentShipStationModal({
                     <div className="space-y-3">
                       <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Billing Options</h5>
 
-                      {(() => {
-                        const shippingCharges = shipment?.charges?.toLowerCase()
-                        const isThirdPartyBilling = shippingCharges === 'third party/ship bill to' ||
-                                                    shippingCharges === 'third party' ||
-                                                    shippingCharges === 'ship bill to'
-
-                        return isThirdPartyBilling && (
-                          <div className="bg-green-50 border border-green-200 rounded p-2 text-xs text-green-800">
-                            <strong>✓ Auto-populated:</strong> Billing set to Third Party from shipment settings (Shipping Charges: {shipment?.charges})
-                          </div>
-                        )
-                      })()}
-
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Bill To Party</label>
                         <select
                           value={advancedOptions.billToParty}
-                          onChange={(e) => setAdvancedOptions({
-                            ...advancedOptions,
-                            billToParty: e.target.value as 'sender' | 'recipient' | 'third_party'
-                          })}
+                          onChange={(e) => {
+                            console.log('🔍 [Bill To Party] Changed to:', e.target.value)
+                            console.log('🔍 [Bill To Party] Current advancedOptions:', advancedOptions)
+                            setAdvancedOptions({
+                              ...advancedOptions,
+                              billToParty: e.target.value as 'sender' | 'recipient' | 'third_party'
+                            })
+                          }}
                           className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="sender">Sender (Default)</option>
@@ -1450,58 +1803,12 @@ export function ProcessShipmentShipStationModal({
                         <p className="text-xs text-gray-500 mt-0.5">Who pays for shipping costs</p>
                       </div>
 
+                      {/* Show note when third party is selected, directing to the prominent section above */}
                       {advancedOptions.billToParty === 'third_party' && (
-                        <>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Bill To Account <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={advancedOptions.billToAccount}
-                              onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToAccount: e.target.value })}
-                              placeholder={shipment?.accountNumber || "Account number"}
-                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {shipment?.accountNumber ? `From shipment: ${shipment.accountNumber}` : 'Third party account number (from shipment.accountNumber)'}
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Country Code <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                value={advancedOptions.billToCountryCode}
-                                onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToCountryCode: e.target.value.toUpperCase() })}
-                                placeholder={shipment?.shipBillToContact?.countryCode || "US"}
-                                maxLength={2}
-                                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {shipment?.shipBillToContact?.countryCode ? `From contact: ${shipment.shipBillToContact.countryCode}` : 'ISO 3166-1 alpha-2 (from shipBillToContact.countryCode)'}
-                              </p>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Postal Code <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                value={advancedOptions.billToPostalCode}
-                                onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToPostalCode: e.target.value })}
-                                placeholder={shipment?.shipBillToContact?.zip || "12345"}
-                                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {shipment?.shipBillToContact?.zip ? `From contact: ${shipment.shipBillToContact.zip}` : 'Validated for FedEx (from shipBillToContact)'}
-                              </p>
-                            </div>
-                          </div>
-                        </>
+                        <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800">
+                          <strong>Third Party Billing:</strong> The billing information fields are displayed prominently above (before Advanced Options) for easy access.
+                          Scroll up to see and edit the Bill To Account, Country Code, and Postal Code fields.
+                        </div>
                       )}
                     </div>
 

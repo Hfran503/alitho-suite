@@ -383,6 +383,8 @@ export async function POST(
           const currentTypeId = currentShipment.shipmentType
 
           if (currentTypeId) {
+            console.log(`🔍 Looking up shipment type mapping for tenantId=${membership.tenantId}, completedTypeId=${currentTypeId}`)
+
             // Look up the planned type for this completed type
             const mapping = await db.shipmentTypeMapping.findFirst({
               where: {
@@ -393,16 +395,21 @@ export async function POST(
 
             if (mapping) {
               shipmentUpdateData.shipmentType = mapping.plannedTypeId
-              console.log(`Changing shipment type back: ${mapping.completedTypeName} (${currentTypeId}) → ${mapping.plannedTypeName} (${mapping.plannedTypeId})`)
+              console.log(`✅ Changing shipment type back: ${mapping.completedTypeName} (${currentTypeId}) → ${mapping.plannedTypeName} (${mapping.plannedTypeId})`)
+            } else {
+              console.warn(`⚠️ No shipment type mapping found for tenantId=${membership.tenantId}, completedTypeId=${currentTypeId}`)
+              console.warn('⚠️ ShipmentType will NOT be reverted. Please configure ShipmentTypeMapping in database.')
             }
+          } else {
+            console.warn('⚠️ Current shipment has no shipmentType field, cannot revert shipmentType')
           }
         }
       } catch (error) {
-        console.error('Error updating shipment type:', error)
+        console.error('❌ Error updating shipment type:', error)
         // Don't fail if type update fails
       }
 
-      console.log('Clearing shipment tracking and cost data, marking as not shipped:', shipmentUpdateData)
+      console.log('📤 Clearing shipment tracking and cost data, marking as not shipped:', JSON.stringify(shipmentUpdateData, null, 2))
 
       const updateShipmentResponse = await fetch(
         `${paceApiUrl}/UpdateObject/updateJobShipment`,
@@ -418,17 +425,21 @@ export async function POST(
       )
 
       if (updateShipmentResponse.ok) {
-        console.log('Successfully cleared shipment tracking and cost data')
+        const updateResult = await updateShipmentResponse.json()
+        console.log('✅ PACE API update successful (cancel labels)!')
+        console.log('✅ Update result:', JSON.stringify(updateResult, null, 2))
+        console.log('✅ Successfully cleared shipment tracking and cost data, set shipped=false')
       } else {
         const errorText = await updateShipmentResponse.text()
-        console.error('Failed to clear shipment data:', {
+        console.error('❌ PACE API update failed (cancel labels):', {
           status: updateShipmentResponse.status,
           statusText: updateShipmentResponse.statusText,
           response: errorText,
         })
+        console.error('❌ Data sent:', JSON.stringify(shipmentUpdateData, null, 2))
       }
     } catch (error) {
-      console.error('Error clearing shipment data:', error)
+      console.error('❌ Error clearing shipment data:', error)
     }
 
     return NextResponse.json({

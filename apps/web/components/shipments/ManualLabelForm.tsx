@@ -14,6 +14,26 @@ interface CartonConfig {
     description: string
     quantity: number
   }>
+  useCarrierPackage: boolean
+  carrierPackageCode?: string
+  carrierPackageName?: string
+}
+
+interface CarrierPackage {
+  package_id: string | null
+  package_code: string
+  name: string
+  description: string
+}
+
+interface Carrier {
+  carrier_id: string
+  carrier_code: string
+  friendly_name: string
+  services: Array<{
+    service_code: string
+    name: string
+  }>
 }
 
 interface AddressData {
@@ -73,8 +93,14 @@ export function ManualLabelForm() {
       weight: '',
       count: 1,
       contents: [{ description: '', quantity: 1 }],
+      useCarrierPackage: false,
     },
   ])
+
+  // Carriers and packages state
+  const [carriers, setCarriers] = useState<Carrier[]>([])
+  const [carrierPackages, setCarrierPackages] = useState<Record<string, CarrierPackage[]>>({})
+  const [selectedCarrierId, setSelectedCarrierId] = useState<string>('')
 
   // Step 2 data - Address validation
   const [validationResult, setValidationResult] = useState<any>(null)
@@ -186,6 +212,54 @@ export function ManualLabelForm() {
     loadDefaultFromAddress()
   }, [])
 
+  // Load carriers on mount
+  useEffect(() => {
+    const loadCarriers = async () => {
+      try {
+        const response = await fetch('/api/shipstation/carriers')
+        if (response.ok) {
+          const data = await response.json()
+          setCarriers(data.data.carriers || [])
+
+          // Auto-select first carrier if available
+          if (data.data.carriers && data.data.carriers.length > 0) {
+            const firstCarrier = data.data.carriers[0]
+            setSelectedCarrierId(firstCarrier.carrier_id)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load carriers:', error)
+      }
+    }
+
+    loadCarriers()
+  }, [])
+
+  // Load carrier packages when carrier is selected
+  useEffect(() => {
+    if (!selectedCarrierId) return
+
+    const loadCarrierPackages = async () => {
+      try {
+        // Check if we already have packages for this carrier
+        if (carrierPackages[selectedCarrierId]) return
+
+        const response = await fetch(`/api/shipstation/carriers/${selectedCarrierId}/packages`)
+        if (response.ok) {
+          const data = await response.json()
+          setCarrierPackages(prev => ({
+            ...prev,
+            [selectedCarrierId]: data.data.packages || []
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to load carrier packages:', error)
+      }
+    }
+
+    loadCarrierPackages()
+  }, [selectedCarrierId, carrierPackages])
+
   // Auto-validate address when toAddress changes
   useEffect(() => {
     const validateAddress = async () => {
@@ -282,9 +356,21 @@ export function ManualLabelForm() {
       for (let i = 0; i < cartons.length; i++) {
         const carton = cartons[i]
 
-        if (!carton.length || !carton.width || !carton.height || !carton.weight) {
-          setError(`Carton ${i + 1}: Please fill in all dimensions and weight`)
-          return
+        // Validate based on whether using carrier package or custom dimensions
+        if (carton.useCarrierPackage) {
+          if (!carton.carrierPackageCode) {
+            setError(`Carton ${i + 1}: Please select a carrier package`)
+            return
+          }
+          if (!carton.weight) {
+            setError(`Carton ${i + 1}: Please enter weight`)
+            return
+          }
+        } else {
+          if (!carton.length || !carton.width || !carton.height || !carton.weight) {
+            setError(`Carton ${i + 1}: Please fill in all dimensions and weight`)
+            return
+          }
         }
 
         if (carton.count < 1) {
@@ -324,14 +410,23 @@ export function ManualLabelForm() {
         const packages = []
         for (const carton of cartons) {
           for (let i = 0; i < carton.count; i++) {
-            packages.push({
-              length: parseFloat(carton.length),
-              width: parseFloat(carton.width),
-              height: parseFloat(carton.height),
+            const pkg: any = {
               weight: parseFloat(carton.weight),
               weightUnit: 'pound',
-              dimensionUnit: 'inch',
-            })
+            }
+
+            if (carton.useCarrierPackage && carton.carrierPackageCode) {
+              // Use carrier package code
+              pkg.package_code = carton.carrierPackageCode
+            } else {
+              // Use custom dimensions
+              pkg.length = parseFloat(carton.length)
+              pkg.width = parseFloat(carton.width)
+              pkg.height = parseFloat(carton.height)
+              pkg.dimensionUnit = 'inch'
+            }
+
+            packages.push(pkg)
           }
         }
 
@@ -382,12 +477,19 @@ export function ManualLabelForm() {
         for (const carton of cartons) {
           for (let i = 0; i < carton.count; i++) {
             const pkg: any = {
-              length: parseFloat(carton.length),
-              width: parseFloat(carton.width),
-              height: parseFloat(carton.height),
               weight: parseFloat(carton.weight),
               weightUnit: 'pound',
-              dimensionUnit: 'inch',
+            }
+
+            if (carton.useCarrierPackage && carton.carrierPackageCode) {
+              // Use carrier package code
+              pkg.package_code = carton.carrierPackageCode
+            } else {
+              // Use custom dimensions
+              pkg.length = parseFloat(carton.length)
+              pkg.width = parseFloat(carton.width)
+              pkg.height = parseFloat(carton.height)
+              pkg.dimensionUnit = 'inch'
             }
 
             const hasMessages = labelMessages.reference1 || labelMessages.reference2 || labelMessages.reference3
@@ -590,6 +692,7 @@ export function ManualLabelForm() {
       weight: '',
       count: 1,
       contents: [{ description: '', quantity: 1 }],
+      useCarrierPackage: false,
     }])
     setToAddress({
       name: '',
@@ -623,6 +726,7 @@ export function ManualLabelForm() {
         weight: '',
         count: 1,
         contents: [{ description: '', quantity: 1 }],
+        useCarrierPackage: false,
       },
     ])
   }
@@ -632,9 +736,15 @@ export function ManualLabelForm() {
     setCartons(newCartons.length > 0 ? newCartons : [cartons[0]])
   }
 
-  const updateCarton = (index: number, field: keyof CartonConfig, value: any) => {
+  const updateCarton = (index: number, field: keyof CartonConfig | Record<string, any>, value?: any) => {
     const newCartons = [...cartons]
-    newCartons[index] = { ...newCartons[index], [field]: value }
+    if (typeof field === 'string') {
+      // Single field update
+      newCartons[index] = { ...newCartons[index], [field]: value }
+    } else {
+      // Multiple fields update
+      newCartons[index] = { ...newCartons[index], ...field }
+    }
     setCartons(newCartons)
   }
 
@@ -735,6 +845,10 @@ export function ManualLabelForm() {
             addContent={addContent}
             removeContent={removeContent}
             updateContent={updateContent}
+            carriers={carriers}
+            selectedCarrierId={selectedCarrierId}
+            setSelectedCarrierId={setSelectedCarrierId}
+            carrierPackages={carrierPackages[selectedCarrierId] || []}
           />
         )}
 
@@ -821,6 +935,10 @@ function Step1CartonConfiguration({
   addContent,
   removeContent,
   updateContent,
+  carriers,
+  selectedCarrierId,
+  setSelectedCarrierId,
+  carrierPackages,
 }: any) {
   return (
     <div className="space-y-4">
@@ -831,10 +949,33 @@ function Step1CartonConfiguration({
           </svg>
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Configure Cartons</h3>
-            <p className="text-xs text-gray-700 mt-0.5">Add cartons with dimensions, weight, and contents.</p>
+            <p className="text-xs text-gray-700 mt-0.5">Add cartons with custom dimensions or select carrier packages.</p>
           </div>
         </div>
       </div>
+
+      {/* Carrier Selection */}
+      {carriers && carriers.length > 0 && (
+        <div className="bg-white border-2 border-gray-200 rounded-lg p-3">
+          <label className="block text-xs font-bold text-gray-900 mb-2">
+            Carrier for Package Types
+          </label>
+          <select
+            value={selectedCarrierId}
+            onChange={(e) => setSelectedCarrierId(e.target.value)}
+            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {carriers.map((carrier: Carrier) => (
+              <option key={carrier.carrier_id} value={carrier.carrier_id}>
+                {carrier.friendly_name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Select a carrier to use their predefined package types
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {cartons.map((carton: CartonConfig, cartonIndex: number) => (
@@ -936,75 +1077,164 @@ function Step1CartonConfiguration({
 
             {/* Dimensions, Weight, and Count */}
             <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-              <div className="grid grid-cols-5 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    L(in) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={carton.length}
-                    onChange={(e) => updateCarton(cartonIndex, 'length', e.target.value)}
-                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="12"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    W(in) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={carton.width}
-                    onChange={(e) => updateCarton(cartonIndex, 'width', e.target.value)}
-                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="8"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    H(in) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={carton.height}
-                    onChange={(e) => updateCarton(cartonIndex, 'height', e.target.value)}
-                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="6"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Wt(lb) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={carton.weight}
-                    onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
-                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="1.0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Qty <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={carton.count}
-                    onChange={(e) =>
-                      updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
-                    }
-                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="1"
-                  />
-                </div>
+              {/* Package Type Toggle */}
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id={`useCarrierPackage-${cartonIndex}`}
+                  checked={carton.useCarrierPackage}
+                  onChange={(e) => updateCarton(cartonIndex, 'useCarrierPackage', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor={`useCarrierPackage-${cartonIndex}`} className="text-xs font-medium text-gray-700">
+                  Use Carrier Package Type
+                </label>
               </div>
+
+              {carton.useCarrierPackage ? (
+                /* Carrier Package Selection */
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Package Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={carton.carrierPackageCode || ''}
+                      onChange={(e) => {
+                        const selectedPackage = carrierPackages.find((pkg: CarrierPackage) => pkg.package_code === e.target.value)
+                        updateCarton(cartonIndex, {
+                          carrierPackageCode: e.target.value,
+                          carrierPackageName: selectedPackage?.name || ''
+                        })
+                      }}
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={!carrierPackages || carrierPackages.length === 0}
+                    >
+                      <option value="">
+                        {!carrierPackages || carrierPackages.length === 0
+                          ? 'Loading packages...'
+                          : 'Select a package type...'}
+                      </option>
+                      {carrierPackages && carrierPackages.map((pkg: CarrierPackage) => (
+                        <option key={pkg.package_code} value={pkg.package_code}>
+                          {pkg.name}
+                        </option>
+                      ))}
+                    </select>
+                    {carton.carrierPackageCode && (
+                      <div className="mt-1">
+                        <p className="text-xs font-medium text-blue-600">
+                          Selected: {carton.carrierPackageName || carton.carrierPackageCode}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {carrierPackages?.find((pkg: CarrierPackage) => pkg.package_code === carton.carrierPackageCode)?.description}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Wt(lb) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={carton.weight}
+                        onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
+                        className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="1.0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Qty <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={carton.count}
+                        onChange={(e) =>
+                          updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
+                        }
+                        className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Custom Dimensions */
+                <div className="grid grid-cols-5 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      L(in) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={carton.length}
+                      onChange={(e) => updateCarton(cartonIndex, 'length', e.target.value)}
+                      className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="12"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      W(in) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={carton.width}
+                      onChange={(e) => updateCarton(cartonIndex, 'width', e.target.value)}
+                      className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="8"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      H(in) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={carton.height}
+                      onChange={(e) => updateCarton(cartonIndex, 'height', e.target.value)}
+                      className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="6"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Wt(lb) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={carton.weight}
+                      onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
+                      className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1.0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Qty <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={carton.count}
+                      onChange={(e) =>
+                        updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
+                      }
+                      className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}

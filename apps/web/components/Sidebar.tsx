@@ -3,7 +3,19 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
+
+interface MenuConfig {
+  id: string
+  menuKey: string
+  label: string
+  href: string
+  icon: string | null
+  parentKey: string | null
+  order: number
+  visibleToRoles: string[]
+  isActive: boolean
+}
 
 interface NavItem {
   name: string
@@ -12,136 +24,89 @@ interface NavItem {
   submenu?: NavItem[]
 }
 
-const navItems: NavItem[] = [
-  {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+// Icon mapping function
+function getIcon(iconName: string | null, className: string = "w-5 h-5"): React.ReactNode {
+  const icons: Record<string, React.ReactNode> = {
+    home: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
       </svg>
     ),
-  },
-  // TODO: Uncomment when Orders page is implemented
-  // {
-  //   name: 'Orders',
-  //   href: '/dashboard/orders',
-  //   icon: (
-  //     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  //       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-  //     </svg>
-  //   ),
-  // },
-  {
-    name: 'Shipments',
-    href: '/shipments',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    package: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
       </svg>
     ),
-    submenu: [
-      {
-        name: 'All Shipments',
-        href: '/shipments',
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-        ),
-      },
-      {
-        name: 'Manual Label',
-        href: '/shipments/manual-label',
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        ),
-      },
-      {
-        name: 'Track Labels',
-        href: '/shipment-track',
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
-    name: 'Batch Import',
-    href: '/batch-import',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    list: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+      </svg>
+    ),
+    plus: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      </svg>
+    ),
+    search: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    ),
+    upload: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
     ),
-    submenu: [
-      {
-        name: 'New Import',
-        href: '/batch-import',
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        ),
-      },
-      {
-        name: 'Track Batches',
-        href: '/batch-import/batches',
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
-    name: 'Rate Estimates',
-    href: '/rates/estimate',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    dollar: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
-  },
-  // TODO: Uncomment when Customers page is implemented
-  // {
-  //   name: 'Customers',
-  //   href: '/dashboard/customers',
-  //   icon: (
-  //     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  //       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-  //     </svg>
-  //   ),
-  // },
-  // TODO: Uncomment when Products page is implemented
-  // {
-  //   name: 'Products',
-  //   href: '/dashboard/products',
-  //   icon: (
-  //     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  //       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-  //     </svg>
-  //   ),
-  // },
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    settings: (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
-  },
-]
+  }
+
+  return icons[iconName || ''] || icons.home
+}
 
 interface SidebarProps {
   onPinChange?: (isPinned: boolean) => void
+}
+
+// Transform menu configurations to NavItem structure
+// API already filters by role and active status
+function transformMenuConfigs(configs: MenuConfig[]): NavItem[] {
+  // Get top-level items (no parent)
+  const topLevel = configs
+    .filter((config) => !config.parentKey)
+    .sort((a, b) => a.order - b.order)
+
+  // Build nav items with submenus
+  return topLevel.map((config) => {
+    const submenuConfigs = configs
+      .filter((sub) => sub.parentKey === config.menuKey)
+      .sort((a, b) => a.order - b.order)
+
+    const navItem: NavItem = {
+      name: config.label,
+      href: config.href,
+      icon: getIcon(config.icon),
+    }
+
+    if (submenuConfigs.length > 0) {
+      navItem.submenu = submenuConfigs.map((sub) => ({
+        name: sub.label,
+        href: sub.href,
+        icon: getIcon(sub.icon, 'w-4 h-4'),
+      }))
+    }
+
+    return navItem
+  })
 }
 
 export function Sidebar({ onPinChange }: SidebarProps = {}) {
@@ -149,7 +114,10 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
   const [isPinned, setIsPinned] = useState(false)
   const [expandedMenus, setExpandedMenus] = useState<string[]>([])
   const [isFullyExpanded, setIsFullyExpanded] = useState(false)
+  const [navItems, setNavItems] = useState<NavItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const pathname = usePathname()
+  const { data: session } = useSession()
 
   // Load pin state from localStorage on mount
   useEffect(() => {
@@ -162,6 +130,39 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
       }
     }
   }, [onPinChange])
+
+  // Fetch menu configurations from API
+  useEffect(() => {
+    async function fetchMenuConfigs() {
+      try {
+        setIsLoading(true)
+        const response = await fetch('/api/settings/menu-configuration')
+
+        if (!response.ok) {
+          console.error('Failed to fetch menu configurations:', response.statusText)
+          setNavItems([])
+          return
+        }
+
+        const data = await response.json()
+        const configs = data.menuConfigs as MenuConfig[]
+
+        // Transform configs to nav items (API already filtered by role)
+        const items = transformMenuConfigs(configs)
+        setNavItems(items)
+      } catch (error) {
+        console.error('Error fetching menu configurations:', error)
+        setNavItems([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    // Only fetch if session is available
+    if (session) {
+      fetchMenuConfigs()
+    }
+  }, [session])
 
   const isExpanded = isPinned || isHovered
 
@@ -227,6 +228,11 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
       <nav className="h-full flex flex-col py-4">
         {/* Navigation Items */}
         <ul className="flex-1 space-y-1 px-2">
+          {isLoading && navItems.length === 0 ? (
+            <li className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </li>
+          ) : null}
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
             const hasSubmenu = item.submenu && item.submenu.length > 0
