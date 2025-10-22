@@ -28,6 +28,12 @@ interface CacheEntry {
 // Cache TTL: 5 minutes (in milliseconds)
 const CACHE_TTL = 5 * 60 * 1000
 
+// Cache version - increment this to invalidate all old caches after breaking changes
+// v4: Fixed PACE date parsing to treat dates as Pacific Time
+// v5: Added date-only format handling (e.g., "2025-10-21" -> "2025-10-21T00:00:00")
+// v6: CRITICAL FIX - PACE sends UTC dates without 'Z' suffix, now treating as UTC
+const CACHE_VERSION = 'v6'
+
 /**
  * Generate a cache key from filters
  */
@@ -39,6 +45,7 @@ function getCacheKey(filters: {
   page?: number
 }): string {
   const parts = [
+    CACHE_VERSION, // Include version in cache key
     filters.startDate || '',
     filters.endDate || '',
     filters.job || '',

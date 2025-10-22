@@ -211,11 +211,20 @@ export async function GET(req: NextRequest) {
             shipmentDetail.description = shipmentDetail.description.join('\n')
           }
 
-          // Normalize the response
+          // Normalize the response and fix timezone issue
           const rawDate =
             shipmentDetail.dateTime ?? shipmentDetail.date ?? shipmentDetail.shipDate
           if (rawDate) {
-            shipmentDetail.dateTime = rawDate
+            // PACE returns dates in UTC format but WITHOUT the 'Z' suffix
+            // e.g., "2025-10-22T01:05:00" is actually UTC, which displays as Oct 21 in PT
+            const dateStr = String(rawDate)
+            if (dateStr && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.match(/-\d{2}:\d{2}$/)) {
+              // No timezone info - treat as UTC by adding 'Z'
+              const dateTimeStr = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`
+              shipmentDetail.dateTime = dateTimeStr + 'Z'
+            } else {
+              shipmentDetail.dateTime = rawDate
+            }
           }
 
           // Client-side date filtering
@@ -310,11 +319,20 @@ export async function GET(req: NextRequest) {
                 shipmentDetail.description = shipmentDetail.description.join('\n')
               }
 
-              // Normalize the response
+              // Normalize the response and fix timezone issue
               const rawDate =
                 shipmentDetail.dateTime ?? shipmentDetail.date ?? shipmentDetail.shipDate
               if (rawDate) {
-                shipmentDetail.dateTime = rawDate
+                // PACE returns dates in UTC format but WITHOUT the 'Z' suffix
+                // e.g., "2025-10-22T01:05:00" is actually UTC, which displays as Oct 21 in PT
+                const dateStr = String(rawDate)
+                if (dateStr && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.match(/-\d{2}:\d{2}$/)) {
+                  // No timezone info - treat as UTC by adding 'Z'
+                  const dateTimeStr = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`
+                  shipmentDetail.dateTime = dateTimeStr + 'Z'
+                } else {
+                  shipmentDetail.dateTime = rawDate
+                }
               }
 
               // Apply date filtering

@@ -5,6 +5,9 @@ import { db } from '@repo/database'
 import { jobShipmentFilterSchema, type JobShipment } from '@repo/types'
 import { ZodError } from 'zod'
 import { getPaceApiCredentials } from '@/lib/secrets'
+import { toZonedTime } from 'date-fns-tz'
+
+const TIMEZONE = 'America/Los_Angeles'
 
 // GET /api/pace/shipments - List job shipments with date filtering
 export async function GET(req: NextRequest) {
@@ -68,12 +71,35 @@ export async function GET(req: NextRequest) {
 
     // Add date filter to XPath query if present (using PACE date() function like Python script)
     if (filters.startDate && filters.endDate) {
-      const startDate = new Date(filters.startDate)
-      const endDate = new Date(filters.endDate)
+      // The frontend sends ISO strings that represent PT dates (e.g., "2025-10-20T07:00:00.000Z" for Oct 20 PT)
+      // We need to convert back to PT and extract the date components
+      // PACE's date() function expects dates in the server's timezone (Pacific Time)
+
+      // Parse the ISO string and convert to Pacific Time
+      const startDatePT = toZonedTime(new Date(filters.startDate), TIMEZONE)
+      const endDatePT = toZonedTime(new Date(filters.endDate), TIMEZONE)
+
+      // Extract date components in Pacific Time
+      const startYear = startDatePT.getFullYear()
+      const startMonth = startDatePT.getMonth() + 1
+      const startDay = startDatePT.getDate()
+
+      const endYear = endDatePT.getFullYear()
+      const endMonth = endDatePT.getMonth() + 1
+      const endDay = endDatePT.getDate()
 
       // Use PACE's date() function for date comparison (same as Python script)
-      const dateXPath = `@date >= date(${startDate.getFullYear()}, ${startDate.getMonth() + 1}, ${startDate.getDate()}) and @date <= date(${endDate.getFullYear()}, ${endDate.getMonth() + 1}, ${endDate.getDate()})`
+      const dateXPath = `@date >= date(${startYear}, ${startMonth}, ${startDay}) and @date <= date(${endYear}, ${endMonth}, ${endDay})`
       xpathConditions.push(dateXPath)
+
+      console.log('Date filtering:', {
+        requestedDates: { start: filters.startDate, end: filters.endDate },
+        pacificTimeDates: {
+          start: { year: startYear, month: startMonth, day: startDay, iso: startDatePT.toISOString() },
+          end: { year: endYear, month: endMonth, day: endDay, iso: endDatePT.toISOString() }
+        },
+        xpath: dateXPath
+      })
     }
 
     // Add job filter
@@ -199,14 +225,23 @@ export async function GET(req: NextRequest) {
             shipmentDetail.description = shipmentDetail.description.join('\n')
           }
 
-          // Normalize the response
+          // Normalize the response and fix timezone issue
           const rawDate =
             shipmentDetail.dateTime ?? shipmentDetail.date ?? shipmentDetail.shipDate
           if (rawDate) {
-            shipmentDetail.dateTime = rawDate
+            // PACE returns dates in UTC format but WITHOUT the 'Z' suffix
+            // e.g., "2025-10-22T01:05:00" is actually UTC, which displays as Oct 21 in PT
+            const dateStr = String(rawDate)
+            if (dateStr && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.match(/-\d{2}:\d{2}$/)) {
+              // No timezone info - treat as UTC by adding 'Z'
+              const dateTimeStr = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`
+              shipmentDetail.dateTime = dateTimeStr + 'Z'
+            } else {
+              shipmentDetail.dateTime = rawDate
+            }
           }
 
-          // Date filtering is now done at the XPath level in PACE API (no need for client-side filtering)
+          // Date filtering is now done at the XPath level in PACE API
           return { id, shipment: shipmentDetail }
         } else {
           const errorText = await detailResponse.text()

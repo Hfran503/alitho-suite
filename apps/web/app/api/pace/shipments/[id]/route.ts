@@ -109,6 +109,22 @@ export async function GET(
 
     const shipment: JobShipment = await response.json()
 
+    // Normalize the date/time field and fix timezone issue
+    const rawDate = shipment.dateTime ?? (shipment as any).date ?? (shipment as any).shipDate
+
+    if (rawDate) {
+      // PACE returns dates in UTC format but WITHOUT the 'Z' suffix
+      // e.g., "2025-10-22T01:05:00" is actually UTC, which displays as Oct 21 in PT
+      const dateStr = String(rawDate)
+      if (dateStr && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.match(/-\d{2}:\d{2}$/)) {
+        // No timezone info - treat as UTC by adding 'Z'
+        const dateTimeStr = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`
+        shipment.dateTime = dateTimeStr + 'Z'
+      } else {
+        shipment.dateTime = rawDate
+      }
+    }
+
     // If shipBillToContact is a number (Contact ID), fetch the Contact details
     if (shipment.shipBillToContact && typeof shipment.shipBillToContact === 'number') {
       try {
