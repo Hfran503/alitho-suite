@@ -179,10 +179,35 @@ const IconMap: Record<string, React.ReactNode> = {
 // Cache for menu data to avoid refetching on every navigation
 let menuCache: { items: MenuItem[]; role: string; timestamp: number } | null = null
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const LOCALSTORAGE_KEY = 'sidebar_menu_cache'
+
+// Helper functions for localStorage cache
+function loadFromLocalStorage(): { items: MenuItem[]; role: string; timestamp: number } | null {
+  try {
+    const cached = localStorage.getItem(LOCALSTORAGE_KEY)
+    if (!cached) return null
+    return JSON.parse(cached)
+  } catch {
+    return null
+  }
+}
+
+function saveToLocalStorage(data: { items: MenuItem[]; role: string; timestamp: number }) {
+  try {
+    localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(data))
+  } catch (error) {
+    console.error('Failed to save menu cache to localStorage:', error)
+  }
+}
 
 // Function to clear menu cache (call this when menu settings are updated)
 export function clearMenuCache() {
   menuCache = null
+  try {
+    localStorage.removeItem(LOCALSTORAGE_KEY)
+  } catch {
+    // Ignore localStorage errors
+  }
 }
 
 export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
@@ -208,14 +233,17 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
     }
   }, [onPinChange])
 
-  // Fetch menu configuration and user role in parallel with caching
+  // Fetch menu configuration and user role with multi-layer caching
   useEffect(() => {
-    async function fetchMenuConfig() {
+    async function fetchMenuConfig(backgroundRefresh = false) {
       try {
-        setLoading(true)
+        if (!backgroundRefresh) {
+          setLoading(true)
+        }
 
-        // Check if we have valid cached data
         const now = Date.now()
+
+        // Layer 1: Check in-memory cache
         if (menuCache && (now - menuCache.timestamp) < CACHE_DURATION) {
           setMenuItems(menuCache.items)
           setUserRole(menuCache.role)
@@ -223,7 +251,23 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
           return
         }
 
-        // Fetch both user role and menu configuration in parallel
+        // Layer 2: Check localStorage cache
+        const localCache = loadFromLocalStorage()
+        if (localCache && (now - localCache.timestamp) < CACHE_DURATION) {
+          // Use localStorage cache immediately for instant render
+          setMenuItems(localCache.items)
+          setUserRole(localCache.role)
+          menuCache = localCache // Update memory cache
+          setLoading(false)
+
+          // Optionally refresh in background if cache is older than 1 minute
+          if ((now - localCache.timestamp) > 60 * 1000) {
+            fetchMenuConfig(true) // Background refresh
+          }
+          return
+        }
+
+        // Layer 3: Fetch from API
         const [userRes, menuRes] = await Promise.all([
           fetch('/api/user/settings'),
           fetch('/api/settings/menu-configuration')
@@ -266,19 +310,23 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
           }
         }
 
-        // Update cache
-        menuCache = {
+        // Update both caches
+        const cacheData = {
           items,
           role,
           timestamp: Date.now()
         }
+        menuCache = cacheData
+        saveToLocalStorage(cacheData)
       } catch (error) {
         console.error('Error fetching menu config:', error)
         // On error, use default menu as fallback
         const defaultMenu = getDefaultMenu()
         setMenuItems(defaultMenu)
       } finally {
-        setLoading(false)
+        if (!backgroundRefresh) {
+          setLoading(false)
+        }
       }
     }
 
