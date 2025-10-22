@@ -34,9 +34,12 @@ export async function POST(request: Request) {
       )
     }
 
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim()
+
     // Check if user already exists
     const existingUser = await db.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     })
 
     if (existingUser) {
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
     const user = await db.user.create({
       data: {
         name,
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         passwordResetRequired: isTemporaryPassword || false, // Force password change if temporary
         memberships: {

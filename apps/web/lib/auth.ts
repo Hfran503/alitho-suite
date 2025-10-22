@@ -70,8 +70,11 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
+          // Normalize email to lowercase for case-insensitive comparison
+          const normalizedEmail = credentials.email.toLowerCase().trim()
+
           const user = await db.user.findUnique({
-            where: { email: credentials.email },
+            where: { email: normalizedEmail },
           })
 
           if (!user || !user.password) {

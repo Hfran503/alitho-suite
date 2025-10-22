@@ -6,11 +6,14 @@ async function main() {
   const name = 'Hector Franco'
   const password = 'Calitho94520!'
 
-  console.log('Creating test user:', email)
+  // Normalize email to lowercase for case-insensitive comparison
+  const normalizedEmail = email.toLowerCase().trim()
+
+  console.log('Creating test user:', normalizedEmail)
 
   // Check if user already exists
   const existingUser = await db.user.findUnique({
-    where: { email },
+    where: { email: normalizedEmail },
   })
 
   if (existingUser) {
@@ -49,7 +52,7 @@ async function main() {
   // Create user
   const user = await db.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       name,
       password: hashedPassword,
       emailVerified: new Date(), // Mark as verified

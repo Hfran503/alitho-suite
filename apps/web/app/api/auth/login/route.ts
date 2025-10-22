@@ -15,9 +15,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim()
+
     // Find user
     const user = await db.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     })
 
     if (!user || !user.password) {
