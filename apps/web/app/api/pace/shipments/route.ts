@@ -66,20 +66,15 @@ export async function GET(req: NextRequest) {
     // Build XPath query for PACE API
     const xpathConditions: string[] = []
 
-    // Store date filters for client-side validation as fallback
-    const dateFilters = {
-      startTimestamp: filters.startDate ? new Date(filters.startDate).getTime() : null,
-      endTimestamp: filters.endDate ? new Date(filters.endDate).getTime() : null,
-    }
+    // Add date filter to XPath query if present (using PACE date() function like Python script)
+    if (filters.startDate && filters.endDate) {
+      const startDate = new Date(filters.startDate)
+      const endDate = new Date(filters.endDate)
 
-    // Add date filter to XPath query if present
-    // NOTE: Don't use date filtering in XPath for now - PACE doesn't reliably support it
-    // We'll fetch more records and filter client-side instead
-    // if (filters.startDate && filters.endDate) {
-    //   const startDate = filters.startDate.replace('Z', '').substring(0, 19)
-    //   const endDate = filters.endDate.replace('Z', '').substring(0, 19)
-    //   xpathConditions.push(`dateTime >= '${startDate}' and dateTime <= '${endDate}'`)
-    // }
+      // Use PACE's date() function for date comparison (same as Python script)
+      const dateXPath = `@date >= date(${startDate.getFullYear()}, ${startDate.getMonth() + 1}, ${startDate.getDate()}) and @date <= date(${endDate.getFullYear()}, ${endDate.getMonth() + 1}, ${endDate.getDate()})`
+      xpathConditions.push(dateXPath)
+    }
 
     // Add job filter
     if (filters.job) {
@@ -104,9 +99,9 @@ export async function GET(req: NextRequest) {
     const authHeader = `Basic ${Buffer.from(`${paceUsername}:${pacePassword}`).toString('base64')}`
 
     // Build query parameters for PACE API
-    // Always fetch more records since PACE returns by ID order (oldest first)
-    // We'll sort by date on the backend to show newest first
-    const fetchLimit = 5000 // Fetch enough to ensure we get recent shipments
+    // With date filtering in XPath, we only get shipments in the date range
+    // So we can use a reasonable limit instead of fetching everything
+    const fetchLimit = 1000 // Reasonable limit since XPath filters by date
 
     const queryParams = new URLSearchParams({
       type: 'JobShipment',
@@ -118,7 +113,7 @@ export async function GET(req: NextRequest) {
     // Call PACE API using findSortAndLimit
     const paceUrl = `${paceApiUrl}/FindObjects/findSortAndLimit?${queryParams.toString()}`
 
-    console.log('PACE API Request:', {
+    console.log('PACE API Request (XPath Date Filtering):', {
       url: paceUrl,
       xpath: xpath,
       offset,
@@ -126,8 +121,8 @@ export async function GET(req: NextRequest) {
       filters: {
         startDate: filters.startDate,
         endDate: filters.endDate,
-        startTimestamp: filters.startDate ? new Date(filters.startDate).getTime() : null,
-        endTimestamp: filters.endDate ? new Date(filters.endDate).getTime() : null,
+        job: filters.job,
+        note: 'Date filtering now done in XPath query at PACE API level (like Python script)'
       }
     })
 
@@ -211,22 +206,7 @@ export async function GET(req: NextRequest) {
             shipmentDetail.dateTime = rawDate
           }
 
-          // Client-side date filtering
-          if (dateFilters.startTimestamp || dateFilters.endTimestamp) {
-            if (!rawDate) {
-              return { id, skipped: true }
-            }
-
-            const shipmentDate = new Date(rawDate).getTime()
-
-            if (dateFilters.startTimestamp && shipmentDate < dateFilters.startTimestamp) {
-              return { id, skipped: true }
-            }
-            if (dateFilters.endTimestamp && shipmentDate > dateFilters.endTimestamp) {
-              return { id, skipped: true }
-            }
-          }
-
+          // Date filtering is now done at the XPath level in PACE API (no need for client-side filtering)
           return { id, shipment: shipmentDetail }
         } else {
           const errorText = await detailResponse.text()
@@ -262,8 +242,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const filteredCount = shipmentIds.length - shipments.length
-    console.log(`✅ Fetched ${shipments.length} shipments (0 errors, ${filteredCount} filtered out by date)`)
+    console.log(`✅ Fetched ${shipments.length} shipments (date filtering done by PACE XPath query)`)
 
     // Enrich shipments with customer data from Job lookup
     console.log(`Enriching ${shipments.length} shipments with customer data...`)

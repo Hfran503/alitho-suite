@@ -78,9 +78,9 @@ export default function JobShipmentsPage() {
 
     try {
       const params = new URLSearchParams()
-      // Note: We fetch ALL pages to enable client-side customer filtering
+      // Note: We fetch a larger batch to enable client-side customer filtering
       params.set('page', '1')
-      params.set('pageSize', '5000') // Fetch all results for client-side filtering
+      params.set('pageSize', '1000') // Reasonable batch size - API now filters by date at PACE level
 
       if (startDate && endDate) {
         // Convert to ISO datetime for API (using Pacific Time)
