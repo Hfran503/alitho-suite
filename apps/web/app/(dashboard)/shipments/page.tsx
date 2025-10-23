@@ -34,6 +34,7 @@ export default function JobShipmentsPage() {
   const [jobFilter, setJobFilter] = useState(searchParams.get('job') || '')
   const [customerFilter, setCustomerFilter] = useState(searchParams.get('customer') || '')
   const [shipmentIdSearch, setShipmentIdSearch] = useState('')
+  const [hideShipped, setHideShipped] = useState(false)
 
   const fetchShipments = async (page = 1, skipCache = false) => {
     // Validate filters
@@ -61,13 +62,32 @@ export default function JobShipmentsPage() {
       })
 
       if (cached) {
-        setShipments(cached.items)
+        // Cache contains all items, so we need to apply client-side pagination
+        setAllShipments(cached.items)
+
+        // Apply client-side customer filter if needed
+        const filteredItems = customerFilter
+          ? cached.items.filter((shipment: JobShipment) => {
+              const customerName = (shipment.customerName || shipment.customer || '').toLowerCase()
+              return customerName.includes(customerFilter.toLowerCase())
+            })
+          : cached.items
+
+        // Apply client-side pagination
+        const pageSize = 20
+        const totalFiltered = filteredItems.length
+        const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize))
+        const currentPage = Math.min(page, totalPages)
+        const startIndex = (currentPage - 1) * pageSize
+        const paginatedItems = filteredItems.slice(startIndex, startIndex + pageSize)
+
+        setShipments(paginatedItems)
         setPagination({
-          page: cached.page,
-          pageSize: cached.pageSize,
-          total: cached.total,
-          totalPages: cached.totalPages,
-          hasMore: cached.hasMore || false,
+          page: currentPage,
+          pageSize: pageSize,
+          total: totalFiltered,
+          totalPages: totalPages,
+          hasMore: currentPage < totalPages,
         })
         return
       }
@@ -244,12 +264,21 @@ export default function JobShipmentsPage() {
     }
   }, [])
 
+  // Reset to page 1 when hideShipped filter changes
+  useEffect(() => {
+    if (pagination.page > 1) {
+      setPagination(prev => ({ ...prev, page: 1 }))
+    }
+  }, [hideShipped])
+
   const handlePageChange = (newPage: number) => {
-    // If customer filter is active and we have data, use client-side pagination
-    if (customerFilter && allShipments.length > 0) {
+    // Re-apply client-side pagination with the new page number
+    // This works for both customer-filtered and non-filtered data
+    if (allShipments.length > 0) {
       applyClientSideFilter(customerFilter, newPage)
     } else {
-      fetchShipments(newPage)
+      // Fallback: just update pagination state
+      setPagination(prev => ({ ...prev, page: newPage }))
     }
   }
 
@@ -281,6 +310,42 @@ export default function JobShipmentsPage() {
     if (e.key === 'Enter') {
       handleFindShipment()
     }
+  }
+
+  // When hideShipped is active, we need to re-paginate from allShipments
+  // Otherwise, use the already-paginated shipments from state
+  let paginatedShipments = shipments
+  let totalFilteredPages = pagination.totalPages
+  let filteredCount = pagination.total
+  let startIndex = (pagination.page - 1) * pagination.pageSize
+  let endIndex = startIndex + pagination.pageSize
+
+  if (hideShipped && allShipments.length > 0) {
+    // Apply customer filter first (if any)
+    const customerFiltered = customerFilter
+      ? allShipments.filter((shipment: JobShipment) => {
+          const customerName = (shipment.customerName || shipment.customer || '').toLowerCase()
+          return customerName.includes(customerFilter.toLowerCase())
+        })
+      : allShipments
+
+    // Apply hideShipped filter
+    const filtered = customerFiltered.filter(shipment => {
+      // @ts-ignore - shipped property exists at runtime
+      return !shipment.shipped
+    })
+
+    // Apply pagination to the filtered results
+    const pageSize = pagination.pageSize
+    filteredCount = filtered.length
+    totalFilteredPages = Math.max(1, Math.ceil(filteredCount / pageSize))
+    const currentPage = Math.min(pagination.page, totalFilteredPages)
+    startIndex = (currentPage - 1) * pageSize
+    endIndex = Math.min(startIndex + pageSize, filteredCount)
+    paginatedShipments = filtered.slice(startIndex, endIndex)
+  } else {
+    // Just use the already-paginated data from state
+    endIndex = startIndex + shipments.length
   }
 
   return (
@@ -421,6 +486,25 @@ export default function JobShipmentsPage() {
             />
           </div>
 
+          {/* Hide Shipped Filter - Toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Hide Shipped</span>
+            <button
+              onClick={() => setHideShipped(!hideShipped)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                hideShipped ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+              role="switch"
+              aria-checked={hideShipped}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  hideShipped ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Action Buttons */}
           <div className="flex gap-2 ml-auto">
             <button
@@ -429,6 +513,7 @@ export default function JobShipmentsPage() {
                 setEndDate('')
                 setJobFilter('')
                 setCustomerFilter('')
+                setHideShipped(false)
                 setShipments([])
                 router.push('/shipments', { scroll: false })
               }}
@@ -459,6 +544,85 @@ export default function JobShipmentsPage() {
             </button>
           </div>
         </div>
+
+        {/* Pagination Controls - Compact */}
+        {filteredCount > 0 && (
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredCount)} of {filteredCount}
+                {hideShipped && pagination.total > filteredCount && ` (${pagination.total - filteredCount} hidden)`}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Show</span>
+                <select
+                  value={pagination.pageSize}
+                  onChange={(e) => {
+                    setPagination(prev => ({
+                      ...prev,
+                      pageSize: Number(e.target.value),
+                      page: 1
+                    }))
+                  }}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+            {totalFilteredPages > 1 ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={pagination.page === 1 || loading}
+                className="p-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="First page"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page === 1 || loading}
+                className="p-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Previous"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              <span className="px-3 text-sm text-gray-700">
+                Page {Math.min(pagination.page, totalFilteredPages)} of {totalFilteredPages}
+              </span>
+
+              <button
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page >= totalFilteredPages || loading}
+                className="p-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Next"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <button
+                onClick={() => handlePageChange(totalFilteredPages)}
+                disabled={pagination.page >= totalFilteredPages || loading}
+                className="p-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Last page"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+            ) : <div></div>}
+          </div>
+        )}
       </div>
 
       {/* Main Content Area - Full Width */}
@@ -505,9 +669,9 @@ export default function JobShipmentsPage() {
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Table Container with Overflow */}
-              <div className="flex-1 overflow-auto px-6 pt-4">
+              <div className="flex-1 overflow-auto">
                 <table className="w-full border-separate border-spacing-0">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
+                  <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">
                         Shipment ID (CL#)
@@ -539,7 +703,7 @@ export default function JobShipmentsPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white">
-                    {shipments.map((shipment, index) => (
+                    {paginatedShipments.map((shipment, index) => (
                       <tr
                         key={shipment.id || index}
                         onClick={() => shipment.id && router.push(`/shipments/${shipment.id}`)}
@@ -586,7 +750,7 @@ export default function JobShipmentsPage() {
                         </td>
                         <td className="px-4 py-3 text-sm">
                           {shipment.shipViaDescription ? (
-                            <div>
+                            <div className="flex flex-col gap-1">
                               <div className="font-medium text-gray-900">
                                 {shipment.shipViaDescription}
                               </div>
@@ -594,6 +758,22 @@ export default function JobShipmentsPage() {
                                 <div className="text-xs text-gray-500">
                                   {shipment.shipViaProvider}
                                 </div>
+                              )}
+                              {/* @ts-ignore - shipped property exists at runtime */}
+                              {shipment.shipped ? (
+                                <span className="inline-flex items-center w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                  Shipped
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                  <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                  </svg>
+                                  Pending
+                                </span>
                               )}
                             </div>
                           ) : (
@@ -622,79 +802,6 @@ export default function JobShipmentsPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Pagination - Fixed at bottom */}
-              {pagination.totalPages > 1 && (
-                <div className="px-6 py-3 border-t border-gray-200 bg-white flex-shrink-0">
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="text-sm text-gray-700">
-                    Showing {((pagination.page - 1) * pagination.pageSize) + 1} to {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total} results
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handlePageChange(1)}
-                      disabled={pagination.page === 1 || loading}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                    >
-                      First
-                    </button>
-                    <button
-                      onClick={() => handlePageChange(pagination.page - 1)}
-                      disabled={pagination.page === 1 || loading}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                    >
-                      Previous
-                    </button>
-
-                    {/* Page numbers */}
-                    <div className="flex gap-1">
-                      {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                        let pageNum: number
-                        if (pagination.totalPages <= 5) {
-                          pageNum = i + 1
-                        } else if (pagination.page <= 3) {
-                          pageNum = i + 1
-                        } else if (pagination.page >= pagination.totalPages - 2) {
-                          pageNum = pagination.totalPages - 4 + i
-                        } else {
-                          pageNum = pagination.page - 2 + i
-                        }
-
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => handlePageChange(pageNum)}
-                            disabled={loading}
-                            className={`px-3 py-2 border rounded-md text-sm font-medium ${
-                              pagination.page === pageNum
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                            } disabled:cursor-not-allowed`}
-                          >
-                            {pageNum}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    <button
-                      onClick={() => handlePageChange(pagination.page + 1)}
-                      disabled={pagination.page === pagination.totalPages || loading}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                    >
-                      Next
-                    </button>
-                    <button
-                      onClick={() => handlePageChange(pagination.totalPages)}
-                      disabled={pagination.page === pagination.totalPages || loading}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                    >
-                      Last
-                    </button>
-                  </div>
-                </div>
-                </div>
-              )}
             </div>
           )}
       </div>

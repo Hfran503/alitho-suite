@@ -41,8 +41,43 @@ export default function OpenJobsPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(50)
+  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
+  const [showJobTypeDropdown, setShowJobTypeDropdown] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
 
+  // Update current time every minute to refresh "time ago" display
   useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 60000) // Update every minute
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Load cached data from localStorage on mount
+  useEffect(() => {
+    const cachedData = localStorage.getItem('open_jobs_cache')
+    const cachedTimestamp = localStorage.getItem('open_jobs_cache_timestamp')
+
+    if (cachedData && cachedTimestamp) {
+      const timestamp = new Date(cachedTimestamp)
+      const now = new Date()
+      const diffMinutes = (now.getTime() - timestamp.getTime()) / (1000 * 60)
+
+      // Use cache if less than 15 minutes old
+      if (diffMinutes < 15) {
+        try {
+          const parsed = JSON.parse(cachedData)
+          setJobs(parsed)
+          setLastFetchTime(timestamp)
+          return
+        } catch (e) {
+          console.error('Failed to parse cached data:', e)
+        }
+      }
+    }
+
+    // If no valid cache, fetch fresh data
     fetchOpenJobs()
   }, [])
 
@@ -78,6 +113,12 @@ export default function OpenJobsPage() {
       if (data.success) {
         console.log('Fetched open jobs from API:', data.data.items.length, 'jobs')
         setJobs(data.data.items)
+
+        // Cache the data with timestamp
+        const now = new Date()
+        setLastFetchTime(now)
+        localStorage.setItem('open_jobs_cache', JSON.stringify(data.data.items))
+        localStorage.setItem('open_jobs_cache_timestamp', now.toISOString())
       } else {
         console.error('API returned success: false')
         throw new Error('API returned unsuccessful response')
@@ -88,6 +129,26 @@ export default function OpenJobsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper function to format time ago
+  const getTimeAgo = (date: Date | null): string => {
+    if (!date) return 'Never'
+    // Use currentTime to ensure display updates every minute
+    const now = currentTime
+    const diffMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+    if (diffMinutes < 1) return 'Just now'
+    if (diffMinutes === 1) return '1 minute ago'
+    if (diffMinutes < 60) return `${diffMinutes} minutes ago`
+
+    const diffHours = Math.floor(diffMinutes / 60)
+    if (diffHours === 1) return '1 hour ago'
+    if (diffHours < 24) return `${diffHours} hours ago`
+
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays === 1) return '1 day ago'
+    return `${diffDays} days ago`
   }
 
   // Helper function to check if a date is in a specific range
@@ -192,10 +253,10 @@ export default function OpenJobsPage() {
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase()
         const jobNumber = (job.job || '').toString().toLowerCase()
-        const customerName = (job.customerName || job.customer || '').toLowerCase()
-        const description = (job.description || '').toLowerCase()
-        const proposalNumber = (job.u_proposal_number || '').toLowerCase()
-        const csrName = (job.csrName || job.csr || '').toLowerCase()
+        const customerName = (job.customerName || job.customer || '').toString().toLowerCase()
+        const description = (job.description || '').toString().toLowerCase()
+        const proposalNumber = (job.u_proposal_number || '').toString().toLowerCase()
+        const csrName = (job.csrName || job.csr || '').toString().toLowerCase()
 
         const matchesSearch = (
           jobNumber.includes(searchLower) ||
@@ -318,18 +379,39 @@ export default function OpenJobsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Open Jobs</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {loading ? (
-                'Loading jobs...'
-              ) : filteredAndSortedJobs.length > 0 ? (
-                <>
-                  Showing {startIndex + 1}-{Math.min(endIndex, filteredAndSortedJobs.length)} of {filteredAndSortedJobs.length} open {filteredAndSortedJobs.length === 1 ? 'job' : 'jobs'}
-                  {searchTerm && ` (filtered from ${jobs.length} total)`}
-                </>
-              ) : (
-                'All jobs with StatusType != 5'
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-sm text-gray-500">
+                {loading ? (
+                  'Loading jobs...'
+                ) : filteredAndSortedJobs.length > 0 ? (
+                  <>
+                    Showing {startIndex + 1}-{Math.min(endIndex, filteredAndSortedJobs.length)} of {filteredAndSortedJobs.length} open {filteredAndSortedJobs.length === 1 ? 'job' : 'jobs'}
+                    {searchTerm && ` (filtered from ${jobs.length} total)`}
+                  </>
+                ) : (
+                  'All jobs with StatusType != 5'
+                )}
+              </p>
+              {lastFetchTime && (
+                <span
+                  className="text-xs text-gray-500 flex items-center gap-1 px-2 py-1 bg-gray-50 rounded border border-gray-200"
+                  title={`Last updated: ${lastFetchTime.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                  })}`}
+                >
+                  <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium">Updated {getTimeAgo(lastFetchTime)}</span>
+                </span>
               )}
-            </p>
+            </div>
           </div>
 
           {/* Search Bar and Filters */}
@@ -364,59 +446,69 @@ export default function OpenJobsPage() {
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-6">
           <div className="flex items-center gap-6">
-            {/* Date Filter */}
+            {/* Date Filter - Compact with Icons */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 mr-2">Due Date:</span>
-              <button
-                onClick={() => setDateFilter('all')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium ${
-                  dateFilter === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                All Jobs
-              </button>
-              <button
-                onClick={() => setDateFilter('pastdue')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium ${
-                  dateFilter === 'pastdue'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Past Due
-              </button>
-              <button
-                onClick={() => setDateFilter('thisweek')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium ${
-                  dateFilter === 'thisweek'
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                This Week
-              </button>
-              <button
-                onClick={() => setDateFilter('thismonth')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium ${
-                  dateFilter === 'thismonth'
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                This Month
-              </button>
-              <button
-                onClick={() => setDateFilter('future')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium ${
-                  dateFilter === 'future'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Future
-              </button>
+              <span className="text-sm font-medium text-gray-700 mr-1">Due Date:</span>
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setDateFilter('all')}
+                  className={`px-2.5 py-1.5 text-xs rounded-md transition-all font-medium ${
+                    dateFilter === 'all'
+                      ? 'bg-white text-blue-700 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="All Jobs"
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setDateFilter('pastdue')}
+                  className={`px-2.5 py-1.5 text-xs rounded-md transition-all font-medium flex items-center gap-1 ${
+                    dateFilter === 'pastdue'
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Past Due"
+                >
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  Past Due
+                </button>
+                <button
+                  onClick={() => setDateFilter('thisweek')}
+                  className={`px-2.5 py-1.5 text-xs rounded-md transition-all font-medium ${
+                    dateFilter === 'thisweek'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="This Week"
+                >
+                  Week
+                </button>
+                <button
+                  onClick={() => setDateFilter('thismonth')}
+                  className={`px-2.5 py-1.5 text-xs rounded-md transition-all font-medium ${
+                    dateFilter === 'thismonth'
+                      ? 'bg-yellow-500 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="This Month"
+                >
+                  Month
+                </button>
+                <button
+                  onClick={() => setDateFilter('future')}
+                  className={`px-2.5 py-1.5 text-xs rounded-md transition-all font-medium ${
+                    dateFilter === 'future'
+                      ? 'bg-green-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Future (Beyond This Month)"
+                >
+                  Future
+                </button>
+              </div>
             </div>
 
             {/* Status Filter */}
@@ -458,30 +550,73 @@ export default function OpenJobsPage() {
               </label>
             </div>
 
-            {/* Job Type Exclusion Filter */}
+            {/* Job Type Exclusion Filter - Dropdown */}
             {uniqueJobTypes.length > 0 && (
-              <div className="flex items-center gap-3 border-l border-gray-300 pl-6">
-                <span className="text-sm font-medium text-gray-700">Exclude Job Types:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {uniqueJobTypes.map(jobType => (
-                    <button
-                      key={jobType}
-                      onClick={() => {
-                        if (excludedJobTypes.includes(jobType)) {
-                          setExcludedJobTypes(excludedJobTypes.filter(t => t !== jobType))
-                        } else {
-                          setExcludedJobTypes([...excludedJobTypes, jobType])
-                        }
-                      }}
-                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                        excludedJobTypes.includes(jobType)
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200 line-through'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {jobType}
-                    </button>
-                  ))}
+              <div className="flex items-center gap-2 border-l border-gray-300 pl-6 relative">
+                <span className="text-sm font-medium text-gray-700">Exclude Types:</span>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowJobTypeDropdown(!showJobTypeDropdown)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <span>
+                      {excludedJobTypes.length === 0
+                        ? 'None'
+                        : `${excludedJobTypes.length} excluded`}
+                    </span>
+                    <svg className={`w-4 h-4 transition-transform ${showJobTypeDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showJobTypeDropdown && (
+                    <>
+                      {/* Backdrop to close dropdown */}
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowJobTypeDropdown(false)}
+                      />
+
+                      <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[250px] max-h-[400px] overflow-y-auto">
+                        <div className="p-2">
+                          <div className="flex items-center justify-between px-2 py-1 mb-1">
+                            <span className="text-xs font-medium text-gray-700">Select types to exclude</span>
+                            {excludedJobTypes.length > 0 && (
+                              <button
+                                onClick={() => setExcludedJobTypes([])}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                Clear all
+                              </button>
+                            )}
+                          </div>
+                          {uniqueJobTypes.map(jobType => (
+                            <label
+                              key={jobType}
+                              className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={excludedJobTypes.includes(jobType)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setExcludedJobTypes([...excludedJobTypes, jobType])
+                                  } else {
+                                    setExcludedJobTypes(excludedJobTypes.filter(t => t !== jobType))
+                                  }
+                                }}
+                                className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                              />
+                              <span className={`text-sm ${excludedJobTypes.includes(jobType) ? 'text-red-700 line-through' : 'text-gray-700'}`}>
+                                {jobType}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -603,9 +738,9 @@ export default function OpenJobsPage() {
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Table Container with Overflow */}
-            <div className="flex-1 overflow-auto px-6 pt-4">
+            <div className="flex-1 overflow-auto px-6">
               <table className="w-full border-separate border-spacing-0">
-                <thead className="bg-gray-50 sticky top-0 z-10">
+                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                   <tr>
                     <th
                       onClick={() => handleSort('job')}

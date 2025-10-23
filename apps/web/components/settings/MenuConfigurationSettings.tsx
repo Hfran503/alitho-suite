@@ -160,18 +160,48 @@ export function MenuConfigurationSettings() {
   const handleDragEnd = (result: any) => {
     if (!result.destination) return
 
-    const items = Array.from(menuConfigs)
-    const [reorderedItem] = items.splice(result.source.index, 1)
-    items.splice(result.destination.index, 0, reorderedItem)
+    // Only reorder parent menus (top-level items)
+    const parents = menuConfigs.filter(m => !m.parentKey)
+    const children = menuConfigs.filter(m => m.parentKey)
 
-    // Update order values
-    const updatedItems = items.map((item, index) => ({
+    const [reorderedItem] = parents.splice(result.source.index, 1)
+    parents.splice(result.destination.index, 0, reorderedItem)
+
+    // Update order values for parents
+    const updatedParents = parents.map((item, index) => ({
       ...item,
       order: index
     }))
 
+    // Combine updated parents with unchanged children
+    const updatedItems = [...updatedParents, ...children]
+
     setMenuConfigs(updatedItems)
     setHasChanges(true)
+  }
+
+  const handleDelete = async (menuKey: string) => {
+    if (!confirm('Are you sure you want to delete this menu item? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/settings/menu-configuration/${menuKey}`, {
+        method: 'DELETE'
+      })
+
+      if (res.ok) {
+        clearMenuCache()
+        await fetchMenuConfigs()
+        alert('Menu item deleted successfully!')
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to delete menu item')
+      }
+    } catch (error) {
+      console.error('Error deleting menu item:', error)
+      alert('Failed to delete menu item')
+    }
   }
 
   const handleDetectPages = async () => {
@@ -448,15 +478,26 @@ export function MenuConfigurationSettings() {
                                   {menu.label}
                                 </h5>
                                 <span className="text-xs text-gray-500">{menu.href}</span>
-                                <label className="flex items-center gap-2 ml-auto">
-                                  <input
-                                    type="checkbox"
-                                    checked={menu.isActive}
-                                    onChange={() => toggleActive(menu.menuKey)}
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm text-gray-600">Active</span>
-                                </label>
+                                <div className="flex items-center gap-2 ml-auto">
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={menu.isActive}
+                                      onChange={() => toggleActive(menu.menuKey)}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm text-gray-600">Active</span>
+                                  </label>
+                                  <button
+                                    onClick={() => handleDelete(menu.menuKey)}
+                                    className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                    title="Delete menu item"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Roles */}
@@ -490,15 +531,26 @@ export function MenuConfigurationSettings() {
                                       <div className="flex items-center gap-3">
                                         <h6 className="text-sm text-gray-700">{submenu.label}</h6>
                                         <span className="text-xs text-gray-500">{submenu.href}</span>
-                                        <label className="flex items-center gap-2 ml-auto">
-                                          <input
-                                            type="checkbox"
-                                            checked={submenu.isActive}
-                                            onChange={() => toggleActive(submenu.menuKey)}
-                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                          />
-                                          <span className="text-xs text-gray-600">Active</span>
-                                        </label>
+                                        <div className="flex items-center gap-2 ml-auto">
+                                          <label className="flex items-center gap-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={submenu.isActive}
+                                              onChange={() => toggleActive(submenu.menuKey)}
+                                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-xs text-gray-600">Active</span>
+                                          </label>
+                                          <button
+                                            onClick={() => handleDelete(submenu.menuKey)}
+                                            className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete submenu item"
+                                          >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                          </button>
+                                        </div>
                                       </div>
                                       <div className="mt-2">
                                         <div className="flex flex-wrap gap-2">

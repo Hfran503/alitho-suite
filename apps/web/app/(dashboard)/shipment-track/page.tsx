@@ -48,7 +48,7 @@ export default function LabelsPage() {
   const [labels, setLabels] = useState<ShippingLabel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState<string>('active') // Default to active only
+  const [filterStatus, setFilterStatus] = useState<string[]>(['active', 'delivered']) // Default to active and delivered
   const [filterCarrier, setFilterCarrier] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [carrierMappings, setCarrierMappings] = useState<Record<string, string>>({})
@@ -59,6 +59,9 @@ export default function LabelsPage() {
   // Get unique carriers from labels
   const uniqueCarriers = Array.from(new Set(labels.map(label => label.carrier))).sort()
 
+  // Get unique statuses from labels
+  const uniqueStatuses = Array.from(new Set(labels.map(label => label.status))).sort()
+
   // Fetch carrier mappings on mount
   useEffect(() => {
     fetchCarrierMappings()
@@ -66,7 +69,7 @@ export default function LabelsPage() {
 
   useEffect(() => {
     fetchLabels()
-  }, [filterStatus])
+  }, [])
 
   // Auto-refresh when window regains focus, but only if it's been more than 30 minutes
   useEffect(() => {
@@ -85,7 +88,7 @@ export default function LabelsPage() {
 
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [filterStatus, lastRefreshTime])
+  }, [lastRefreshTime])
 
   const fetchCarrierMappings = async () => {
     try {
@@ -145,13 +148,8 @@ export default function LabelsPage() {
   const fetchLabels = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams()
-
-      if (filterStatus !== 'all') {
-        params.append('status', filterStatus)
-      }
-
-      const response = await fetch(`/api/labels?${params.toString()}`)
+      // Fetch all labels without status filter (we'll filter client-side)
+      const response = await fetch('/api/labels')
 
       if (!response.ok) {
         throw new Error('Failed to fetch labels')
@@ -205,6 +203,11 @@ export default function LabelsPage() {
   }
 
   const filteredLabels = labels.filter(label => {
+    // Filter by status
+    if (filterStatus.length > 0 && !filterStatus.includes(label.status)) {
+      return false
+    }
+
     // Filter by carrier
     if (filterCarrier !== 'all' && label.carrier !== filterCarrier) {
       return false
@@ -306,19 +309,50 @@ export default function LabelsPage() {
 
           {/* Status Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Status
             </label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="voided">Voided</option>
-              <option value="refunded">Refunded</option>
-            </select>
+            <div className="flex flex-wrap gap-2">
+              {uniqueStatuses.length > 0 ? (
+                uniqueStatuses.map((status) => {
+                  const isSelected = filterStatus.includes(status)
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => {
+                        if (isSelected) {
+                          setFilterStatus(filterStatus.filter(s => s !== status))
+                        } else {
+                          setFilterStatus([...filterStatus, status])
+                        }
+                      }}
+                      className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                        isSelected
+                          ? status === 'active'
+                            ? 'bg-green-600 text-white'
+                            : status === 'voided'
+                            ? 'bg-gray-600 text-white'
+                            : status === 'delivered'
+                            ? 'bg-green-600 text-white'
+                            : status === 'refunded'
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {isSelected && (
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                      <span className="capitalize">{status}</span>
+                    </button>
+                  )
+                })
+              ) : (
+                <div className="text-xs text-gray-400">No labels yet</div>
+              )}
+            </div>
           </div>
 
           {/* Carrier Filter */}
@@ -386,9 +420,6 @@ export default function LabelsPage() {
                   Cost
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tracking
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -402,7 +433,7 @@ export default function LabelsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedLabels.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                     No shipping labels found
                   </td>
                 </tr>
@@ -410,22 +441,35 @@ export default function LabelsPage() {
                 paginatedLabels.map((label) => (
                   <tr key={label.id} className={`hover:bg-gray-50 ${label.isReturnLabel ? 'bg-amber-50/30' : ''}`}>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {label.isReturnLabel ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                            🔄 Return
-                          </span>
-                          {label.rmaNumber && (
-                            <span className="text-xs text-amber-600 font-mono">
-                              {label.rmaNumber}
+                      <div className="flex flex-col gap-1">
+                        {label.isReturnLabel ? (
+                          <>
+                            <span className="inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                              🔄 Return
                             </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                          📦 Outbound
+                            {label.rmaNumber && (
+                              <span className="text-xs text-amber-600 font-mono">
+                                {label.rmaNumber}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                            📦 Outbound
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium ${
+                          label.status === 'active'
+                            ? 'bg-green-100 text-green-700'
+                            : label.status === 'voided'
+                            ? 'bg-gray-100 text-gray-700'
+                            : label.status === 'delivered'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {label.status}
                         </span>
-                      )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {label.paceShipmentId ? (
@@ -521,19 +565,6 @@ export default function LabelsPage() {
                     <td className="px-4 py-3 text-right">
                       <span className="text-sm font-semibold text-green-600">
                         ${Number(label.cost).toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        label.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : label.status === 'voided'
-                          ? 'bg-gray-100 text-gray-700'
-                          : label.status === 'delivered'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {label.status}
                       </span>
                     </td>
                     <td className="px-4 py-3">
