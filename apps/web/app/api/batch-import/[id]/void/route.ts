@@ -266,13 +266,12 @@ export async function POST(
     }
 
     // Update batch stats
-    // Voided labels should move from successful to voided count
     if (voidedCount > 0) {
       await db.batchImport.update({
         where: { id },
         data: {
           successfulRows: { decrement: voidedCount },
-          voidedRows: { increment: voidedCount },
+          failedRows: { increment: voidedCount },
         },
       })
     }

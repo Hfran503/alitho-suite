@@ -283,12 +283,11 @@ export async function POST(
     }
 
     // Update batch stats
-    if (voidedCount > 0 || failedCount > 0) {
+    if (voidedCount > 0) {
       await db.batchImport.update({
         where: { id: batchId },
         data: {
           successfulRows: { decrement: voidedCount },
-          voidedRows: { increment: voidedCount },
           failedRows: { increment: failedCount },
           processedRows: batch.successfulRows + batch.failedRows, // Keep same
         },
