@@ -54,6 +54,9 @@ export default function LabelsPage() {
   const [carrierMappings, setCarrierMappings] = useState<Record<string, string>>({})
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now())
 
+  // Get unique carriers from labels
+  const uniqueCarriers = Array.from(new Set(labels.map(label => label.carrier))).sort()
+
   // Fetch carrier mappings on mount
   useEffect(() => {
     fetchCarrierMappings()
@@ -316,9 +319,9 @@ export default function LabelsPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Carriers</option>
-              {Object.entries(carrierMappings).map(([carrierId, carrierName]) => (
-                <option key={carrierId} value={carrierId}>
-                  {carrierName}
+              {uniqueCarriers.map((carrier) => (
+                <option key={carrier} value={carrier}>
+                  {carrier}
                 </option>
               ))}
             </select>
