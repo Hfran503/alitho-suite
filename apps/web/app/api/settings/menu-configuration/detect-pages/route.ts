@@ -14,7 +14,7 @@ interface DetectedPage {
 }
 
 // Scan the app directory for page.tsx files
-function scanAppDirectory(baseDir: string, currentPath: string = '', depth: number = 0): DetectedPage[] {
+function scanAppDirectory(baseDir: string, currentPath: string = '', depth: number = 0, urlPath: string = ''): DetectedPage[] {
   const pages: DetectedPage[] = []
   const appDir = join(baseDir, 'app', currentPath)
 
@@ -35,12 +35,15 @@ function scanAppDirectory(baseDir: string, currentPath: string = '', depth: numb
 
       if (stat.isDirectory()) {
         // Skip special Next.js directories
-        if (entry.startsWith('(') || entry.startsWith('_') || entry === 'api') {
-          // For route groups like (dashboard), scan inside them
-          if (entry.startsWith('(')) {
-            const subPages = scanAppDirectory(baseDir, join(currentPath, entry), depth)
-            pages.push(...subPages)
-          }
+        if (entry.startsWith('_') || entry === 'api') {
+          continue
+        }
+
+        // Handle route groups (directories with parentheses) - they don't appear in URLs
+        if (entry.startsWith('(')) {
+          // Scan inside the route group but don't include it in the URL path
+          const subPages = scanAppDirectory(baseDir, join(currentPath, entry), depth, urlPath)
+          pages.push(...subPages)
           continue
         }
 
@@ -50,8 +53,9 @@ function scanAppDirectory(baseDir: string, currentPath: string = '', depth: numb
           statSync(pageFilePath)
 
           // Found a page!
-          const routePath = join(currentPath, entry).replace(/\\/g, '/')
-          const cleanPath = routePath.startsWith('/') ? routePath : `/${routePath}`
+          // Use urlPath for the actual route (excludes route groups)
+          const routePath = urlPath ? `${urlPath}/${entry}` : `/${entry}`
+          const cleanPath = routePath.replace(/\\/g, '/')
 
           // Generate a nice label from the path
           const label = entry
@@ -75,7 +79,8 @@ function scanAppDirectory(baseDir: string, currentPath: string = '', depth: numb
 
         // Recursively scan subdirectories (but limit depth to avoid too deep nesting)
         if (depth < 3) {
-          const subPages = scanAppDirectory(baseDir, join(currentPath, entry), depth + 1)
+          const newUrlPath = urlPath ? `${urlPath}/${entry}` : `/${entry}`
+          const subPages = scanAppDirectory(baseDir, join(currentPath, entry), depth + 1, newUrlPath)
           pages.push(...subPages)
         }
       }

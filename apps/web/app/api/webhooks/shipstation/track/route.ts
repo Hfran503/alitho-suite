@@ -7,8 +7,10 @@ import { db } from '@repo/database'
  * This endpoint receives tracking updates from ShipStation/ShipEngine
  * when shipment status changes occur (in transit, delivered, exceptions, etc.)
  *
- * Webhook URL to register in ShipStation:
- * https://your-domain.com/api/webhooks/shipstation/track
+ * Webhook URL to register in ShipStation (with Basic Auth):
+ * https://username:password@calithosuite.com/api/webhooks/shipstation/track
+ *
+ * Set SHIPSTATION_WEBHOOK_USERNAME and SHIPSTATION_WEBHOOK_PASSWORD in your .env file
  *
  * Event Type: track
  */
@@ -69,11 +71,41 @@ function mapStatusCode(statusCode: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify the request is from ShipStation by checking user-agent
+    // 1. Verify Basic Authentication
+    const authHeader = request.headers.get('authorization')
+    const expectedUsername = process.env.SHIPSTATION_WEBHOOK_USERNAME
+    const expectedPassword = process.env.SHIPSTATION_WEBHOOK_PASSWORD
+
+    if (expectedUsername && expectedPassword) {
+      if (!authHeader || !authHeader.startsWith('Basic ')) {
+        console.warn('Webhook received without Basic Auth')
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized' },
+          { status: 401 }
+        )
+      }
+
+      const base64Credentials = authHeader.split(' ')[1]
+      const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8')
+      const [username, password] = credentials.split(':')
+
+      if (username !== expectedUsername || password !== expectedPassword) {
+        console.warn('Webhook received with invalid credentials')
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized' },
+          { status: 401 }
+        )
+      }
+    }
+
+    // 2. Verify the request is from ShipStation by checking user-agent
     const userAgent = request.headers.get('user-agent') || ''
     if (!userAgent.includes('ShipEngine')) {
       console.warn('Webhook received from non-ShipEngine source:', userAgent)
-      // Still process it, but log the warning
+      return NextResponse.json(
+        { success: false, error: 'Invalid user-agent' },
+        { status: 401 }
+      )
     }
 
     // Parse the webhook payload
