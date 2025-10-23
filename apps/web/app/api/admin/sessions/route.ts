@@ -40,7 +40,7 @@ export async function GET() {
     })
 
     // Find the current user's most recent session (there should only be one now)
-    const currentSessionToken = sessions.find(s => s.userId === currentUserId)?.sessionToken
+    const currentSessionToken = sessions.find((s: any) => s.userId === currentUserId)?.sessionToken
 
     return NextResponse.json({
       sessions,

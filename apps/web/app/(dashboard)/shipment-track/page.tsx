@@ -73,16 +73,6 @@ export default function LabelsPage() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [filterStatus])
 
-  // Auto-refresh every 30 seconds to check for tracking updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('Auto-refreshing labels for tracking updates...')
-      fetchLabels()
-    }, 30000) // 30 seconds
-
-    return () => clearInterval(interval)
-  }, [filterStatus])
-
   const fetchCarrierMappings = async () => {
     try {
       const response = await fetch('/api/settings/carrier-services')
@@ -241,11 +231,34 @@ export default function LabelsPage() {
   return (
     <div className="w-full p-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Shipment Track</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Track and manage all shipping labels
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Shipment Track</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            Track and manage all shipping labels
+          </p>
+        </div>
+        <button
+          onClick={fetchLabels}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          title="Refresh tracking data"
+        >
+          <svg
+            className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
 
       {/* Filters */}
