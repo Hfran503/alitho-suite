@@ -167,6 +167,7 @@ async function createPaceJobShipment(
     serviceCode?: string
     totalShippingCost?: number
     shipViaId?: number | null
+    billToParty?: string | null
   }
 ): Promise<{ success: boolean; shipmentId?: string; error?: string }> {
   try {
@@ -208,6 +209,13 @@ async function createPaceJobShipment(
       shipVia: shipmentDetails.shipViaId || undefined,
       // Mark as shipped since we have labels and tracking
       shipped: true,
+    }
+
+    // Set charges field for third-party billing
+    // Note: The exact value must match PACE's enum list
+    if (shipmentDetails.billToParty === 'third_party') {
+      shipmentData.charges = 'Third Party/Ship Bill To'
+      console.log(`[PACE] 💳 Setting charges to 'Third Party/Ship Bill To' for third-party billing`)
     }
 
     console.log(`[PACE] 📋 Shipment Type ID: ${shipmentData.shipmentType}`)
@@ -703,7 +711,54 @@ async function createShippingLabels(
       }
     }
 
-    const labelRequest = {
+    // Build advanced options from batch configuration
+    const advancedOptions: any = {}
+
+    // Third-party billing
+    if (batch.billToParty && batch.billToParty !== 'sender') {
+      advancedOptions.bill_to_party = batch.billToParty
+      console.log(`[batch-import] 📋 Adding bill_to_party: ${batch.billToParty}`)
+    }
+
+    if (batch.billToAccount) {
+      advancedOptions.bill_to_account = batch.billToAccount
+      console.log(`[batch-import] 📋 Adding bill_to_account: ${batch.billToAccount}`)
+    }
+
+    if (batch.billToCountryCode && batch.billToParty === 'third_party') {
+      advancedOptions.bill_to_country_code = batch.billToCountryCode
+      console.log(`[batch-import] 📋 Adding bill_to_country_code: ${batch.billToCountryCode}`)
+    }
+
+    if (batch.billToPostalCode && batch.billToParty === 'third_party') {
+      advancedOptions.bill_to_postal_code = batch.billToPostalCode
+      console.log(`[batch-import] 📋 Adding bill_to_postal_code: ${batch.billToPostalCode}`)
+    }
+
+    // Package options
+    if (batch.containsAlcohol) {
+      advancedOptions.contains_alcohol = true
+      console.log(`[batch-import] 📋 Adding contains_alcohol: true`)
+    }
+
+    if (batch.saturdayDelivery) {
+      advancedOptions.saturday_delivery = true
+      console.log(`[batch-import] 📋 Adding saturday_delivery: true`)
+    }
+
+    // Delivery confirmation
+    if (batch.confirmation && batch.confirmation !== 'none') {
+      advancedOptions.confirmation = batch.confirmation
+      console.log(`[batch-import] 📋 Adding confirmation: ${batch.confirmation}`)
+    }
+
+    // Notification email
+    if (batch.notificationsEmail) {
+      advancedOptions.NotificationsEmail = batch.notificationsEmail
+      console.log(`[batch-import] 📋 Adding NotificationsEmail: ${batch.notificationsEmail}`)
+    }
+
+    const labelRequest: any = {
       shipment: {
         carrier_id: batch.carrierId,
         service_code: batch.serviceCode,
@@ -723,6 +778,12 @@ async function createShippingLabels(
       },
       label_format: 'pdf' as 'pdf' | 'zpl' | 'png',
       label_layout: '4x6' as '4x6' | 'letter',
+    }
+
+    // Add advanced options if any were configured
+    if (Object.keys(advancedOptions).length > 0) {
+      labelRequest.shipment.advanced_options = advancedOptions
+      console.log(`[batch-import] 📋 Advanced options configured:`, JSON.stringify(advancedOptions, null, 2))
     }
 
     console.log('[batch-import] ShipStation label request:', JSON.stringify(labelRequest, null, 2))
@@ -910,6 +971,7 @@ async function processShipmentGroup(
       trackingNumber: firstTracking,
       totalShippingCost: totalShippingCost,
       shipViaId: shipViaId,
+      billToParty: batch.billToParty,
     })
 
     if (!paceResult.success) {

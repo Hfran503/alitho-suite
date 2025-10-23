@@ -710,9 +710,27 @@ export default function JobShipmentsPage() {
                         className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors group"
                       >
                         <td className="px-4 py-3 text-sm">
-                          <span className="font-mono text-xs text-gray-700">
-                            {shipment.id || '-'}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="font-mono text-xs text-gray-700">
+                              {shipment.id || '-'}
+                            </span>
+                            {/* @ts-ignore - shipped property exists at runtime */}
+                            {shipment.shipped ? (
+                              <span className="inline-flex items-center w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                Shipped
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                                Pending
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900">
                           <div className="font-medium">{formatDateOnlyPT(shipment.dateTime)}</div>
@@ -750,7 +768,7 @@ export default function JobShipmentsPage() {
                         </td>
                         <td className="px-4 py-3 text-sm">
                           {shipment.shipViaDescription ? (
-                            <div className="flex flex-col gap-1">
+                            <div>
                               <div className="font-medium text-gray-900">
                                 {shipment.shipViaDescription}
                               </div>
@@ -758,22 +776,6 @@ export default function JobShipmentsPage() {
                                 <div className="text-xs text-gray-500">
                                   {shipment.shipViaProvider}
                                 </div>
-                              )}
-                              {/* @ts-ignore - shipped property exists at runtime */}
-                              {shipment.shipped ? (
-                                <span className="inline-flex items-center w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                  <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                  Shipped
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                                  <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                  </svg>
-                                  Pending
-                                </span>
                               )}
                             </div>
                           ) : (

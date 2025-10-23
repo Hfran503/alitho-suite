@@ -133,11 +133,11 @@ export async function POST(
           continue
         }
 
-        // Update row to mark as voided
+        // Update row to mark as voided/cancelled
         await db.batchImportRow.update({
           where: { id: relatedRow.id },
           data: {
-            status: 'FAILED',
+            status: 'CANCELLED',
             errorMessage: 'Label voided by user',
             trackingNumber: null,
             labelUrl: null,
@@ -266,12 +266,13 @@ export async function POST(
     }
 
     // Update batch stats
+    // Voided labels should move from successful to voided count
     if (voidedCount > 0) {
       await db.batchImport.update({
         where: { id },
         data: {
           successfulRows: { decrement: voidedCount },
-          failedRows: { increment: voidedCount },
+          voidedRows: { increment: voidedCount },
         },
       })
     }
