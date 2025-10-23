@@ -53,6 +53,8 @@ export default function LabelsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [carrierMappings, setCarrierMappings] = useState<Record<string, string>>({})
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now())
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Get unique carriers from labels
   const uniqueCarriers = Array.from(new Set(labels.map(label => label.carrier))).sort()
@@ -221,6 +223,17 @@ export default function LabelsPage() {
     )
   })
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredLabels.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedLabels = filteredLabels.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterStatus, filterCarrier, searchTerm])
+
   if (loading) {
     return (
       <div className="w-full p-6">
@@ -387,14 +400,14 @@ export default function LabelsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredLabels.length === 0 ? (
+              {paginatedLabels.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                     No shipping labels found
                   </td>
                 </tr>
               ) : (
-                filteredLabels.map((label) => (
+                paginatedLabels.map((label) => (
                   <tr key={label.id} className={`hover:bg-gray-50 ${label.isReturnLabel ? 'bg-amber-50/30' : ''}`}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {label.isReturnLabel ? (
@@ -578,6 +591,68 @@ export default function LabelsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
+              <span className="font-medium">{Math.min(endIndex, filteredLabels.length)}</span> of{' '}
+              <span className="font-medium">{filteredLabels.length}</span> results
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  // Show first page, last page, current page, and pages around current
+                  const showPage =
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+
+                  const showEllipsis =
+                    (page === 2 && currentPage > 3) ||
+                    (page === totalPages - 1 && currentPage < totalPages - 2)
+
+                  if (showEllipsis) {
+                    return <span key={page} className="px-2 text-gray-500">...</span>
+                  }
+
+                  if (!showPage) return null
+
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
