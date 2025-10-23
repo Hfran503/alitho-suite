@@ -52,6 +52,7 @@ export default function LabelsPage() {
   const [filterCarrier, setFilterCarrier] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [carrierMappings, setCarrierMappings] = useState<Record<string, string>>({})
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now())
 
   // Fetch carrier mappings on mount
   useEffect(() => {
@@ -62,16 +63,24 @@ export default function LabelsPage() {
     fetchLabels()
   }, [filterStatus])
 
-  // Auto-refresh when window regains focus (e.g., after voiding labels in another tab/page)
+  // Auto-refresh when window regains focus, but only if it's been more than 30 minutes
   useEffect(() => {
     const handleFocus = () => {
-      console.log('Window focused, refreshing labels...')
-      fetchLabels()
+      const now = Date.now()
+      const thirtyMinutes = 30 * 60 * 1000 // 30 minutes in milliseconds
+      const timeSinceLastRefresh = now - lastRefreshTime
+
+      if (timeSinceLastRefresh > thirtyMinutes) {
+        console.log('Window focused after 30+ minutes, refreshing labels...')
+        fetchLabels()
+      } else {
+        console.log('Window focused but last refresh was less than 30 minutes ago, skipping refresh')
+      }
     }
 
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [filterStatus])
+  }, [filterStatus, lastRefreshTime])
 
   const fetchCarrierMappings = async () => {
     try {
@@ -145,6 +154,7 @@ export default function LabelsPage() {
 
       const data = await response.json()
       setLabels(data.data.labels)
+      setLastRefreshTime(Date.now()) // Update last refresh time
     } catch (err) {
       console.error('Error fetching labels:', err)
       setError(err instanceof Error ? err.message : 'Failed to load labels')
