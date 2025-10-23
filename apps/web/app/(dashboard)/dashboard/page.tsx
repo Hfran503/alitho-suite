@@ -2,6 +2,7 @@ import { db } from '@repo/database'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import Link from 'next/link'
+import { formatDatePT } from '@/lib/dateUtils'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -117,14 +118,9 @@ export default async function DashboardPage() {
     }).format(Number(amount))
   }
 
-  // Format date
+  // Format date in Pacific Time (matching UPS format: Oct 22, 3:46 PM)
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(new Date(date))
+    return formatDatePT(date, 'MMM d, h:mm a')
   }
 
   return (

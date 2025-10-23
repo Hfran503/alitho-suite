@@ -16,6 +16,8 @@ interface ShippingLabel {
   cost: number
   currency: string
   status: string
+  trackingStatus: string | null
+  lastTrackedAt: string | null
   createdAt: string
   shipTo: any
   isReturnLabel: boolean
@@ -25,6 +27,18 @@ interface ShippingLabel {
     reference1?: string | null
     reference2?: string | null
     reference3?: string | null
+    tracking?: {
+      status_description?: string
+      carrier_status_description?: string
+      estimated_delivery_date?: string
+      actual_delivery_date?: string
+      last_event?: {
+        description?: string
+        city_locality?: string
+        state_province?: string
+        occurred_at?: string
+      }
+    }
     [key: string]: any
   }
 }
@@ -59,6 +73,16 @@ export default function LabelsPage() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [filterStatus])
 
+  // Auto-refresh every 30 seconds to check for tracking updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('Auto-refreshing labels for tracking updates...')
+      fetchLabels()
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [filterStatus])
+
   const fetchCarrierMappings = async () => {
     try {
       const response = await fetch('/api/settings/carrier-services')
@@ -79,6 +103,39 @@ export default function LabelsPage() {
   const formatCarrierName = (carrierId: string): string => {
     // Use mapping if available, otherwise return the ID as-is
     return carrierMappings[carrierId] || carrierId
+  }
+
+  const getTrackingStatusBadge = (trackingStatus: string | null, status: string) => {
+    // If voided or refunded, show that status
+    if (status === 'voided' || status === 'refunded') {
+      return null
+    }
+
+    if (!trackingStatus) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+          No tracking
+        </span>
+      )
+    }
+
+    const statusConfig: Record<string, { bg: string; text: string; label: string; icon: string }> = {
+      'unknown': { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: '❓' },
+      'accepted': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Accepted', icon: '✅' },
+      'in_transit': { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'In Transit', icon: '🚚' },
+      'delivered': { bg: 'bg-green-100', text: 'text-green-700', label: 'Delivered', icon: '📬' },
+      'exception': { bg: 'bg-red-100', text: 'text-red-700', label: 'Exception', icon: '⚠️' },
+      'attempted_delivery': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Attempted', icon: '🔔' },
+      'not_yet_in_system': { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Pending', icon: '⏳' },
+    }
+
+    const config = statusConfig[trackingStatus] || statusConfig['unknown']
+
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+        {config.icon} {config.label}
+      </span>
+    )
   }
 
   const fetchLabels = async () => {
@@ -293,6 +350,9 @@ export default function LabelsPage() {
                   Status
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tracking
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -303,7 +363,7 @@ export default function LabelsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredLabels.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                     No shipping labels found
                   </td>
                 </tr>
@@ -430,10 +490,32 @@ export default function LabelsPage() {
                           ? 'bg-green-100 text-green-700'
                           : label.status === 'voided'
                           ? 'bg-gray-100 text-gray-700'
+                          : label.status === 'delivered'
+                          ? 'bg-green-100 text-green-700'
                           : 'bg-orange-100 text-orange-700'
                       }`}>
                         {label.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-center gap-1">
+                        {getTrackingStatusBadge(label.trackingStatus, label.status)}
+                        {label.metadata?.tracking?.last_event && (
+                          <div className="text-xs text-gray-500 text-center">
+                            {label.metadata.tracking.last_event.description}
+                            {label.metadata.tracking.last_event.city_locality && label.metadata.tracking.last_event.state_province && (
+                              <div className="text-xs text-gray-400">
+                                {label.metadata.tracking.last_event.city_locality}, {label.metadata.tracking.last_event.state_province}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {label.lastTrackedAt && (
+                          <div className="text-xs text-gray-400">
+                            {new Date(label.lastTrackedAt).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center text-xs text-gray-500">
                       {new Date(label.createdAt).toLocaleDateString()}

@@ -411,9 +411,13 @@ model ShippingLabel {
   currency        String   @default("USD")
 
   // Status
-  status          String   @default("active") // active, voided, refunded
+  status          String   @default("active") // active, voided, refunded, delivered
   voidedAt        DateTime?
   refundedAt      DateTime?
+
+  // Tracking status
+  trackingStatus  String?  // unknown, accepted, in_transit, delivered, exception, attempted_delivery, not_yet_in_system
+  lastTrackedAt   DateTime? // Last time tracking info was updated
 
   // Return label info
   isReturnLabel   Boolean  @default(false)
@@ -439,6 +443,7 @@ model ShippingLabel {
   @@index([status])
   @@index([createdAt])
   @@index([isReturnLabel])
+  @@index([trackingStatus])
 }
 
 // ============================================
