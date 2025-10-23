@@ -164,6 +164,17 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
     }
   }, [session])
 
+  // Auto-expand parent menu if a submenu item is active
+  useEffect(() => {
+    navItems.forEach((item) => {
+      if (item.submenu && item.submenu.some(sub => pathname === sub.href)) {
+        if (!expandedMenus.includes(item.href)) {
+          setExpandedMenus(prev => [...prev, item.href])
+        }
+      }
+    })
+  }, [pathname, navItems])
+
   const isExpanded = isPinned || isHovered
 
   // Delay showing submenus until sidebar expansion animation completes
@@ -234,8 +245,9 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
             </li>
           ) : null}
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
             const hasSubmenu = item.submenu && item.submenu.length > 0
+            const isSubmenuActive = hasSubmenu && item.submenu?.some(sub => pathname === sub.href)
+            const isActive = !hasSubmenu && (pathname === item.href || pathname?.startsWith(item.href + '/'))
             const isSubmenuExpanded = expandedMenus.includes(item.href)
 
             return (
@@ -245,7 +257,7 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
                     <button
                       onClick={() => toggleSubmenu(item.href)}
                       className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors w-full ${
-                        isActive
+                        isSubmenuActive
                           ? 'bg-blue-600 text-white'
                           : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                       }`}
