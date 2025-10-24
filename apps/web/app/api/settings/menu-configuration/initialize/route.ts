@@ -83,11 +83,19 @@ const DEFAULT_MENU_ITEMS = [
     visibleToRoles: ['full_admin', 'admin', 'estimator']
   },
   {
+    menuKey: 'invoice-integrations',
+    label: 'Invoice Integrations',
+    href: '/invoices/integrations',
+    icon: 'document',
+    order: 4,
+    visibleToRoles: ['full_admin', 'admin', 'accounting']
+  },
+  {
     menuKey: 'settings',
     label: 'Settings',
     href: '/settings',
     icon: 'settings',
-    order: 4,
+    order: 5,
     visibleToRoles: ['full_admin', 'admin']
   }
 ]

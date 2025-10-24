@@ -1,0 +1,2 @@
+-- This is an empty migration that represents the initial baseline state
+-- All tables already exist in the database from the restore

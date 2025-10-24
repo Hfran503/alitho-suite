@@ -652,6 +652,43 @@ enum BatchRowStatus {
 }
 
 // ============================================
+// INVOICE INTEGRATIONS (PACE to NetSuite)
+// ============================================
+
+model InvoiceIntegration {
+  id                    String   @id @default(cuid())
+
+  // Invoice reference
+  invoiceNumber         String   @unique
+
+  // Status tracking
+  status                String   @default("pending") // pending, processing, sent, failed, completed
+
+  // PACE invoice data (stored as JSONB for easy forwarding to NetSuite)
+  payload               Json     // The full invoice JSON from PACE
+
+  // NetSuite integration tracking
+  netsuiteResponse      Json?    // Response from NetSuite API (for debugging/auditing)
+  netsuiteInvoiceId     String?  // NetSuite internal ID if successfully created
+  errorMessage          String?  // Error details if integration fails
+
+  // Retry mechanism
+  retryCount            Int      @default(0)
+  maxRetries            Int      @default(3)
+  lastAttemptAt         DateTime?
+
+  // Timestamps
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  sentToNetsuiteAt      DateTime?
+
+  @@index([status])
+  @@index([invoiceNumber])
+  @@index([createdAt])
+  @@index([status, retryCount])
+}
+
+// ============================================
 // MENU CONFIGURATION (Role-Based Navigation)
 // ============================================
 

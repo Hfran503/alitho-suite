@@ -1,3 +1,9 @@
+-- CreateEnum
+CREATE TYPE "BatchImportStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETE', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "BatchRowStatus" AS ENUM ('PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'CANCELLED');
+
 -- CreateTable
 CREATE TABLE "Tenant" (
     "id" TEXT NOT NULL,
@@ -30,7 +36,7 @@ CREATE TABLE "User" (
 -- CreateTable
 CREATE TABLE "Membership" (
     "id" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'member',
+    "role" TEXT NOT NULL DEFAULT 'customer_service',
     "userId" TEXT NOT NULL,
     "tenantId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -181,9 +187,26 @@ CREATE TABLE "ShipmentTypeMapping" (
 );
 
 -- CreateTable
+CREATE TABLE "CarrierServiceMapping" (
+    "id" TEXT NOT NULL,
+    "shipstationCarrierId" TEXT NOT NULL,
+    "shipstationCarrierCode" TEXT NOT NULL,
+    "shipstationServiceCode" TEXT NOT NULL,
+    "carrierName" TEXT NOT NULL,
+    "serviceName" TEXT NOT NULL,
+    "paceShipViaId" INTEGER NOT NULL,
+    "paceShipViaName" TEXT NOT NULL,
+    "tenantId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CarrierServiceMapping_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ShippingLabel" (
     "id" TEXT NOT NULL,
-    "paceShipmentId" INTEGER NOT NULL,
+    "paceShipmentId" INTEGER,
     "paceCartonId" INTEGER,
     "provider" TEXT NOT NULL,
     "providerShipmentId" TEXT,
@@ -204,6 +227,8 @@ CREATE TABLE "ShippingLabel" (
     "status" TEXT NOT NULL DEFAULT 'active',
     "voidedAt" TIMESTAMP(3),
     "refundedAt" TIMESTAMP(3),
+    "trackingStatus" TEXT,
+    "lastTrackedAt" TIMESTAMP(3),
     "isReturnLabel" BOOLEAN NOT NULL DEFAULT false,
     "outboundLabelId" TEXT,
     "rmaNumber" TEXT,
@@ -229,6 +254,143 @@ CREATE TABLE "Job" (
     "completedAt" TIMESTAMP(3),
 
     CONSTRAINT "Job_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BatchImport" (
+    "id" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "fileUrl" TEXT,
+    "sheetName" TEXT,
+    "status" "BatchImportStatus" NOT NULL DEFAULT 'PENDING',
+    "totalRows" INTEGER NOT NULL DEFAULT 0,
+    "processedRows" INTEGER NOT NULL DEFAULT 0,
+    "successfulRows" INTEGER NOT NULL DEFAULT 0,
+    "failedRows" INTEGER NOT NULL DEFAULT 0,
+    "carrierId" TEXT,
+    "carrierCode" TEXT,
+    "serviceCode" TEXT,
+    "carrier" TEXT,
+    "service" TEXT,
+    "billToParty" TEXT NOT NULL DEFAULT 'sender',
+    "billToAccount" TEXT,
+    "billToCountryCode" TEXT NOT NULL DEFAULT 'US',
+    "billToPostalCode" TEXT,
+    "containsAlcohol" BOOLEAN NOT NULL DEFAULT false,
+    "saturdayDelivery" BOOLEAN NOT NULL DEFAULT false,
+    "confirmation" TEXT NOT NULL DEFAULT 'none',
+    "notificationsEmail" TEXT,
+    "fromAddress" JSONB,
+    "columnMapping" JSONB,
+    "tenantId" TEXT NOT NULL,
+    "createdBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "startedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "BatchImport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BatchImportRow" (
+    "id" TEXT NOT NULL,
+    "batchImportId" TEXT NOT NULL,
+    "rowNumber" INTEGER NOT NULL,
+    "status" "BatchRowStatus" NOT NULL DEFAULT 'PENDING',
+    "groupKey" TEXT,
+    "shipDate" TIMESTAMP(3),
+    "jobNumber" TEXT,
+    "totalPackages" INTEGER,
+    "packageNumber" INTEGER,
+    "shipToName" TEXT,
+    "shipToCompany" TEXT,
+    "shipToAddress1" TEXT,
+    "shipToAddress2" TEXT,
+    "shipToCity" TEXT,
+    "shipToState" TEXT,
+    "shipToZip" TEXT,
+    "shipToCountry" TEXT NOT NULL DEFAULT 'US',
+    "shipToPhone" TEXT,
+    "weight" DOUBLE PRECISION,
+    "length" DOUBLE PRECISION,
+    "width" DOUBLE PRECISION,
+    "height" DOUBLE PRECISION,
+    "reference1" TEXT,
+    "reference2" TEXT,
+    "reference3" TEXT,
+    "itemNumber" TEXT,
+    "itemQuantity" INTEGER,
+    "trackingNumber" TEXT,
+    "trackingUrl" TEXT,
+    "labelUrl" TEXT,
+    "shippingCost" DOUBLE PRECISION,
+    "errorMessage" TEXT,
+    "notes" TEXT,
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "maxRetries" INTEGER NOT NULL DEFAULT 3,
+    "lastAttemptAt" TIMESTAMP(3),
+    "isTransientError" BOOLEAN NOT NULL DEFAULT false,
+    "paceJobShipmentId" INTEGER,
+    "paceCartonId" INTEGER,
+    "shipstationShipmentId" TEXT,
+    "shipstationLabelId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "processedAt" TIMESTAMP(3),
+
+    CONSTRAINT "BatchImportRow_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BatchImportMapping" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT,
+    "tenantId" TEXT,
+    "mappingName" TEXT NOT NULL,
+    "columnMappings" JSONB NOT NULL,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BatchImportMapping_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "InvoiceIntegration" (
+    "id" TEXT NOT NULL,
+    "invoiceNumber" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "payload" JSONB NOT NULL,
+    "netsuiteResponse" JSONB,
+    "netsuiteInvoiceId" TEXT,
+    "errorMessage" TEXT,
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "maxRetries" INTEGER NOT NULL DEFAULT 3,
+    "lastAttemptAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "sentToNetsuiteAt" TIMESTAMP(3),
+
+    CONSTRAINT "InvoiceIntegration_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MenuConfiguration" (
+    "id" TEXT NOT NULL,
+    "menuKey" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "href" TEXT NOT NULL,
+    "icon" TEXT,
+    "parentKey" TEXT,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "visibleToRoles" TEXT[],
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "tenantId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MenuConfiguration_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -340,6 +502,18 @@ CREATE UNIQUE INDEX "ShipmentTypeMapping_tenantId_plannedTypeId_key" ON "Shipmen
 CREATE UNIQUE INDEX "ShipmentTypeMapping_tenantId_completedTypeId_key" ON "ShipmentTypeMapping"("tenantId", "completedTypeId");
 
 -- CreateIndex
+CREATE INDEX "CarrierServiceMapping_tenantId_idx" ON "CarrierServiceMapping"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "CarrierServiceMapping_shipstationCarrierCode_idx" ON "CarrierServiceMapping"("shipstationCarrierCode");
+
+-- CreateIndex
+CREATE INDEX "CarrierServiceMapping_shipstationServiceCode_idx" ON "CarrierServiceMapping"("shipstationServiceCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CarrierServiceMapping_tenantId_shipstationCarrierId_shipsta_key" ON "CarrierServiceMapping"("tenantId", "shipstationCarrierId", "shipstationServiceCode");
+
+-- CreateIndex
 CREATE INDEX "ShippingLabel_tenantId_idx" ON "ShippingLabel"("tenantId");
 
 -- CreateIndex
@@ -364,6 +538,9 @@ CREATE INDEX "ShippingLabel_createdAt_idx" ON "ShippingLabel"("createdAt");
 CREATE INDEX "ShippingLabel_isReturnLabel_idx" ON "ShippingLabel"("isReturnLabel");
 
 -- CreateIndex
+CREATE INDEX "ShippingLabel_trackingStatus_idx" ON "ShippingLabel"("trackingStatus");
+
+-- CreateIndex
 CREATE INDEX "Job_type_idx" ON "Job"("type");
 
 -- CreateIndex
@@ -371,6 +548,63 @@ CREATE INDEX "Job_status_idx" ON "Job"("status");
 
 -- CreateIndex
 CREATE INDEX "Job_createdAt_idx" ON "Job"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "BatchImport_tenantId_idx" ON "BatchImport"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "BatchImport_status_idx" ON "BatchImport"("status");
+
+-- CreateIndex
+CREATE INDEX "BatchImport_createdAt_idx" ON "BatchImport"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "BatchImportRow_batchImportId_idx" ON "BatchImportRow"("batchImportId");
+
+-- CreateIndex
+CREATE INDEX "BatchImportRow_batchImportId_status_idx" ON "BatchImportRow"("batchImportId", "status");
+
+-- CreateIndex
+CREATE INDEX "BatchImportRow_groupKey_idx" ON "BatchImportRow"("groupKey");
+
+-- CreateIndex
+CREATE INDEX "BatchImportRow_jobNumber_idx" ON "BatchImportRow"("jobNumber");
+
+-- CreateIndex
+CREATE INDEX "BatchImportRow_status_idx" ON "BatchImportRow"("status");
+
+-- CreateIndex
+CREATE INDEX "BatchImportMapping_userId_idx" ON "BatchImportMapping"("userId");
+
+-- CreateIndex
+CREATE INDEX "BatchImportMapping_tenantId_idx" ON "BatchImportMapping"("tenantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "InvoiceIntegration_invoiceNumber_key" ON "InvoiceIntegration"("invoiceNumber");
+
+-- CreateIndex
+CREATE INDEX "InvoiceIntegration_status_idx" ON "InvoiceIntegration"("status");
+
+-- CreateIndex
+CREATE INDEX "InvoiceIntegration_invoiceNumber_idx" ON "InvoiceIntegration"("invoiceNumber");
+
+-- CreateIndex
+CREATE INDEX "InvoiceIntegration_createdAt_idx" ON "InvoiceIntegration"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "InvoiceIntegration_status_retryCount_idx" ON "InvoiceIntegration"("status", "retryCount");
+
+-- CreateIndex
+CREATE INDEX "MenuConfiguration_tenantId_idx" ON "MenuConfiguration"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "MenuConfiguration_tenantId_isActive_idx" ON "MenuConfiguration"("tenantId", "isActive");
+
+-- CreateIndex
+CREATE INDEX "MenuConfiguration_order_idx" ON "MenuConfiguration"("order");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MenuConfiguration_tenantId_menuKey_key" ON "MenuConfiguration"("tenantId", "menuKey");
 
 -- AddForeignKey
 ALTER TABLE "Membership" ADD CONSTRAINT "Membership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -412,5 +646,16 @@ ALTER TABLE "Integration" ADD CONSTRAINT "Integration_tenantId_fkey" FOREIGN KEY
 ALTER TABLE "ShipmentTypeMapping" ADD CONSTRAINT "ShipmentTypeMapping_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "CarrierServiceMapping" ADD CONSTRAINT "CarrierServiceMapping_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "ShippingLabel" ADD CONSTRAINT "ShippingLabel_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
+ALTER TABLE "BatchImport" ADD CONSTRAINT "BatchImport_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BatchImportRow" ADD CONSTRAINT "BatchImportRow_batchImportId_fkey" FOREIGN KEY ("batchImportId") REFERENCES "BatchImport"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MenuConfiguration" ADD CONSTRAINT "MenuConfiguration_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;

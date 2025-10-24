@@ -240,6 +240,127 @@ async function main() {
     console.log(`✅ Shipment type mappings already exist (${existingMappings} found)`)
   }
 
+  // Create menu configuration (only if it doesn't exist)
+  const existingMenus = await prisma.menuConfiguration.count({
+    where: { tenantId: tenant.id }
+  })
+
+  if (existingMenus === 0) {
+    const menuItems = [
+      {
+        menuKey: 'dashboard',
+        label: 'Dashboard',
+        href: '/dashboard',
+        icon: 'home',
+        parentKey: null,
+        order: 0,
+        visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator', 'logistics', 'accounting']
+      },
+      {
+        menuKey: 'shipments',
+        label: 'Shipments',
+        href: '/shipments',
+        icon: 'package',
+        parentKey: null,
+        order: 1,
+        visibleToRoles: ['full_admin', 'admin', 'customer_service', 'logistics']
+      },
+      {
+        menuKey: 'shipments-all',
+        label: 'All Shipments',
+        href: '/shipments',
+        icon: 'list',
+        parentKey: 'shipments',
+        order: 0,
+        visibleToRoles: ['full_admin', 'admin', 'customer_service', 'logistics']
+      },
+      {
+        menuKey: 'shipments-manual-label',
+        label: 'Manual Label',
+        href: '/shipments/manual-label',
+        icon: 'plus',
+        parentKey: 'shipments',
+        order: 1,
+        visibleToRoles: ['full_admin', 'admin', 'customer_service']
+      },
+      {
+        menuKey: 'shipments-track',
+        label: 'Track Labels',
+        href: '/shipment-track',
+        icon: 'search',
+        parentKey: 'shipments',
+        order: 2,
+        visibleToRoles: ['full_admin', 'admin', 'customer_service', 'logistics']
+      },
+      {
+        menuKey: 'batch-import',
+        label: 'Batch Import',
+        href: '/batch-import',
+        icon: 'upload',
+        parentKey: null,
+        order: 2,
+        visibleToRoles: ['full_admin', 'admin']
+      },
+      {
+        menuKey: 'batch-import-new',
+        label: 'New Import',
+        href: '/batch-import',
+        icon: 'plus',
+        parentKey: 'batch-import',
+        order: 0,
+        visibleToRoles: ['full_admin', 'admin']
+      },
+      {
+        menuKey: 'batch-import-track',
+        label: 'Track Batches',
+        href: '/batch-import/batches',
+        icon: 'search',
+        parentKey: 'batch-import',
+        order: 1,
+        visibleToRoles: ['full_admin', 'admin']
+      },
+      {
+        menuKey: 'rate-estimates',
+        label: 'Rate Estimates',
+        href: '/rates/estimate',
+        icon: 'dollar',
+        parentKey: null,
+        order: 3,
+        visibleToRoles: ['full_admin', 'admin', 'estimator']
+      },
+      {
+        menuKey: 'invoice-integrations',
+        label: 'Invoice Integrations',
+        href: '/invoices/integrations',
+        icon: 'document',
+        parentKey: null,
+        order: 4,
+        visibleToRoles: ['full_admin', 'admin', 'accounting']
+      },
+      {
+        menuKey: 'settings',
+        label: 'Settings',
+        href: '/settings',
+        icon: 'settings',
+        parentKey: null,
+        order: 5,
+        visibleToRoles: ['full_admin', 'admin']
+      }
+    ]
+
+    for (const item of menuItems) {
+      await prisma.menuConfiguration.create({
+        data: {
+          ...item,
+          tenantId: tenant.id,
+        },
+      })
+    }
+    console.log(`✅ Created ${menuItems.length} menu configuration items`)
+  } else {
+    console.log(`✅ Menu configuration already exists (${existingMenus} items found)`)
+  }
+
   console.log('🎉 Seeding complete!')
 }
 
