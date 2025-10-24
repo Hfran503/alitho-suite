@@ -4,6 +4,22 @@
 
 PACE can send **multiple webhook calls** for the same invoice number with different internal IDs. This happens when an invoice has multiple parts or components.
 
+## Processing Delay
+
+To ensure all parts are accumulated before sending to NetSuite, the system uses a **10-second delay**:
+
+```
+12:09:33 - Part 1 arrives → Queue with 10s delay (will process at 12:09:43)
+12:09:34 - Part 2 arrives → Replace delayed job (now will process at 12:09:44)
+12:09:44 - No more parts → Worker sends complete invoice to NetSuite
+```
+
+**Key Features:**
+- ✅ Each webhook queues with a 10-second delay
+- ✅ New parts **replace** the delayed job (resets timer)
+- ✅ Uses BullMQ's `jobId` deduplication (only one job per invoice)
+- ✅ Worker processes the **final accumulated** version
+
 ### Example:
 
 **Invoice 55853-1** is sent in 2 separate webhook calls:
