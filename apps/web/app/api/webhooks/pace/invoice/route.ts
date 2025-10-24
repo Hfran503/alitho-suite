@@ -204,12 +204,13 @@ export async function POST(request: NextRequest) {
         status: updated.status,
       })
 
-      // Queue the invoice for automatic processing
-      // Note: This will re-queue even if already queued, which is fine
-      // The worker will process the latest version
+      // Queue the invoice for automatic processing with a delay
+      // This allows multiple parts to accumulate before sending to NetSuite
+      // If already queued, the jobId will be replaced with the new delayed job
+      const ACCUMULATION_DELAY_MS = 10000 // 10 seconds delay to allow parts to accumulate
       try {
-        await queueNetsuiteInvoice(updated.id, updated.invoiceNumber)
-        console.log(`🔄 Queued accumulated invoice ${invoiceNumber} for NetSuite processing`)
+        await queueNetsuiteInvoice(updated.id, updated.invoiceNumber, ACCUMULATION_DELAY_MS)
+        console.log(`🔄 Queued accumulated invoice ${invoiceNumber} for NetSuite processing (${ACCUMULATION_DELAY_MS}ms delay)`)
       } catch (queueError) {
         console.error('Failed to queue invoice:', queueError)
         // Don't fail the webhook, just log the error
@@ -250,10 +251,12 @@ export async function POST(request: NextRequest) {
       status: invoiceIntegration.status,
     })
 
-    // Queue the invoice for automatic processing
+    // Queue the invoice for automatic processing with a delay
+    // This allows multiple parts to arrive before sending to NetSuite
+    const ACCUMULATION_DELAY_MS = 10000 // 10 seconds delay to allow parts to accumulate
     try {
-      await queueNetsuiteInvoice(invoiceIntegration.id, invoiceIntegration.invoiceNumber)
-      console.log(`🔄 Queued invoice ${invoiceNumber} for NetSuite processing`)
+      await queueNetsuiteInvoice(invoiceIntegration.id, invoiceIntegration.invoiceNumber, ACCUMULATION_DELAY_MS)
+      console.log(`🔄 Queued invoice ${invoiceNumber} for NetSuite processing (${ACCUMULATION_DELAY_MS}ms delay)`)
     } catch (queueError) {
       console.error('Failed to queue invoice:', queueError)
       // Don't fail the webhook, just log the error
