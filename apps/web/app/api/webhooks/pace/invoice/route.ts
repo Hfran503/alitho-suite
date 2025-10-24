@@ -17,7 +17,9 @@ interface SalesDistribution {
   id: number
   invoice: string
   amount: number
-  salesCategory: string
+  quantity: number
+  salesCategoryId: number | null
+  salesCategoryName: string
   chargeBackAccount: string
   amountAdjustment: number
   jobPartReference: string
@@ -31,20 +33,41 @@ interface SalesDistribution {
   adjustedTotal: number
 }
 
+interface InvoiceExtra {
+  id: number
+  lineNum: number | null
+  description: string
+  price: number
+  priceAdjustment: number
+  adjustedTotal: number
+  quantity: number
+  invoiceExtraTypeId: number | null
+  invoiceExtraTypeName: string
+  jobPartReference: string
+  jobProductReference: number
+  posted: boolean
+}
+
 interface PACEInvoice {
   id: number
   invoiceNum: string
   invoiceAmount: number
-  customer: string
+  customerId: string
+  customerName: string
   posted: boolean
   invoiceDate: string
+  job: string
+  jobPart: string
+  poNumber: string
 }
 
 interface PACEInvoiceWebhookPayload {
   invoice: PACEInvoice
   salesDistributions: SalesDistribution[]
+  invoiceExtras: InvoiceExtra[]
   metadata: {
     totalSalesDistLines: number
+    totalInvoiceExtras: number
     objectType: string
     exportedAt: string
   }
@@ -88,8 +111,10 @@ export async function POST(request: NextRequest) {
     console.log('📄 Received PACE invoice webhook:', {
       invoiceNumber,
       invoiceAmount: payload.invoice?.invoiceAmount,
-      customer: payload.invoice?.customer,
+      customerName: payload.invoice?.customerName,
+      job: payload.invoice?.job,
       salesDistLines: payload.salesDistributions?.length || 0,
+      invoiceExtras: payload.invoiceExtras?.length || 0,
     })
 
     // Validate invoice number exists
@@ -153,8 +178,10 @@ export async function POST(request: NextRequest) {
       id: invoiceIntegration.id,
       invoiceNumber: invoiceIntegration.invoiceNumber,
       invoiceAmount: payload.invoice?.invoiceAmount,
-      customer: payload.invoice?.customer,
+      customerName: payload.invoice?.customerName,
+      job: payload.invoice?.job,
       salesDistLines: payload.salesDistributions?.length || 0,
+      invoiceExtras: payload.invoiceExtras?.length || 0,
       status: invoiceIntegration.status,
     })
 
