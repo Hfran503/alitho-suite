@@ -31,15 +31,71 @@ fi
 # Run database migrations with explicit environment variable
 echo "Running database migrations..."
 
+# Check if using Neon pooler connection
+MIGRATION_DATABASE_URL="$DATABASE_URL"
+if [[ "$DATABASE_URL" == *"-pooler."* ]]; then
+  echo "⚠️  WARNING: DATABASE_URL uses connection pooler"
+
+  # Try to convert pooler URL to direct URL for migrations
+  DIRECT_URL="${DATABASE_URL//-pooler./-.}"
+  echo "   Converted to direct URL for migrations"
+  echo "   Using: ${DIRECT_URL:0:50}..."
+  MIGRATION_DATABASE_URL="$DIRECT_URL"
+
+  echo "   Note: Pooler connections don't support Prisma advisory locks"
+  echo "   Using direct connection for migrations only"
+fi
+
 # Try to run migrations (allow output to stream)
 set +e  # Don't exit on error
-env DATABASE_URL="$DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
+env DATABASE_URL="$MIGRATION_DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
 MIGRATION_EXIT_CODE=${PIPESTATUS[0]}
 set -e  # Re-enable exit on error
 
-# Check if migration failed due to non-empty database (P3005)
+# Check if migration failed
 if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
-  if grep -q "P3005" /tmp/migration.log; then
+  # Check for P1002 (timeout/advisory lock error)
+  if grep -q "P1002" /tmp/migration.log || grep -q "advisory lock" /tmp/migration.log; then
+    echo ""
+    echo "⚠️  Migration timeout (P1002 - advisory lock timeout)"
+    echo "This usually means:"
+    echo "  1. Connection pooler doesn't support advisory locks (use direct connection)"
+    echo "  2. Another process is holding the lock"
+    echo "  3. Database is under heavy load"
+    echo ""
+    echo "Retrying with exponential backoff..."
+
+    # Retry logic with exponential backoff
+    for attempt in 1 2 3; do
+      wait_time=$((5 * attempt))
+      echo "Retry attempt $attempt/3 (waiting ${wait_time}s)..."
+      sleep $wait_time
+
+      set +e
+      env DATABASE_URL="$MIGRATION_DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
+      MIGRATION_EXIT_CODE=${PIPESTATUS[0]}
+      set -e
+
+      if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
+        echo "✓ Migration succeeded on retry $attempt"
+        break
+      fi
+    done
+
+    if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+      echo ""
+      echo "❌ Migration failed after 3 retries"
+      echo ""
+      echo "SOLUTION: Update your DATABASE_URL to use a direct connection:"
+      echo "  Current (pooler): ep-xxx-pooler.c-2.us-east-1.aws.neon.tech"
+      echo "  Change to (direct): ep-xxx.c-2.us-east-1.aws.neon.tech"
+      echo ""
+      echo "Or set DIRECT_DATABASE_URL in your environment variables."
+      exit 1
+    fi
+
+  # Check for P3005 (non-empty database)
+  elif grep -q "P3005" /tmp/migration.log; then
     echo ""
     echo "⚠️  Database is not empty (P3005 error detected)"
     echo "Attempting to baseline by marking migrations as applied..."
