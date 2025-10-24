@@ -261,6 +261,42 @@ export function ProcessShipmentShipStationModal({
     }
   } | null>(null)
 
+  // Countdown timer for auto-close
+  const [autoCloseCountdown, setAutoCloseCountdown] = useState<number | null>(null)
+
+  // Auto-open PDF when label is created and auto-close modal after 10 seconds
+  useEffect(() => {
+    if (labelData?.outbound?.labelUrl && currentStep === 5) {
+      // Auto-open the outbound label PDF in a new tab
+      window.open(labelData.outbound.labelUrl, '_blank', 'noopener,noreferrer')
+
+      // Initialize countdown
+      setAutoCloseCountdown(10)
+
+      // Update countdown every second
+      const countdownInterval = setInterval(() => {
+        setAutoCloseCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            return null
+          }
+          return prev - 1
+        })
+      }, 1000)
+
+      // Auto-close modal after 10 seconds
+      const autoCloseTimer = setTimeout(() => {
+        handleComplete()
+      }, 10000) // 10 seconds
+
+      // Cleanup timers if user manually closes or navigates away
+      return () => {
+        clearTimeout(autoCloseTimer)
+        clearInterval(countdownInterval)
+        setAutoCloseCountdown(null)
+      }
+    }
+  }, [labelData, currentStep])
+
   // Load default ship-from address from integration settings
   useEffect(() => {
     const loadDefaultFromAddress = async () => {
@@ -1912,6 +1948,14 @@ export function ProcessShipmentShipStationModal({
                   ? 'Both outbound and return labels have been created. Include the return label in the package for customer convenience.'
                   : 'Your shipment has been created with ShipStation.'}
               </p>
+              {autoCloseCountdown !== null && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-green-700 bg-green-100 px-3 py-2 rounded border border-green-200">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>This window will automatically close in <strong>{autoCloseCountdown}</strong> seconds...</span>
+                </div>
+              )}
             </div>
 
             {/* Outbound Label Section */}
@@ -2020,20 +2064,23 @@ export function ProcessShipmentShipStationModal({
 
         {/* Action Buttons */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <button
-            type="button"
-            onClick={currentStep === 1 ? handleClose : handleBack}
-            disabled={isLoading}
-            className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors shadow-sm"
-          >
-            {currentStep === 1 ? 'Cancel' : 'Back'}
-          </button>
+          {/* Hide back button on step 5 (final step) */}
+          {currentStep !== 5 && (
+            <button
+              type="button"
+              onClick={currentStep === 1 ? handleClose : handleBack}
+              disabled={isLoading}
+              className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors shadow-sm"
+            >
+              {currentStep === 1 ? 'Cancel' : 'Back'}
+            </button>
+          )}
 
           <button
             type="button"
             onClick={currentStep === 5 ? handleComplete : handleNext}
             disabled={isLoading}
-            className="px-8 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-sm"
+            className={`px-8 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-sm ${currentStep === 5 ? 'ml-auto' : ''}`}
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
