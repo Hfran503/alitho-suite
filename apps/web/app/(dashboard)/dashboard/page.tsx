@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import Link from 'next/link'
 import { formatDatePT } from '@/lib/dateUtils'
+import { USER_ROLES } from '@/lib/roles'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -22,6 +23,29 @@ export default async function DashboardPage() {
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-4">No Tenant Found</h2>
         <p className="text-gray-600">Please contact your administrator.</p>
+      </div>
+    )
+  }
+
+  // Check if user has access to full dashboard (Logistics, Admin, or Full Admin only)
+  const allowedRoles = [USER_ROLES.LOGISTICS, USER_ROLES.ADMIN, USER_ROLES.FULL_ADMIN]
+  const hasFullDashboardAccess = allowedRoles.includes(membership.role as any)
+
+  // If user doesn't have full dashboard access, show welcome message only
+  if (!hasFullDashboardAccess) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center max-w-2xl px-6">
+          <h1 className="text-4xl font-bold mb-4">
+            Welcome back, {session.user.name || session.user.email}!
+          </h1>
+          <p className="text-xl text-gray-600 mb-2">
+            {membership.tenant.name}
+          </p>
+          <p className="text-gray-500">
+            Use the navigation menu to access the tools available for your role.
+          </p>
+        </div>
       </div>
     )
   }
