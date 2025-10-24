@@ -24,6 +24,9 @@ export default function InvoiceIntegrationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceIntegration | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [sendingToNetsuite, setSendingToNetsuite] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [sendSuccess, setSendSuccess] = useState<string | null>(null)
 
   const fetchInvoices = async () => {
     setLoading(true)
@@ -85,6 +88,55 @@ export default function InvoiceIntegrationsPage() {
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  const handleSendToNetsuite = async () => {
+    if (!selectedInvoice) return
+
+    setSendingToNetsuite(true)
+    setSendError(null)
+    setSendSuccess(null)
+
+    try {
+      const response = await fetch(
+        `/api/invoices/integrations/${selectedInvoice.id}/send`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        }
+      )
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setSendSuccess('Invoice sent to NetSuite successfully!')
+        // Refresh the invoice list to get updated status
+        await fetchInvoices()
+        // Update the selected invoice if it's still the same one
+        if (selectedInvoice) {
+          const updatedInvoice = await fetch('/api/invoices/integrations')
+            .then((r) => r.json())
+            .then((result) =>
+              result.data.find((inv: InvoiceIntegration) => inv.id === selectedInvoice.id)
+            )
+          if (updatedInvoice) {
+            setSelectedInvoice(updatedInvoice)
+          }
+        }
+      } else {
+        setSendError(data.error || 'Failed to send invoice to NetSuite')
+      }
+    } catch (err) {
+      setSendError(
+        err instanceof Error ? err.message : 'An error occurred while sending to NetSuite'
+      )
+      console.error('Send to NetSuite error:', err)
+    } finally {
+      setSendingToNetsuite(false)
+    }
   }
 
   return (
@@ -237,19 +289,137 @@ export default function InvoiceIntegrationsPage() {
         {/* Invoice Details Panel */}
         {selectedInvoice && (
           <div className="w-1/2 bg-white overflow-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
               <h2 className="text-lg font-semibold text-gray-900">Invoice Details</h2>
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-3">
+                {/* Send to NetSuite Button */}
+                <button
+                  onClick={handleSendToNetsuite}
+                  disabled={sendingToNetsuite || selectedInvoice.status === 'completed'}
+                  className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                    selectedInvoice.status === 'completed'
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : sendingToNetsuite
+                      ? 'bg-blue-400 text-white cursor-wait'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                  title={
+                    selectedInvoice.status === 'completed'
+                      ? 'Invoice already sent to NetSuite'
+                      : 'Send invoice to NetSuite'
+                  }
+                >
+                  {sendingToNetsuite ? (
+                    <>
+                      <svg
+                        className="animate-spin h-4 w-4"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                        />
+                      </svg>
+                      Send to NetSuite
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setSelectedInvoice(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div className="p-6 space-y-6">
+              {/* Success Message */}
+              {sendSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {sendSuccess}
+                  </div>
+                  <button
+                    onClick={() => setSendSuccess(null)}
+                    className="text-green-600 hover:text-green-800"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {sendError && (
+                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {sendError}
+                  </div>
+                  <button
+                    onClick={() => setSendError(null)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
               {/* Status and Info */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Status Information</h3>

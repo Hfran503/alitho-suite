@@ -4,10 +4,10 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { createAuditLog } from '@/lib/audit'
 import {
-  saveNetSuiteCredentials,
   getNetSuiteCredentials,
+  saveNetSuiteCredentials,
   deleteNetSuiteCredentials,
-} from '@/lib/secrets'
+} from '@repo/shared'
 
 // GET /api/integrations/netsuite - Get NetSuite configuration
 export async function GET() {
@@ -53,13 +53,60 @@ export async function GET() {
       })
     }
 
+    // Helper function to mask credentials (show first 4 and last 4 characters)
+    const maskCredential = (value: string | undefined): string => {
+      if (!value || value.length <= 8) return '••••••••'
+      return `${value.slice(0, 4)}••••${value.slice(-4)}`
+    }
+
     // Get credentials from AWS Secrets Manager
     let sandboxAccountId = ''
+    let sandboxConsumerKey = ''
+    let sandboxConsumerSecret = ''
+    let sandboxTokenId = ''
+    let sandboxTokenSecret = ''
     let productionAccountId = ''
+    let productionConsumerKey = ''
+    let productionConsumerSecret = ''
+    let productionTokenId = ''
+    let productionTokenSecret = ''
+    let hasSandboxCredentials = false
+    let hasProductionCredentials = false
+
     try {
       const credentials = await getNetSuiteCredentials(membership.tenantId)
+
+      // Set account IDs (not masked - needed for display)
       sandboxAccountId = credentials.sandboxAccountId || ''
       productionAccountId = credentials.productionAccountId || ''
+
+      // Mask sensitive credentials (show first 4 and last 4)
+      sandboxConsumerKey = maskCredential(credentials.sandboxConsumerKey)
+      sandboxConsumerSecret = maskCredential(credentials.sandboxConsumerSecret)
+      sandboxTokenId = maskCredential(credentials.sandboxTokenId)
+      sandboxTokenSecret = maskCredential(credentials.sandboxTokenSecret)
+      productionConsumerKey = maskCredential(credentials.productionConsumerKey)
+      productionConsumerSecret = maskCredential(credentials.productionConsumerSecret)
+      productionTokenId = maskCredential(credentials.productionTokenId)
+      productionTokenSecret = maskCredential(credentials.productionTokenSecret)
+
+      // Check if sandbox credentials exist (all fields required)
+      hasSandboxCredentials = !!(
+        credentials.sandboxAccountId &&
+        credentials.sandboxConsumerKey &&
+        credentials.sandboxConsumerSecret &&
+        credentials.sandboxTokenId &&
+        credentials.sandboxTokenSecret
+      )
+
+      // Check if production credentials exist (all fields required)
+      hasProductionCredentials = !!(
+        credentials.productionAccountId &&
+        credentials.productionConsumerKey &&
+        credentials.productionConsumerSecret &&
+        credentials.productionTokenId &&
+        credentials.productionTokenSecret
+      )
     } catch (error) {
       // Credentials not found in AWS Secrets Manager
     }
@@ -72,7 +119,17 @@ export async function GET() {
         sandboxEnabled: integration.sandboxEnabled,
         productionEnabled: integration.productionEnabled,
         sandboxAccountId,
+        sandboxConsumerKey,
+        sandboxConsumerSecret,
+        sandboxTokenId,
+        sandboxTokenSecret,
         productionAccountId,
+        productionConsumerKey,
+        productionConsumerSecret,
+        productionTokenId,
+        productionTokenSecret,
+        hasSandboxCredentials,
+        hasProductionCredentials,
         createdAt: integration.createdAt,
         updatedAt: integration.updatedAt,
       },
@@ -182,8 +239,10 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('Save NetSuite integration error:', error)
+    console.error('Error details:', error instanceof Error ? error.message : String(error))
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
     return NextResponse.json(
-      { error: 'Failed to save NetSuite credentials' },
+      { error: 'Failed to save NetSuite credentials', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }

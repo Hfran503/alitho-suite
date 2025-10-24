@@ -54,12 +54,37 @@ export function NetSuiteIntegrationModal({
         setSandboxEnabled(data.data?.sandboxEnabled || false)
         setProductionEnabled(data.data?.productionEnabled || false)
 
-        // Load account IDs (these are not sensitive)
+        // Load credentials (masked values for security - show first 4 and last 4)
         if (data.data?.sandboxAccountId) {
           setSandboxAccountId(data.data.sandboxAccountId)
         }
+        if (data.data?.sandboxConsumerKey) {
+          setSandboxConsumerKey(data.data.sandboxConsumerKey)
+        }
+        if (data.data?.sandboxConsumerSecret) {
+          setSandboxConsumerSecret(data.data.sandboxConsumerSecret)
+        }
+        if (data.data?.sandboxTokenId) {
+          setSandboxTokenId(data.data.sandboxTokenId)
+        }
+        if (data.data?.sandboxTokenSecret) {
+          setSandboxTokenSecret(data.data.sandboxTokenSecret)
+        }
+
         if (data.data?.productionAccountId) {
           setProductionAccountId(data.data.productionAccountId)
+        }
+        if (data.data?.productionConsumerKey) {
+          setProductionConsumerKey(data.data.productionConsumerKey)
+        }
+        if (data.data?.productionConsumerSecret) {
+          setProductionConsumerSecret(data.data.productionConsumerSecret)
+        }
+        if (data.data?.productionTokenId) {
+          setProductionTokenId(data.data.productionTokenId)
+        }
+        if (data.data?.productionTokenSecret) {
+          setProductionTokenSecret(data.data.productionTokenSecret)
         }
       }
     } catch (error) {
@@ -74,6 +99,7 @@ export function NetSuiteIntegrationModal({
     setSuccess('')
 
     // Validate that required fields are filled for the mode being enabled
+    // (Allow masked values - they indicate existing credentials)
     if (currentMode === 'sandbox' && sandboxEnabled) {
       if (!sandboxAccountId.trim() || !sandboxConsumerKey.trim() || !sandboxConsumerSecret.trim() || !sandboxTokenId.trim() || !sandboxTokenSecret.trim()) {
         setError('Please fill in all sandbox credentials')
@@ -91,25 +117,30 @@ export function NetSuiteIntegrationModal({
     }
 
     try {
+      // Helper function to check if a value is masked (either full mask or partial mask)
+      const isMaskedValue = (value: string): boolean => {
+        return value === '••••••••' || /^.{0,4}••••.{0,4}$/.test(value)
+      }
+
       const requestBody: any = {
         currentMode,
         sandboxEnabled,
         productionEnabled,
       }
 
-      // Only include sandbox credentials if they're being updated (not empty or just loaded)
-      if (sandboxAccountId) requestBody.sandboxAccountId = sandboxAccountId
-      if (sandboxConsumerKey) requestBody.sandboxConsumerKey = sandboxConsumerKey
-      if (sandboxConsumerSecret) requestBody.sandboxConsumerSecret = sandboxConsumerSecret
-      if (sandboxTokenId) requestBody.sandboxTokenId = sandboxTokenId
-      if (sandboxTokenSecret) requestBody.sandboxTokenSecret = sandboxTokenSecret
+      // Only include sandbox credentials if they're being updated (not empty and not masked)
+      if (sandboxAccountId && !isMaskedValue(sandboxAccountId)) requestBody.sandboxAccountId = sandboxAccountId
+      if (sandboxConsumerKey && !isMaskedValue(sandboxConsumerKey)) requestBody.sandboxConsumerKey = sandboxConsumerKey
+      if (sandboxConsumerSecret && !isMaskedValue(sandboxConsumerSecret)) requestBody.sandboxConsumerSecret = sandboxConsumerSecret
+      if (sandboxTokenId && !isMaskedValue(sandboxTokenId)) requestBody.sandboxTokenId = sandboxTokenId
+      if (sandboxTokenSecret && !isMaskedValue(sandboxTokenSecret)) requestBody.sandboxTokenSecret = sandboxTokenSecret
 
-      // Only include production credentials if they're being updated
-      if (productionAccountId) requestBody.productionAccountId = productionAccountId
-      if (productionConsumerKey) requestBody.productionConsumerKey = productionConsumerKey
-      if (productionConsumerSecret) requestBody.productionConsumerSecret = productionConsumerSecret
-      if (productionTokenId) requestBody.productionTokenId = productionTokenId
-      if (productionTokenSecret) requestBody.productionTokenSecret = productionTokenSecret
+      // Only include production credentials if they're being updated (not empty and not masked)
+      if (productionAccountId && !isMaskedValue(productionAccountId)) requestBody.productionAccountId = productionAccountId
+      if (productionConsumerKey && !isMaskedValue(productionConsumerKey)) requestBody.productionConsumerKey = productionConsumerKey
+      if (productionConsumerSecret && !isMaskedValue(productionConsumerSecret)) requestBody.productionConsumerSecret = productionConsumerSecret
+      if (productionTokenId && !isMaskedValue(productionTokenId)) requestBody.productionTokenId = productionTokenId
+      if (productionTokenSecret && !isMaskedValue(productionTokenSecret)) requestBody.productionTokenSecret = productionTokenSecret
 
       const response = await fetch('/api/integrations/netsuite', {
         method: 'POST',
@@ -448,8 +479,8 @@ export function NetSuiteIntegrationModal({
         </div>
 
         {/* Show/Hide Secrets Toggle */}
-        <div className="flex items-center justify-center bg-gray-50 rounded-lg p-3">
-          <label className="flex items-center cursor-pointer">
+        <div className="bg-gray-50 rounded-lg p-3">
+          <label className="flex items-center cursor-pointer justify-center">
             <input
               type="checkbox"
               checked={showSecrets}
@@ -460,6 +491,11 @@ export function NetSuiteIntegrationModal({
               {showSecrets ? 'Hide credentials' : 'Show credentials'}
             </span>
           </label>
+          {isConfigured && (
+            <p className="text-xs text-gray-500 text-center mt-2">
+              Saved credentials show first 4 and last 4 characters (e.g., ABCD••••WXYZ). Enter new values to update them.
+            </p>
+          )}
         </div>
 
         {/* Error/Success Messages */}
