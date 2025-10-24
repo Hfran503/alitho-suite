@@ -52,6 +52,7 @@ interface PACEInvoiceWebhookPayload {
     totalInvoiceExtras: number
     objectType: string
     exportedAt: string
+    paceInvoiceIds?: number[] // Track multiple PACE invoice IDs for same invoice number
   }
 }
 
@@ -126,31 +127,89 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingInvoice) {
-      console.warn(`Invoice ${invoiceNumber} already exists, updating...`)
+      console.log(`📋 Invoice ${invoiceNumber} already exists, accumulating line items...`)
 
-      // Update existing invoice
+      // Parse existing payload
+      const existingPayload = existingInvoice.payload as unknown as PACEInvoiceWebhookPayload
+
+      // Accumulate sales distributions (combine arrays, remove duplicates by ID)
+      const existingSalesDistributions = existingPayload.salesDistributions || []
+      const newSalesDistributions = payload.salesDistributions || []
+
+      // Create a map to track unique sales distributions by ID
+      const salesDistMap = new Map()
+      existingSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
+      newSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
+      const combinedSalesDistributions = Array.from(salesDistMap.values())
+
+      // Accumulate invoice extras (combine arrays, remove duplicates by ID)
+      const existingInvoiceExtras = existingPayload.invoiceExtras || []
+      const newInvoiceExtras = payload.invoiceExtras || []
+
+      const extrasMap = new Map()
+      existingInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
+      newInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
+      const combinedInvoiceExtras = Array.from(extrasMap.values())
+
+      // Calculate combined totals
+      const combinedInvoiceAmount = combinedSalesDistributions.reduce((sum, dist) => sum + dist.amount, 0)
+      const combinedExtrasAmount = combinedInvoiceExtras.reduce((sum, extra) => sum + extra.price, 0)
+      const totalAmount = combinedInvoiceAmount + combinedExtrasAmount
+
+      // Create combined payload
+      const combinedPayload: PACEInvoiceWebhookPayload = {
+        invoice: {
+          ...payload.invoice,
+          invoiceAmount: totalAmount,
+          // Keep the latest tax amount (or accumulate if needed)
+          taxAmount: payload.invoice.taxAmount,
+        },
+        salesDistributions: combinedSalesDistributions,
+        invoiceExtras: combinedInvoiceExtras,
+        metadata: {
+          ...payload.metadata,
+          totalSalesDistLines: combinedSalesDistributions.length,
+          totalInvoiceExtras: combinedInvoiceExtras.length,
+          exportedAt: new Date().toISOString(),
+          paceInvoiceIds: [
+            ...(existingPayload.metadata?.paceInvoiceIds || [existingPayload.invoice.id]),
+            payload.invoice.id
+          ].filter((id, index, self) => self.indexOf(id) === index), // Remove duplicates
+        },
+      }
+
+      // Update existing invoice with combined data
       const updated = await db.invoiceIntegration.update({
         where: {
           invoiceNumber: invoiceNumber,
         },
         data: {
-          payload: payload as any, // Cast to any for JSON field
-          status: 'pending', // Reset status to pending if re-sent
+          payload: combinedPayload as any,
+          status: 'pending', // Reset status to pending
           retryCount: 0, // Reset retry count
           updatedAt: new Date(),
         },
       })
 
-      console.log('✅ Updated invoice integration record:', {
+      console.log('✅ Accumulated invoice data:', {
         id: updated.id,
         invoiceNumber: updated.invoiceNumber,
+        previousSalesDistLines: existingSalesDistributions.length,
+        newSalesDistLines: newSalesDistributions.length,
+        combinedSalesDistLines: combinedSalesDistributions.length,
+        previousExtras: existingInvoiceExtras.length,
+        newExtras: newInvoiceExtras.length,
+        combinedExtras: combinedInvoiceExtras.length,
+        totalAmount: totalAmount.toFixed(2),
         status: updated.status,
       })
 
       // Queue the invoice for automatic processing
+      // Note: This will re-queue even if already queued, which is fine
+      // The worker will process the latest version
       try {
         await queueNetsuiteInvoice(updated.id, updated.invoiceNumber)
-        console.log(`🔄 Queued updated invoice ${invoiceNumber} for NetSuite processing`)
+        console.log(`🔄 Queued accumulated invoice ${invoiceNumber} for NetSuite processing`)
       } catch (queueError) {
         console.error('Failed to queue invoice:', queueError)
         // Don't fail the webhook, just log the error
@@ -158,9 +217,12 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         status: 'success',
-        message: `Invoice ${invoiceNumber} updated and queued for NetSuite`,
+        message: `Invoice ${invoiceNumber} accumulated and queued for NetSuite`,
         invoiceNumber: updated.invoiceNumber,
-        salesDistLines: payload.salesDistributions?.length || 0,
+        salesDistLines: combinedSalesDistributions.length,
+        invoiceExtras: combinedInvoiceExtras.length,
+        totalAmount: totalAmount.toFixed(2),
+        accumulated: true,
         queued: true,
       })
     }
