@@ -20,44 +20,25 @@ interface SalesDistribution {
   quantity: number
   salesCategoryId: number | null
   salesCategoryName: string
-  chargeBackAccount: string
-  amountAdjustment: number
-  jobPartReference: string
-  jobProductReference: number
-  glLocation: number | null
-  ioID: string
-  sourceOrganizationCompany: string
-  posted: boolean
-  taxBase: number
-  commBase: number
-  adjustedTotal: number
 }
 
 interface InvoiceExtra {
   id: number
   lineNum: number | null
-  description: string
   price: number
-  priceAdjustment: number
-  adjustedTotal: number
   quantity: number
   invoiceExtraTypeId: number | null
   invoiceExtraTypeName: string
-  jobPartReference: string
-  jobProductReference: number
-  posted: boolean
 }
 
 interface PACEInvoice {
   id: number
   invoiceNum: string
   invoiceAmount: number
+  taxAmount: number
   customerId: string
   customerName: string
-  posted: boolean
   invoiceDate: string
-  job: string
-  jobPart: string
   poNumber: string
 }
 
@@ -111,8 +92,8 @@ export async function POST(request: NextRequest) {
     console.log('📄 Received PACE invoice webhook:', {
       invoiceNumber,
       invoiceAmount: payload.invoice?.invoiceAmount,
+      taxAmount: payload.invoice?.taxAmount,
       customerName: payload.invoice?.customerName,
-      job: payload.invoice?.job,
       salesDistLines: payload.salesDistributions?.length || 0,
       invoiceExtras: payload.invoiceExtras?.length || 0,
     })
@@ -178,8 +159,8 @@ export async function POST(request: NextRequest) {
       id: invoiceIntegration.id,
       invoiceNumber: invoiceIntegration.invoiceNumber,
       invoiceAmount: payload.invoice?.invoiceAmount,
+      taxAmount: payload.invoice?.taxAmount,
       customerName: payload.invoice?.customerName,
-      job: payload.invoice?.job,
       salesDistLines: payload.salesDistributions?.length || 0,
       invoiceExtras: payload.invoiceExtras?.length || 0,
       status: invoiceIntegration.status,

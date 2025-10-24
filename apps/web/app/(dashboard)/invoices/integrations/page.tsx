@@ -196,8 +196,10 @@ export default function InvoiceIntegrationsPage() {
                               {(invoice.payload as any).invoice.customerName || 'Unknown Customer'}
                             </div>
                             <div className="text-xs text-gray-500">
-                              Job: {(invoice.payload as any).invoice.job || 'N/A'} |
                               Amount: ${((invoice.payload as any).invoice.invoiceAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                              {(invoice.payload as any).invoice.taxAmount > 0 && (
+                                <> | Tax: ${((invoice.payload as any).invoice.taxAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</>
+                              )}
                             </div>
                           </>
                         )}
@@ -312,18 +314,14 @@ export default function InvoiceIntegrationsPage() {
                         <div>
                           <p className="text-xs text-gray-600">Customer</p>
                           <p className="font-semibold text-gray-900">{(selectedInvoice.payload as any).invoice.customerName || 'N/A'}</p>
+                          <p className="text-xs text-gray-500">ID: {(selectedInvoice.payload as any).invoice.customerId || 'N/A'}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-600">Amount</p>
+                          <p className="text-xs text-gray-600">Invoice Amount</p>
                           <p className="font-semibold text-gray-900 text-lg">${((selectedInvoice.payload as any).invoice.invoiceAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-600">Job</p>
-                          <p className="font-medium text-gray-900">{(selectedInvoice.payload as any).invoice.job || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-600">Job Part</p>
-                          <p className="font-medium text-gray-900">{(selectedInvoice.payload as any).invoice.jobPart || 'N/A'}</p>
+                          {(selectedInvoice.payload as any).invoice.taxAmount > 0 && (
+                            <p className="text-xs text-gray-500">Tax: ${((selectedInvoice.payload as any).invoice.taxAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
+                          )}
                         </div>
                         <div>
                           <p className="text-xs text-gray-600">PO Number</p>
@@ -348,18 +346,18 @@ export default function InvoiceIntegrationsPage() {
                           <thead className="bg-gray-50">
                             <tr>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Qty</th>
                               <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Job Part Ref</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {(selectedInvoice.payload as any).salesDistributions.map((line: any, idx: number) => (
                               <tr key={idx} className="hover:bg-gray-50">
                                 <td className="px-3 py-2 text-sm text-gray-900">{line.salesCategoryName || 'N/A'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-600 text-center">{line.quantity || 1}</td>
                                 <td className="px-3 py-2 text-sm text-gray-900 text-right font-medium">
                                   ${(line.amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
                                 </td>
-                                <td className="px-3 py-2 text-sm text-gray-600">{line.jobPartReference || 'N/A'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -378,22 +376,20 @@ export default function InvoiceIntegrationsPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Line #</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Qty</th>
                               <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {(selectedInvoice.payload as any).invoiceExtras.map((extra: any, idx: number) => (
                               <tr key={idx} className="hover:bg-gray-50">
-                                <td className="px-3 py-2 text-sm text-gray-900">{extra.description || 'N/A'}</td>
-                                <td className="px-3 py-2 text-sm text-gray-600">{extra.invoiceExtraTypeName || 'N/A'}</td>
-                                <td className="px-3 py-2 text-sm text-gray-900 text-right">
-                                  ${(extra.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
-                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-900">{extra.invoiceExtraTypeName || 'N/A'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-600 text-center">{extra.lineNum || 'N/A'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-600 text-center">{extra.quantity || 1}</td>
                                 <td className="px-3 py-2 text-sm text-gray-900 text-right font-medium">
-                                  ${(extra.adjustedTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                                  ${(extra.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
                                 </td>
                               </tr>
                             ))}
