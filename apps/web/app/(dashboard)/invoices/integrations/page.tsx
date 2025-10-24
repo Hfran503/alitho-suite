@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 
 interface InvoiceIntegration {
   id: string
@@ -20,7 +19,6 @@ interface InvoiceIntegration {
 }
 
 export default function InvoiceIntegrationsPage() {
-  const router = useRouter()
   const [invoices, setInvoices] = useState<InvoiceIntegration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

@@ -7,15 +7,47 @@ import { db } from '@repo/database'
  * This endpoint receives invoice data from PACE and stores it for later
  * processing and forwarding to NetSuite.
  *
- * Webhook URL to register in PACE (with Basic Auth):
- * https://username:password@yourdomain.com/api/webhooks/pace/invoice
+ * Webhook URL to configure in PACE:
+ * https://calithosuite.com/api/webhooks/pace/invoice
  *
  * Set PACE_WEBHOOK_USERNAME and PACE_WEBHOOK_PASSWORD in your .env file
  */
 
+interface SalesDistribution {
+  id: number
+  invoice: string
+  amount: number
+  salesCategory: string
+  chargeBackAccount: string
+  amountAdjustment: number
+  jobPartReference: string
+  jobProductReference: number
+  glLocation: number | null
+  ioID: string
+  sourceOrganizationCompany: string
+  posted: boolean
+  taxBase: number
+  commBase: number
+  adjustedTotal: number
+}
+
+interface PACEInvoice {
+  id: number
+  invoiceNum: string
+  invoiceAmount: number
+  customer: string
+  posted: boolean
+  invoiceDate: string
+}
+
 interface PACEInvoiceWebhookPayload {
-  invoiceNumber: string
-  [key: string]: any // Accept any other invoice fields
+  invoice: PACEInvoice
+  salesDistributions: SalesDistribution[]
+  metadata: {
+    totalSalesDistLines: number
+    objectType: string
+    exportedAt: string
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -29,7 +61,7 @@ export async function POST(request: NextRequest) {
       if (!authHeader || !authHeader.startsWith('Basic ')) {
         console.warn('PACE Invoice webhook received without Basic Auth')
         return NextResponse.json(
-          { success: false, error: 'Unauthorized' },
+          { status: 'error', error: 'Unauthorized' },
           { status: 401 }
         )
       }
@@ -41,7 +73,7 @@ export async function POST(request: NextRequest) {
       if (username !== expectedUsername || password !== expectedPassword) {
         console.warn('PACE Invoice webhook received with invalid credentials')
         return NextResponse.json(
-          { success: false, error: 'Unauthorized' },
+          { status: 'error', error: 'Unauthorized' },
           { status: 401 }
         )
       }
@@ -50,15 +82,21 @@ export async function POST(request: NextRequest) {
     // Parse the webhook payload
     const payload: PACEInvoiceWebhookPayload = await request.json()
 
+    // Extract invoice number from the nested structure
+    const invoiceNumber = payload.invoice?.invoiceNum
+
     console.log('📄 Received PACE invoice webhook:', {
-      invoiceNumber: payload.invoiceNumber,
+      invoiceNumber,
+      invoiceAmount: payload.invoice?.invoiceAmount,
+      customer: payload.invoice?.customer,
+      salesDistLines: payload.salesDistributions?.length || 0,
     })
 
     // Validate invoice number exists
-    if (!payload.invoiceNumber) {
-      console.error('Invoice webhook missing invoiceNumber')
+    if (!invoiceNumber) {
+      console.error('Invoice webhook missing invoice.invoiceNum')
       return NextResponse.json(
-        { success: false, error: 'invoiceNumber is required' },
+        { status: 'error', error: 'invoice.invoiceNum is required' },
         { status: 400 }
       )
     }
@@ -66,41 +104,46 @@ export async function POST(request: NextRequest) {
     // Check if invoice already exists
     const existingInvoice = await db.invoiceIntegration.findUnique({
       where: {
-        invoiceNumber: payload.invoiceNumber,
+        invoiceNumber: invoiceNumber,
       },
     })
 
     if (existingInvoice) {
-      console.warn(`Invoice ${payload.invoiceNumber} already exists, updating...`)
+      console.warn(`Invoice ${invoiceNumber} already exists, updating...`)
 
       // Update existing invoice
       const updated = await db.invoiceIntegration.update({
         where: {
-          invoiceNumber: payload.invoiceNumber,
+          invoiceNumber: invoiceNumber,
         },
         data: {
-          payload: payload,
+          payload: payload as any, // Cast to any for JSON field
           status: 'pending', // Reset status to pending if re-sent
           retryCount: 0, // Reset retry count
           updatedAt: new Date(),
         },
       })
 
-      return NextResponse.json({
-        success: true,
-        message: 'Invoice updated successfully',
-        invoiceNumber: updated.invoiceNumber,
+      console.log('✅ Updated invoice integration record:', {
         id: updated.id,
+        invoiceNumber: updated.invoiceNumber,
         status: updated.status,
+      })
+
+      return NextResponse.json({
+        status: 'success',
+        message: `Invoice ${invoiceNumber} updated with ${payload.salesDistributions?.length || 0} lines`,
+        invoiceNumber: updated.invoiceNumber,
+        salesDistLines: payload.salesDistributions?.length || 0,
       })
     }
 
     // Create new invoice integration record
     const invoiceIntegration = await db.invoiceIntegration.create({
       data: {
-        invoiceNumber: payload.invoiceNumber,
+        invoiceNumber: invoiceNumber,
         status: 'pending',
-        payload: payload,
+        payload: payload as any, // Cast to any for JSON field
         retryCount: 0,
         maxRetries: 3,
       },
@@ -109,22 +152,19 @@ export async function POST(request: NextRequest) {
     console.log('✅ Created invoice integration record:', {
       id: invoiceIntegration.id,
       invoiceNumber: invoiceIntegration.invoiceNumber,
+      invoiceAmount: payload.invoice?.invoiceAmount,
+      customer: payload.invoice?.customer,
+      salesDistLines: payload.salesDistributions?.length || 0,
       status: invoiceIntegration.status,
     })
 
-    // TODO: Add custom business logic here
-    // Examples:
-    // - Trigger background job to process invoice immediately
-    // - Send notification to accounting team
-    // - Validate invoice data before accepting
-    // - Queue for NetSuite integration
-
+    // Return success response matching your Python test format
     return NextResponse.json({
-      success: true,
-      message: 'Invoice received and queued for processing',
-      invoiceNumber: invoiceIntegration.invoiceNumber,
-      id: invoiceIntegration.id,
-      status: invoiceIntegration.status,
+      status: 'success',
+      message: `Invoice ${invoiceNumber} received with ${payload.salesDistributions?.length || 0} lines`,
+      received_at: new Date().toISOString(),
+      invoiceNumber: invoiceNumber,
+      salesDistLines: payload.salesDistributions?.length || 0,
     })
 
   } catch (error) {
@@ -132,8 +172,8 @@ export async function POST(request: NextRequest) {
 
     // Return 500 on error so PACE can retry
     return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 })
   }
 }
@@ -142,12 +182,21 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     message: 'PACE Invoice Webhook Endpoint',
-    status: 'active',
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
     instructions: 'This endpoint receives POST requests from PACE with invoice data.',
     webhook_url: '/api/webhooks/pace/invoice',
     expected_payload: {
-      invoiceNumber: 'INV-12345 (required)',
-      // Add other expected fields as documentation
+      invoice: {
+        id: 'number',
+        invoiceNum: 'string (required)',
+        invoiceAmount: 'number',
+        customer: 'string',
+        posted: 'boolean',
+        invoiceDate: 'string'
+      },
+      salesDistributions: 'array',
+      metadata: 'object'
     },
   })
 }

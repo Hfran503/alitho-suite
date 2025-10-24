@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { db } from '@repo/database'
 
 /**
  * GET /api/invoices/integrations
  * Fetch all invoice integration records
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const invoices = await db.invoiceIntegration.findMany({
       orderBy: {
