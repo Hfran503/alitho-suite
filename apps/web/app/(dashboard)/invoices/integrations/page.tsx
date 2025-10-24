@@ -190,12 +190,23 @@ export default function InvoiceIntegrationsPage() {
                         </span>
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
-                        <div>Created: {formatDate(invoice.createdAt)}</div>
+                        {invoice.payload && typeof invoice.payload === 'object' && 'invoice' in invoice.payload && (
+                          <>
+                            <div className="font-medium text-gray-900">
+                              {(invoice.payload as any).invoice.customerName || 'Unknown Customer'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Job: {(invoice.payload as any).invoice.job || 'N/A'} |
+                              Amount: ${((invoice.payload as any).invoice.invoiceAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                            </div>
+                          </>
+                        )}
+                        <div className="text-xs">Created: {formatDate(invoice.createdAt)}</div>
                         {invoice.sentToNetsuiteAt && (
-                          <div>Sent to NetSuite: {formatDate(invoice.sentToNetsuiteAt)}</div>
+                          <div className="text-xs">Sent to NetSuite: {formatDate(invoice.sentToNetsuiteAt)}</div>
                         )}
                         {invoice.netsuiteInvoiceId && (
-                          <div className="font-medium text-green-700">
+                          <div className="font-medium text-green-700 text-xs">
                             NetSuite ID: {invoice.netsuiteInvoiceId}
                           </div>
                         )}
@@ -290,12 +301,120 @@ export default function InvoiceIntegrationsPage() {
                 </div>
               )}
 
-              {/* PACE Payload */}
+              {/* User-Friendly Invoice Display */}
+              {selectedInvoice.payload && typeof selectedInvoice.payload === 'object' && 'invoice' in selectedInvoice.payload && (
+                <>
+                  {/* Invoice Header */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Invoice Information</h3>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-600">Customer</p>
+                          <p className="font-semibold text-gray-900">{(selectedInvoice.payload as any).invoice.customerName || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Amount</p>
+                          <p className="font-semibold text-gray-900 text-lg">${((selectedInvoice.payload as any).invoice.invoiceAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Job</p>
+                          <p className="font-medium text-gray-900">{(selectedInvoice.payload as any).invoice.job || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Job Part</p>
+                          <p className="font-medium text-gray-900">{(selectedInvoice.payload as any).invoice.jobPart || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">PO Number</p>
+                          <p className="font-medium text-gray-900">{(selectedInvoice.payload as any).invoice.poNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Invoice Date</p>
+                          <p className="font-medium text-gray-900">{(selectedInvoice.payload as any).invoice.invoiceDate || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sales Distribution Lines */}
+                  {(selectedInvoice.payload as any).salesDistributions && (selectedInvoice.payload as any).salesDistributions.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">
+                        Sales Distribution Lines ({(selectedInvoice.payload as any).salesDistributions.length})
+                      </h3>
+                      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Job Part Ref</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {(selectedInvoice.payload as any).salesDistributions.map((line: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 text-sm text-gray-900">{line.salesCategoryName || 'N/A'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-900 text-right font-medium">
+                                  ${(line.amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-600">{line.jobPartReference || 'N/A'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Invoice Extras */}
+                  {(selectedInvoice.payload as any).invoiceExtras && (selectedInvoice.payload as any).invoiceExtras.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">
+                        Invoice Extras ({(selectedInvoice.payload as any).invoiceExtras.length})
+                      </h3>
+                      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {(selectedInvoice.payload as any).invoiceExtras.map((extra: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 text-sm text-gray-900">{extra.description || 'N/A'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-600">{extra.invoiceExtraTypeName || 'N/A'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-900 text-right">
+                                  ${(extra.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-900 text-right font-medium">
+                                  ${(extra.adjustedTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Raw JSON (Collapsed by default) */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">PACE Invoice Data</h3>
-                <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-xs overflow-x-auto">
-                  {JSON.stringify(selectedInvoice.payload, null, 2)}
-                </pre>
+                <details>
+                  <summary className="text-sm font-semibold text-gray-700 uppercase mb-3 cursor-pointer hover:text-gray-900">
+                    Raw PACE Invoice Data (JSON)
+                  </summary>
+                  <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-xs overflow-x-auto mt-3">
+                    {JSON.stringify(selectedInvoice.payload, null, 2)}
+                  </pre>
+                </details>
               </div>
 
               {/* NetSuite Response */}
