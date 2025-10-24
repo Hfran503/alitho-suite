@@ -34,6 +34,7 @@ model Tenant {
   auditLogs            AuditLog[]
   integrations         Integration[]
   netsuiteIntegration  NetSuiteIntegration?
+  invoiceIntegrations  InvoiceIntegration[]
   shippingLabels       ShippingLabel[]
   shipmentTypeMappings ShipmentTypeMapping[]
   carrierServiceMappings CarrierServiceMapping[]
@@ -683,6 +684,10 @@ enum BatchRowStatus {
 model InvoiceIntegration {
   id                    String   @id @default(cuid())
 
+  // Tenant relationship
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   // Invoice reference
   invoiceNumber         String   @unique
 
@@ -707,6 +712,7 @@ model InvoiceIntegration {
   updatedAt             DateTime @updatedAt
   sentToNetsuiteAt      DateTime?
 
+  @@index([tenantId])
   @@index([status])
   @@index([invoiceNumber])
   @@index([createdAt])

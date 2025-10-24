@@ -84,6 +84,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get the tenant (for single-tenant deployments, get the first/only tenant)
+    const tenant = await db.tenant.findFirst()
+    if (!tenant) {
+      console.error('No tenant found - cannot process invoice')
+      return NextResponse.json(
+        { status: 'error', error: 'No tenant configured' },
+        { status: 500 }
+      )
+    }
+
     // Parse the webhook payload
     const payload: PACEInvoiceWebhookPayload = await request.json()
 
@@ -158,6 +168,7 @@ export async function POST(request: NextRequest) {
     // Create new invoice integration record
     const invoiceIntegration = await db.invoiceIntegration.create({
       data: {
+        tenantId: tenant.id,
         invoiceNumber: invoiceNumber,
         status: 'pending',
         payload: payload as any, // Cast to any for JSON field

@@ -144,14 +144,11 @@ export function netsuiteInvoiceWorker(connection: Redis) {
  */
 async function sendToNetSuite(invoiceIntegration: any) {
   try {
-    // Get tenant ID from the invoice payload
-    // We'll need to determine this from the customer or store it separately
-    // For now, we'll get the first membership's tenant
-    const firstMembership = await db.membership.findFirst()
-    if (!firstMembership) {
-      throw new Error('No tenant found')
+    // Get tenant ID from the invoice integration record
+    const tenantId = invoiceIntegration.tenantId
+    if (!tenantId) {
+      throw new Error('Invoice integration has no tenantId')
     }
-    const tenantId = firstMembership.tenantId
 
     // Get NetSuite integration config
     const netsuiteIntegration = await db.netSuiteIntegration.findUnique({
