@@ -319,24 +319,10 @@ model Integration {
 model NetSuiteIntegration {
   id              String   @id @default(cuid())
 
-  // Sandbox credentials
-  sandboxAccountId       String?
-  sandboxConsumerKey     String?
-  sandboxConsumerSecret  String?
-  sandboxTokenId         String?
-  sandboxTokenSecret     String?
+  // Configuration (credentials stored in AWS Secrets Manager)
   sandboxEnabled         Boolean  @default(false)
-
-  // Production credentials
-  productionAccountId       String?
-  productionConsumerKey     String?
-  productionConsumerSecret  String?
-  productionTokenId         String?
-  productionTokenSecret     String?
-  productionEnabled         Boolean  @default(false)
-
-  // Current mode
-  currentMode     String   @default("sandbox") // "sandbox" or "production"
+  productionEnabled      Boolean  @default(false)
+  currentMode            String   @default("sandbox") // "sandbox" or "production"
 
   // Tenant (one NetSuite integration per tenant)
   tenantId        String   @unique

@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { createAuditLog } from '@/lib/audit'
+import {
+  saveNetSuiteCredentials,
+  getNetSuiteCredentials,
+  deleteNetSuiteCredentials,
+} from '@/lib/secrets'
 
 // GET /api/integrations/netsuite - Get NetSuite configuration
 export async function GET() {
@@ -21,7 +26,7 @@ export async function GET() {
       return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
     }
 
-    // Check if NetSuite integration exists
+    // Check if NetSuite integration exists in database
     const integration = await db.netSuiteIntegration.findUnique({
       where: {
         tenantId: membership.tenantId,
@@ -31,9 +36,6 @@ export async function GET() {
         currentMode: true,
         sandboxEnabled: true,
         productionEnabled: true,
-        // Return masked credentials
-        sandboxAccountId: true,
-        productionAccountId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -51,6 +53,17 @@ export async function GET() {
       })
     }
 
+    // Get credentials from AWS Secrets Manager
+    let sandboxAccountId = ''
+    let productionAccountId = ''
+    try {
+      const credentials = await getNetSuiteCredentials(membership.tenantId)
+      sandboxAccountId = credentials.sandboxAccountId || ''
+      productionAccountId = credentials.productionAccountId || ''
+    } catch (error) {
+      // Credentials not found in AWS Secrets Manager
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -58,8 +71,8 @@ export async function GET() {
         currentMode: integration.currentMode,
         sandboxEnabled: integration.sandboxEnabled,
         productionEnabled: integration.productionEnabled,
-        sandboxAccountId: integration.sandboxAccountId,
-        productionAccountId: integration.productionAccountId,
+        sandboxAccountId,
+        productionAccountId,
         createdAt: integration.createdAt,
         updatedAt: integration.updatedAt,
       },
@@ -104,28 +117,31 @@ export async function POST(req: NextRequest) {
       productionEnabled,
     } = body
 
-    // Prepare update data - only include fields that are provided
+    // Save credentials to AWS Secrets Manager (only if provided)
+    const credentialsToSave: any = {}
+    if (sandboxAccountId !== undefined) credentialsToSave.sandboxAccountId = sandboxAccountId
+    if (sandboxConsumerKey !== undefined) credentialsToSave.sandboxConsumerKey = sandboxConsumerKey
+    if (sandboxConsumerSecret !== undefined) credentialsToSave.sandboxConsumerSecret = sandboxConsumerSecret
+    if (sandboxTokenId !== undefined) credentialsToSave.sandboxTokenId = sandboxTokenId
+    if (sandboxTokenSecret !== undefined) credentialsToSave.sandboxTokenSecret = sandboxTokenSecret
+    if (productionAccountId !== undefined) credentialsToSave.productionAccountId = productionAccountId
+    if (productionConsumerKey !== undefined) credentialsToSave.productionConsumerKey = productionConsumerKey
+    if (productionConsumerSecret !== undefined) credentialsToSave.productionConsumerSecret = productionConsumerSecret
+    if (productionTokenId !== undefined) credentialsToSave.productionTokenId = productionTokenId
+    if (productionTokenSecret !== undefined) credentialsToSave.productionTokenSecret = productionTokenSecret
+
+    // Save to AWS Secrets Manager if there are credentials to save
+    if (Object.keys(credentialsToSave).length > 0) {
+      await saveNetSuiteCredentials(membership.tenantId, credentialsToSave)
+    }
+
+    // Prepare database update data (only mode and enabled flags, NOT credentials)
     const updateData: any = {}
-
-    if (currentMode) updateData.currentMode = currentMode
-
-    // Sandbox fields - only update if provided
-    if (sandboxAccountId !== undefined) updateData.sandboxAccountId = sandboxAccountId
-    if (sandboxConsumerKey !== undefined) updateData.sandboxConsumerKey = sandboxConsumerKey
-    if (sandboxConsumerSecret !== undefined) updateData.sandboxConsumerSecret = sandboxConsumerSecret
-    if (sandboxTokenId !== undefined) updateData.sandboxTokenId = sandboxTokenId
-    if (sandboxTokenSecret !== undefined) updateData.sandboxTokenSecret = sandboxTokenSecret
+    if (currentMode !== undefined) updateData.currentMode = currentMode
     if (sandboxEnabled !== undefined) updateData.sandboxEnabled = sandboxEnabled
-
-    // Production fields - only update if provided
-    if (productionAccountId !== undefined) updateData.productionAccountId = productionAccountId
-    if (productionConsumerKey !== undefined) updateData.productionConsumerKey = productionConsumerKey
-    if (productionConsumerSecret !== undefined) updateData.productionConsumerSecret = productionConsumerSecret
-    if (productionTokenId !== undefined) updateData.productionTokenId = productionTokenId
-    if (productionTokenSecret !== undefined) updateData.productionTokenSecret = productionTokenSecret
     if (productionEnabled !== undefined) updateData.productionEnabled = productionEnabled
 
-    // Create or update NetSuite integration
+    // Create or update NetSuite integration in database (config only, not credentials)
     const integration = await db.netSuiteIntegration.upsert({
       where: {
         tenantId: membership.tenantId,
@@ -133,17 +149,7 @@ export async function POST(req: NextRequest) {
       create: {
         tenantId: membership.tenantId,
         currentMode: currentMode || 'sandbox',
-        sandboxAccountId: sandboxAccountId || null,
-        sandboxConsumerKey: sandboxConsumerKey || null,
-        sandboxConsumerSecret: sandboxConsumerSecret || null,
-        sandboxTokenId: sandboxTokenId || null,
-        sandboxTokenSecret: sandboxTokenSecret || null,
         sandboxEnabled: sandboxEnabled || false,
-        productionAccountId: productionAccountId || null,
-        productionConsumerKey: productionConsumerKey || null,
-        productionConsumerSecret: productionConsumerSecret || null,
-        productionTokenId: productionTokenId || null,
-        productionTokenSecret: productionTokenSecret || null,
         productionEnabled: productionEnabled || false,
       },
       update: updateData,
@@ -200,7 +206,10 @@ export async function DELETE() {
       return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
     }
 
-    // Delete NetSuite integration
+    // Delete credentials from AWS Secrets Manager
+    await deleteNetSuiteCredentials(membership.tenantId)
+
+    // Delete NetSuite integration from database
     await db.netSuiteIntegration.delete({
       where: {
         tenantId: membership.tenantId,

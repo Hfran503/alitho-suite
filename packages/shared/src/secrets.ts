@@ -453,3 +453,131 @@ export async function deleteShipStationApiKey(tenantId: string): Promise<void> {
     }
   }
 }
+
+// ============================================
+// NETSUITE INTEGRATION CREDENTIALS
+// ============================================
+
+export interface NetSuiteCredentials {
+  sandboxAccountId?: string
+  sandboxConsumerKey?: string
+  sandboxConsumerSecret?: string
+  sandboxTokenId?: string
+  sandboxTokenSecret?: string
+  productionAccountId?: string
+  productionConsumerKey?: string
+  productionConsumerSecret?: string
+  productionTokenId?: string
+  productionTokenSecret?: string
+}
+
+/**
+ * Get NetSuite credentials from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to get credentials for
+ * @returns The NetSuite credentials
+ */
+export async function getNetSuiteCredentials(tenantId: string): Promise<NetSuiteCredentials> {
+  const secretName = `calitho-suite/integrations/netsuite/${tenantId}`
+
+  try {
+    const secret = await getSecret(secretName, true)
+    return secret as NetSuiteCredentials
+  } catch (error) {
+    throw new Error(`NetSuite credentials not found for tenant ${tenantId}`)
+  }
+}
+
+/**
+ * Save NetSuite credentials to AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to save credentials for
+ * @param credentials - The NetSuite credentials to save
+ */
+export async function saveNetSuiteCredentials(
+  tenantId: string,
+  credentials: Partial<NetSuiteCredentials>
+): Promise<void> {
+  const secretName = `calitho-suite/integrations/netsuite/${tenantId}`
+
+  // Get existing credentials if they exist
+  let existingSecret: NetSuiteCredentials = {}
+  try {
+    existingSecret = await getSecret(secretName, true)
+  } catch (error) {
+    // Secret doesn't exist yet, will create new one
+  }
+
+  // Merge with new credentials (only update provided fields)
+  const secretValue: NetSuiteCredentials = {
+    sandboxAccountId: credentials.sandboxAccountId ?? existingSecret.sandboxAccountId,
+    sandboxConsumerKey: credentials.sandboxConsumerKey ?? existingSecret.sandboxConsumerKey,
+    sandboxConsumerSecret: credentials.sandboxConsumerSecret ?? existingSecret.sandboxConsumerSecret,
+    sandboxTokenId: credentials.sandboxTokenId ?? existingSecret.sandboxTokenId,
+    sandboxTokenSecret: credentials.sandboxTokenSecret ?? existingSecret.sandboxTokenSecret,
+    productionAccountId: credentials.productionAccountId ?? existingSecret.productionAccountId,
+    productionConsumerKey: credentials.productionConsumerKey ?? existingSecret.productionConsumerKey,
+    productionConsumerSecret: credentials.productionConsumerSecret ?? existingSecret.productionConsumerSecret,
+    productionTokenId: credentials.productionTokenId ?? existingSecret.productionTokenId,
+    productionTokenSecret: credentials.productionTokenSecret ?? existingSecret.productionTokenSecret,
+  }
+
+  const secretString = JSON.stringify(secretValue)
+
+  try {
+    // Try to update existing secret first
+    const updateCommand = new UpdateSecretCommand({
+      SecretId: secretName,
+      SecretString: secretString,
+    })
+
+    await client.send(updateCommand)
+
+    // Update cache
+    secretsCache.set(secretName, secretValue)
+  } catch (error: any) {
+    // If secret doesn't exist, create it
+    if (error.name === 'ResourceNotFoundException') {
+      const createCommand = new CreateSecretCommand({
+        Name: secretName,
+        SecretString: secretString,
+        Description: `NetSuite OAuth credentials for tenant ${tenantId}`,
+        Tags: [
+          { Key: 'Application', Value: 'calitho-suite' },
+          { Key: 'Integration', Value: 'netsuite' },
+          { Key: 'TenantId', Value: tenantId },
+        ],
+      })
+
+      await client.send(createCommand)
+
+      // Update cache
+      secretsCache.set(secretName, secretValue)
+    } else {
+      throw error
+    }
+  }
+}
+
+/**
+ * Delete NetSuite credentials from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to delete credentials for
+ */
+export async function deleteNetSuiteCredentials(tenantId: string): Promise<void> {
+  const secretName = `calitho-suite/integrations/netsuite/${tenantId}`
+
+  try {
+    const deleteCommand = new DeleteSecretCommand({
+      SecretId: secretName,
+      ForceDeleteWithoutRecovery: false, // Allow 30-day recovery window
+    })
+
+    await client.send(deleteCommand)
+
+    // Clear from cache
+    secretsCache.delete(secretName)
+  } catch (error: any) {
+    // Ignore if secret doesn't exist
+    if (error.name !== 'ResourceNotFoundException') {
+      throw error
+    }
+  }
+}
