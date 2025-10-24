@@ -47,6 +47,14 @@ PACE_PASSWORD=Calitho94520!!
   - Expose PACE API through a public endpoint/domain, OR
   - Use SSH tunneling
 
+### 6. NetSuite Integration (Required for invoices)
+```bash
+NETSUITE_RESTLET_URL=https://your-account.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=xxx&deploy=1
+AWS_REGION=us-west-2
+```
+
+**Note:** NetSuite credentials (Account ID, Consumer Key/Secret, Token ID/Secret) are stored in AWS Secrets Manager and retrieved automatically by the application.
+
 ## How to Add Environment Variables in Dokploy
 
 ### Option 1: Through Dokploy UI (Recommended)
@@ -118,17 +126,21 @@ curl -u "CalithoSuiteAPI:Calitho94520!!" \
 
 ## Deployment Checklist
 
-- [ ] All environment variables added in Dokploy
+- [ ] All environment variables added in Dokploy (web AND worker services)
 - [ ] NEXTAUTH_SECRET generated and set
 - [ ] NEXTAUTH_URL matches production domain
 - [ ] Database connection tested
 - [ ] Redis connection tested
 - [ ] S3 credentials configured
 - [ ] PACE API reachable from Dokploy server
+- [ ] NetSuite RESTlet URL configured
+- [ ] AWS Secrets Manager configured with NetSuite credentials
+- [ ] Worker service is running (check logs for "NetSuite Invoice Worker started")
 - [ ] Application redeployed after adding env vars
 - [ ] Verified env vars loaded via `/api/debug/env`
 - [ ] Test login functionality
 - [ ] Test shipments page
+- [ ] Test invoice webhook processing
 
 ## Support
 
