@@ -16,13 +16,13 @@ interface MenuConfig {
   isActive: boolean
 }
 
-const AVAILABLE_ROLES = ['full_admin', 'admin', 'customer_service', 'estimator', 'logistics', 'accounting']
+const AVAILABLE_ROLES = ['full_admin', 'admin', 'customer_service', 'estimators', 'logistics', 'accounting']
 
 const ROLE_LABELS: Record<string, string> = {
   full_admin: 'Full Admin',
   admin: 'Admin',
   customer_service: 'Customer Service',
-  estimator: 'Estimator',
+  estimators: 'Estimators',
   logistics: 'Logistics',
   accounting: 'Accounting'
 }
@@ -31,9 +31,9 @@ const ROLE_COLORS: Record<string, string> = {
   full_admin: 'bg-purple-100 text-purple-800',
   admin: 'bg-blue-100 text-blue-800',
   customer_service: 'bg-green-100 text-green-800',
-  estimator: 'bg-yellow-100 text-yellow-800',
+  estimators: 'bg-yellow-100 text-yellow-800',
   logistics: 'bg-orange-100 text-orange-800',
-  accounting: 'bg-pink-100 text-pink-800'
+  accounting: 'bg-pink-100 text-pink-100'
 }
 
 interface DetectedPage {
