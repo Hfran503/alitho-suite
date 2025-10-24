@@ -120,6 +120,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if invoice already exists
+    // Note: We do this check first, but there's still a race condition
+    // If both webhooks arrive simultaneously, both might pass this check
+    // The upsert operation below handles this safely
     const existingInvoice = await db.invoiceIntegration.findUnique({
       where: {
         invoiceNumber: invoiceNumber,
@@ -229,27 +232,105 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new invoice integration record
-    const invoiceIntegration = await db.invoiceIntegration.create({
-      data: {
-        tenantId: tenant.id,
-        invoiceNumber: invoiceNumber,
-        status: 'pending',
-        payload: payload as any, // Cast to any for JSON field
-        retryCount: 0,
-        maxRetries: 3,
-      },
-    })
+    // Handle race condition: if another request created it simultaneously, accumulate instead
+    let invoiceIntegration
+    try {
+      invoiceIntegration = await db.invoiceIntegration.create({
+        data: {
+          tenantId: tenant.id,
+          invoiceNumber: invoiceNumber,
+          status: 'pending',
+          payload: payload as any,
+          retryCount: 0,
+          maxRetries: 3,
+        },
+      })
 
-    console.log('✅ Created invoice integration record:', {
-      id: invoiceIntegration.id,
-      invoiceNumber: invoiceIntegration.invoiceNumber,
-      invoiceAmount: payload.invoice?.invoiceAmount,
-      taxAmount: payload.invoice?.taxAmount,
-      customerName: payload.invoice?.customerName,
-      salesDistLines: payload.salesDistributions?.length || 0,
-      invoiceExtras: payload.invoiceExtras?.length || 0,
-      status: invoiceIntegration.status,
-    })
+      console.log('✅ Created invoice integration record:', {
+        id: invoiceIntegration.id,
+        invoiceNumber: invoiceIntegration.invoiceNumber,
+        invoiceAmount: payload.invoice?.invoiceAmount,
+        taxAmount: payload.invoice?.taxAmount,
+        customerName: payload.invoice?.customerName,
+        salesDistLines: payload.salesDistributions?.length || 0,
+        invoiceExtras: payload.invoiceExtras?.length || 0,
+        status: invoiceIntegration.status,
+      })
+    } catch (createError: any) {
+      // Race condition: another request created it first
+      // Fetch it and accumulate the data
+      if (createError.code === 'P2002') {
+        console.log(`⚠️  Race condition detected for invoice ${invoiceNumber}, accumulating...`)
+
+        // Fetch the existing record
+        const existing = await db.invoiceIntegration.findUnique({
+          where: { invoiceNumber },
+        })
+
+        if (!existing) {
+          throw new Error('Invoice disappeared after race condition')
+        }
+
+        // Perform accumulation (same logic as above)
+        const existingPayload = existing.payload as unknown as PACEInvoiceWebhookPayload
+        const existingSalesDist = existingPayload.salesDistributions || []
+        const newSalesDist = payload.salesDistributions || []
+        const salesDistMap = new Map()
+        existingSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
+        newSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
+        const combinedSalesDist = Array.from(salesDistMap.values())
+
+        const existingExtras = existingPayload.invoiceExtras || []
+        const newExtras = payload.invoiceExtras || []
+        const extrasMap = new Map()
+        existingExtras.forEach(extra => extrasMap.set(extra.id, extra))
+        newExtras.forEach(extra => extrasMap.set(extra.id, extra))
+        const combinedExtras = Array.from(extrasMap.values())
+
+        const combinedAmount = combinedSalesDist.reduce((sum, dist) => sum + dist.amount, 0) +
+                               combinedExtras.reduce((sum, extra) => sum + extra.price, 0)
+
+        const combinedPayload: PACEInvoiceWebhookPayload = {
+          invoice: {
+            ...payload.invoice,
+            invoiceAmount: combinedAmount,
+            taxAmount: payload.invoice.taxAmount,
+          },
+          salesDistributions: combinedSalesDist,
+          invoiceExtras: combinedExtras,
+          metadata: {
+            ...payload.metadata,
+            totalSalesDistLines: combinedSalesDist.length,
+            totalInvoiceExtras: combinedExtras.length,
+            exportedAt: new Date().toISOString(),
+            paceInvoiceIds: [
+              ...(existingPayload.metadata?.paceInvoiceIds || [existingPayload.invoice.id]),
+              payload.invoice.id
+            ].filter((id, index, self) => self.indexOf(id) === index),
+          },
+        }
+
+        invoiceIntegration = await db.invoiceIntegration.update({
+          where: { invoiceNumber },
+          data: {
+            payload: combinedPayload as any,
+            status: 'pending',
+            retryCount: 0,
+            updatedAt: new Date(),
+          },
+        })
+
+        console.log('✅ Accumulated after race condition:', {
+          invoiceNumber,
+          totalSalesDist: combinedSalesDist.length,
+          totalExtras: combinedExtras.length,
+          totalAmount: combinedAmount.toFixed(2),
+        })
+      } else {
+        // Different error, re-throw
+        throw createError
+      }
+    }
 
     // Queue the invoice for automatic processing with a delay
     // This allows multiple parts to arrive before sending to NetSuite
