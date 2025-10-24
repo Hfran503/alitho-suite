@@ -25,7 +25,7 @@ async function main() {
       icon: 'home',
       parentKey: null,
       order: 0,
-      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator', 'logistics', 'accounting'],
+      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimators', 'logistics', 'accounting'],
       isActive: true
     },
     {
@@ -105,7 +105,7 @@ async function main() {
       icon: 'briefcase',
       parentKey: null,
       order: 3,
-      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator'],
+      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimators'],
       isActive: true
     },
     {
@@ -115,7 +115,7 @@ async function main() {
       icon: 'dollar',
       parentKey: null,
       order: 4,
-      visibleToRoles: ['full_admin', 'admin', 'estimator'],
+      visibleToRoles: ['full_admin', 'admin', 'estimators'],
       isActive: true
     },
     {

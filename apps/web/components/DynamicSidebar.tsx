@@ -115,7 +115,7 @@ function getDefaultMenu(): MenuItem[] {
       icon: 'briefcase',
       parentKey: null,
       order: 3,
-      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator'],
+      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimators'],
       isActive: true
     },
     {
@@ -125,7 +125,7 @@ function getDefaultMenu(): MenuItem[] {
       icon: 'dollar',
       parentKey: null,
       order: 4,
-      visibleToRoles: ['full_admin', 'admin', 'estimator'],
+      visibleToRoles: ['full_admin', 'admin', 'estimators'],
       isActive: true
     },
     {

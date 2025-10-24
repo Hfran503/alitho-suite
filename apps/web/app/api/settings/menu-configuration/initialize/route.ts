@@ -11,7 +11,7 @@ const DEFAULT_MENU_ITEMS = [
     href: '/dashboard',
     icon: 'home',
     order: 0,
-    visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator', 'logistics', 'accounting']
+    visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimators', 'logistics', 'accounting']
   },
   {
     menuKey: 'shipments',
@@ -80,7 +80,7 @@ const DEFAULT_MENU_ITEMS = [
     href: '/rates/estimate',
     icon: 'dollar',
     order: 3,
-    visibleToRoles: ['full_admin', 'admin', 'estimator']
+    visibleToRoles: ['full_admin', 'admin', 'estimators']
   },
   {
     menuKey: 'invoice-integrations',
