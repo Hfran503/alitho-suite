@@ -37,7 +37,8 @@ if [[ "$DATABASE_URL" == *"-pooler."* ]]; then
   echo "⚠️  WARNING: DATABASE_URL uses connection pooler"
 
   # Try to convert pooler URL to direct URL for migrations
-  DIRECT_URL="${DATABASE_URL//-pooler./-.}"
+  # Remove "-pooler" from the hostname (e.g., ep-xxx-pooler.c-2 -> ep-xxx.c-2)
+  DIRECT_URL="${DATABASE_URL//-pooler./.}"
   echo "   Converted to direct URL for migrations"
   echo "   Using: ${DIRECT_URL:0:50}..."
   MIGRATION_DATABASE_URL="$DIRECT_URL"
