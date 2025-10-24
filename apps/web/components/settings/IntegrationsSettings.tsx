@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { EasyPostIntegrationModal } from './EasyPostIntegrationModal'
 import ShipStationIntegrationModal from './ShipStationIntegrationModal'
+import { NetSuiteIntegrationModal } from './NetSuiteIntegrationModal'
 
 interface Integration {
   provider: string
@@ -18,6 +19,7 @@ export function IntegrationsSettings() {
   const [isLoading, setIsLoading] = useState(true)
   const [isEasyPostModalOpen, setIsEasyPostModalOpen] = useState(false)
   const [isShipStationModalOpen, setIsShipStationModalOpen] = useState(false)
+  const [isNetSuiteModalOpen, setIsNetSuiteModalOpen] = useState(false)
 
   useEffect(() => {
     fetchIntegrations()
@@ -32,6 +34,10 @@ export function IntegrationsSettings() {
       // Fetch ShipStation integration status
       const shipstationResponse = await fetch('/api/integrations/shipstation')
       const shipstationData = await shipstationResponse.json()
+
+      // Fetch NetSuite integration status
+      const netsuiteResponse = await fetch('/api/integrations/netsuite')
+      const netsuiteData = await netsuiteResponse.json()
 
       const integrationsList: Integration[] = [
         {
@@ -50,6 +56,14 @@ export function IntegrationsSettings() {
           configured: shipstationData.data?.configured || false,
           enabled: shipstationData.data?.enabled || false,
         },
+        {
+          provider: 'netsuite',
+          name: 'NetSuite',
+          description: 'Cloud ERP system for managing invoices, customers, and business operations.',
+          icon: '💼',
+          configured: netsuiteData.data?.configured || false,
+          enabled: netsuiteData.data?.sandboxEnabled || netsuiteData.data?.productionEnabled || false,
+        },
       ]
 
       setIntegrations(integrationsList)
@@ -65,6 +79,8 @@ export function IntegrationsSettings() {
       setIsEasyPostModalOpen(true)
     } else if (provider === 'shipstation') {
       setIsShipStationModalOpen(true)
+    } else if (provider === 'netsuite') {
+      setIsNetSuiteModalOpen(true)
     }
   }
 
@@ -72,6 +88,7 @@ export function IntegrationsSettings() {
     fetchIntegrations()
     setIsEasyPostModalOpen(false)
     setIsShipStationModalOpen(false)
+    setIsNetSuiteModalOpen(false)
   }
 
   if (isLoading) {
@@ -169,6 +186,14 @@ export function IntegrationsSettings() {
           isOpen={isShipStationModalOpen}
           onClose={() => setIsShipStationModalOpen(false)}
           onSave={handleIntegrationUpdated}
+        />
+      )}
+
+      {isNetSuiteModalOpen && (
+        <NetSuiteIntegrationModal
+          isOpen={isNetSuiteModalOpen}
+          onClose={() => setIsNetSuiteModalOpen(false)}
+          onSuccess={handleIntegrationUpdated}
         />
       )}
     </div>

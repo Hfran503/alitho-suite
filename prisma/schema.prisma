@@ -33,6 +33,7 @@ model Tenant {
   attachments          Attachment[]
   auditLogs            AuditLog[]
   integrations         Integration[]
+  netsuiteIntegration  NetSuiteIntegration?
   shippingLabels       ShippingLabel[]
   shipmentTypeMappings ShipmentTypeMapping[]
   carrierServiceMappings CarrierServiceMapping[]
@@ -309,6 +310,44 @@ model Integration {
   @@index([tenantId])
   @@index([provider])
   @@index([enabled])
+}
+
+// ============================================
+// NETSUITE INTEGRATION
+// ============================================
+
+model NetSuiteIntegration {
+  id              String   @id @default(cuid())
+
+  // Sandbox credentials
+  sandboxAccountId       String?
+  sandboxConsumerKey     String?
+  sandboxConsumerSecret  String?
+  sandboxTokenId         String?
+  sandboxTokenSecret     String?
+  sandboxEnabled         Boolean  @default(false)
+
+  // Production credentials
+  productionAccountId       String?
+  productionConsumerKey     String?
+  productionConsumerSecret  String?
+  productionTokenId         String?
+  productionTokenSecret     String?
+  productionEnabled         Boolean  @default(false)
+
+  // Current mode
+  currentMode     String   @default("sandbox") // "sandbox" or "production"
+
+  // Tenant (one NetSuite integration per tenant)
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([currentMode])
 }
 
 // ============================================
