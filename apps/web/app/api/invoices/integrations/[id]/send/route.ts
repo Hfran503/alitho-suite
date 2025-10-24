@@ -10,7 +10,7 @@ import crypto from 'crypto'
  * Manually send an invoice to NetSuite RESTlet
  */
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -83,7 +83,7 @@ export async function POST(
     }
 
     // Determine which credentials to use based on current mode
-    let accountId =
+    const rawAccountId =
       netsuiteIntegration.currentMode === 'sandbox'
         ? credentials.sandboxAccountId
         : credentials.productionAccountId
@@ -104,10 +104,10 @@ export async function POST(
         ? credentials.sandboxTokenSecret
         : credentials.productionTokenSecret
 
-    // Normalize account ID format for NetSuite TBA
+    // Normalize account ID format for NetSuite TBA (if it exists)
     // NetSuite expects uppercase with underscores: TSTDRV123456_SB1
     // But some users might enter it with hyphens or lowercase
-    accountId = accountId.toUpperCase().replace(/-/g, '_')
+    const accountId = rawAccountId?.toUpperCase().replace(/-/g, '_')
 
     // Validate credentials
     if (!accountId || !consumerKey || !consumerSecret || !tokenId || !tokenSecret) {
@@ -150,22 +150,23 @@ export async function POST(
     const invoicePayload = invoiceIntegration.payload
 
     // Generate OAuth 1.0 signature for NetSuite RESTlet
+    // At this point all credentials are validated and non-null
     const oauthParams = generateOAuthSignature(
       restletUrl,
       'POST',
-      accountId,
-      consumerKey,
-      consumerSecret,
-      tokenId,
-      tokenSecret
+      accountId!,
+      consumerKey!,
+      consumerSecret!,
+      tokenId!,
+      tokenSecret!
     )
 
     console.log('Sending to NetSuite RESTlet:', {
       url: restletUrl,
       mode: netsuiteIntegration.currentMode,
-      accountId,
-      consumerKeyPrefix: consumerKey.substring(0, 10) + '...',
-      tokenIdPrefix: tokenId.substring(0, 10) + '...',
+      accountId: accountId!,
+      consumerKeyPrefix: consumerKey!.substring(0, 10) + '...',
+      tokenIdPrefix: tokenId!.substring(0, 10) + '...',
       invoiceNumber: invoiceIntegration.invoiceNumber,
     })
     console.log('OAuth Header:', oauthParams)
@@ -210,7 +211,7 @@ export async function POST(
           data: {
             status: 'completed',
             netsuiteResponse: responseData,
-            netsuiteInvoiceId: netsuiteInvoiceId,
+            netsuiteInvoiceId: netsuiteInvoiceId ? String(netsuiteInvoiceId) : null,
             errorMessage: null,
             sentToNetsuiteAt: new Date(),
           },
@@ -289,7 +290,9 @@ export async function POST(
 
 /**
  * Transform PACE invoice payload to NetSuite SuiteTalk invoice format
+ * Currently unused - reserved for future SuiteTalk API integration
  */
+// @ts-expect-error - Function reserved for future use
 function transformToSuiteTalkInvoice(payload: any): any {
   const invoice = payload.invoice
   const salesDistributions = payload.salesDistributions || []

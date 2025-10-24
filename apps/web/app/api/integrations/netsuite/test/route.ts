@@ -53,14 +53,14 @@ export async function GET() {
 
     // Get current mode credentials
     const mode = netsuiteIntegration.currentMode
-    let accountId = mode === 'sandbox' ? credentials.sandboxAccountId : credentials.productionAccountId
+    const rawAccountId = mode === 'sandbox' ? credentials.sandboxAccountId : credentials.productionAccountId
     const consumerKey = mode === 'sandbox' ? credentials.sandboxConsumerKey : credentials.productionConsumerKey
     const consumerSecret = mode === 'sandbox' ? credentials.sandboxConsumerSecret : credentials.productionConsumerSecret
     const tokenId = mode === 'sandbox' ? credentials.sandboxTokenId : credentials.productionTokenId
     const tokenSecret = mode === 'sandbox' ? credentials.sandboxTokenSecret : credentials.productionTokenSecret
 
-    // Normalize account ID
-    accountId = accountId.toUpperCase().replace(/-/g, '_')
+    // Normalize account ID (if it exists)
+    const accountId = rawAccountId?.toUpperCase().replace(/-/g, '_')
 
     // Check if all credentials exist
     const hasAllCredentials = !!(accountId && consumerKey && consumerSecret && tokenId && tokenSecret)
@@ -91,14 +91,15 @@ export async function GET() {
     }
 
     // Generate OAuth header for GET request
+    // At this point we know all credentials exist due to hasAllCredentials check
     const oauthHeader = generateOAuthSignature(
       restletUrl,
       'GET',
-      accountId,
-      consumerKey,
-      consumerSecret,
-      tokenId,
-      tokenSecret
+      accountId!,
+      consumerKey!,
+      consumerSecret!,
+      tokenId!,
+      tokenSecret!
     )
 
     // Make test request
@@ -122,9 +123,9 @@ export async function GET() {
         success: response.ok,
         test: 'NetSuite TBA Authentication Test',
         mode,
-        accountId,
-        consumerKeyPrefix: consumerKey.substring(0, 10) + '...',
-        tokenIdPrefix: tokenId.substring(0, 10) + '...',
+        accountId: accountId!,
+        consumerKeyPrefix: consumerKey!.substring(0, 10) + '...',
+        tokenIdPrefix: tokenId!.substring(0, 10) + '...',
         restletUrl,
         httpStatus: response.status,
         httpStatusText: response.statusText,

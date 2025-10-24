@@ -111,6 +111,8 @@ export default function InvoiceIntegrationsPage() {
 
       const data = await response.json()
 
+      console.log('NetSuite send response:', { status: response.status, data })
+
       if (response.ok && data.success) {
         setSendSuccess('Invoice sent to NetSuite successfully!')
         // Refresh the invoice list to get updated status
@@ -127,7 +129,9 @@ export default function InvoiceIntegrationsPage() {
           }
         }
       } else {
-        setSendError(data.error || 'Failed to send invoice to NetSuite')
+        const errorMsg = data.error || 'Failed to send invoice to NetSuite'
+        console.error('NetSuite send error:', errorMsg, data)
+        setSendError(errorMsg)
       }
     } catch (err) {
       setSendError(

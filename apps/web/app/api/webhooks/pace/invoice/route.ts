@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@repo/database'
+import { queueNetsuiteInvoice } from '@/lib/queue/netsuite-invoice-queue'
 
 /**
  * PACE Invoice Webhook Handler
  *
- * This endpoint receives invoice data from PACE and stores it for later
- * processing and forwarding to NetSuite.
+ * This endpoint receives invoice data from PACE, stores it, and automatically
+ * queues it for processing and forwarding to NetSuite.
  *
  * Webhook URL to configure in PACE:
  * https://calithosuite.com/api/webhooks/pace/invoice
@@ -136,11 +137,21 @@ export async function POST(request: NextRequest) {
         status: updated.status,
       })
 
+      // Queue the invoice for automatic processing
+      try {
+        await queueNetsuiteInvoice(updated.id, updated.invoiceNumber)
+        console.log(`🔄 Queued updated invoice ${invoiceNumber} for NetSuite processing`)
+      } catch (queueError) {
+        console.error('Failed to queue invoice:', queueError)
+        // Don't fail the webhook, just log the error
+      }
+
       return NextResponse.json({
         status: 'success',
-        message: `Invoice ${invoiceNumber} updated with ${payload.salesDistributions?.length || 0} lines`,
+        message: `Invoice ${invoiceNumber} updated and queued for NetSuite`,
         invoiceNumber: updated.invoiceNumber,
         salesDistLines: payload.salesDistributions?.length || 0,
+        queued: true,
       })
     }
 
@@ -166,13 +177,23 @@ export async function POST(request: NextRequest) {
       status: invoiceIntegration.status,
     })
 
-    // Return success response matching your Python test format
+    // Queue the invoice for automatic processing
+    try {
+      await queueNetsuiteInvoice(invoiceIntegration.id, invoiceIntegration.invoiceNumber)
+      console.log(`🔄 Queued invoice ${invoiceNumber} for NetSuite processing`)
+    } catch (queueError) {
+      console.error('Failed to queue invoice:', queueError)
+      // Don't fail the webhook, just log the error
+    }
+
+    // Return success response
     return NextResponse.json({
       status: 'success',
-      message: `Invoice ${invoiceNumber} received with ${payload.salesDistributions?.length || 0} lines`,
+      message: `Invoice ${invoiceNumber} received and queued for NetSuite`,
       received_at: new Date().toISOString(),
       invoiceNumber: invoiceNumber,
       salesDistLines: payload.salesDistributions?.length || 0,
+      queued: true,
     })
 
   } catch (error) {
