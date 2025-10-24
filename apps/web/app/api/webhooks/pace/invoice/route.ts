@@ -57,18 +57,11 @@ export async function POST(request: NextRequest) {
     const expectedUsername = process.env.PACE_WEBHOOK_USERNAME
     const expectedPassword = process.env.PACE_WEBHOOK_PASSWORD
 
-    console.log('🔐 Auth Debug:', {
-      hasAuthHeader: !!authHeader,
-      hasExpectedUsername: !!expectedUsername,
-      hasExpectedPassword: !!expectedPassword,
-      authHeaderPreview: authHeader ? authHeader.substring(0, 20) + '...' : 'none'
-    })
-
     if (expectedUsername && expectedPassword) {
       if (!authHeader || !authHeader.startsWith('Basic ')) {
         console.warn('PACE Invoice webhook received without Basic Auth')
         return NextResponse.json(
-          { status: 'error', error: 'Unauthorized - Missing Auth Header' },
+          { status: 'error', error: 'Unauthorized' },
           { status: 401 }
         )
       }
@@ -77,13 +70,10 @@ export async function POST(request: NextRequest) {
       const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8')
       const [username, password] = credentials.split(':')
 
-      console.log('🔑 Credentials received:', { username, passwordLength: password?.length })
-
       if (username !== expectedUsername || password !== expectedPassword) {
         console.warn('PACE Invoice webhook received with invalid credentials')
-        console.log('Expected:', { username: expectedUsername, passwordLength: expectedPassword?.length })
         return NextResponse.json(
-          { status: 'error', error: 'Unauthorized - Invalid Credentials' },
+          { status: 'error', error: 'Unauthorized' },
           { status: 401 }
         )
       }
