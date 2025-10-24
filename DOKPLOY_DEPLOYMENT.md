@@ -104,6 +104,22 @@ After deploying, you can verify environment variables are loaded:
 **Cause:** DATABASE_URL not set or incorrect
 **Fix:** Verify connection string in Dokploy environment settings
 
+### Issue 3a: TLS/SSL connection errors (P1011)
+**Error:** `Error: P1011: Error opening a TLS connection: error:0A00041A:SSL routines:ssl3_read_bytes:tlsv1 alert decode error`
+
+**Cause:** Missing SSL parameters in DATABASE_URL or SSL version incompatibility
+
+**Fix:** Ensure your DATABASE_URL includes SSL parameters:
+```bash
+# Correct format for Neon:
+DATABASE_URL="postgresql://user:password@ep-xxx.c-2.us-east-1.aws.neon.tech/dbname?sslmode=require"
+
+# Or with additional SSL parameters:
+DATABASE_URL="postgresql://user:password@ep-xxx.c-2.us-east-1.aws.neon.tech/dbname?sslmode=require&sslaccept=strict"
+```
+
+**Note:** The startup script ([start.sh](start.sh)) automatically adds these SSL parameters for Neon databases, but you should include them in your environment variables to be safe.
+
 ### Issue 4: NextAuth errors / Can't login
 **Cause:** NEXTAUTH_SECRET or NEXTAUTH_URL not set
 **Fix:** Set both variables and ensure NEXTAUTH_URL matches your domain

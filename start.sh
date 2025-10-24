@@ -46,6 +46,22 @@ if [[ "$DATABASE_URL" == *"-pooler."* ]]; then
   echo "   Using direct connection for migrations only"
 fi
 
+# Ensure SSL parameters are present in the connection string
+if [[ "$MIGRATION_DATABASE_URL" == *"neon.tech"* ]] && [[ "$MIGRATION_DATABASE_URL" != *"sslmode="* ]]; then
+  echo "⚠️  Adding SSL parameters for Neon database connection"
+
+  # Check if URL already has query parameters
+  if [[ "$MIGRATION_DATABASE_URL" == *"?"* ]]; then
+    # Append to existing parameters
+    MIGRATION_DATABASE_URL="${MIGRATION_DATABASE_URL}&sslmode=require&sslaccept=strict"
+  else
+    # Add new parameters
+    MIGRATION_DATABASE_URL="${MIGRATION_DATABASE_URL}?sslmode=require&sslaccept=strict"
+  fi
+
+  echo "   SSL parameters added: sslmode=require&sslaccept=strict"
+fi
+
 # Try to run migrations (allow output to stream)
 set +e  # Don't exit on error
 env DATABASE_URL="$MIGRATION_DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
