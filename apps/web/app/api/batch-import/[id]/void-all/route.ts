@@ -84,7 +84,7 @@ export async function POST(
     const paceShipmentIds = new Set<number>()
     const paceCartonIds = new Set<number>()
 
-    successRows.forEach(r => {
+    successRows.forEach((r: typeof successRows[number]) => {
       if (r.paceJobShipmentId) paceShipmentIds.add(r.paceJobShipmentId)
       if (r.paceCartonId) paceCartonIds.add(r.paceCartonId)
     })

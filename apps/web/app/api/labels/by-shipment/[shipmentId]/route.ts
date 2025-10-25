@@ -33,19 +33,21 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid shipment ID' }, { status: 400 })
     }
 
-    // Fetch only ACTIVE labels from database for this shipment
+    // Fetch labels from database for this shipment (exclude voided/refunded)
     const labels = await db.shippingLabel.findMany({
       where: {
         tenantId: membership.tenantId,
         paceShipmentId: shipmentId,
-        status: 'active', // Only fetch active labels, exclude voided/refunded
+        status: {
+          notIn: ['voided', 'refunded'], // Exclude voided and refunded labels
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     })
 
-    // Separate outbound and return labels (both are already active)
+    // Separate outbound and return labels
     const outboundLabels = labels.filter(l => !l.isReturnLabel)
     const returnLabels = labels.filter(l => l.isReturnLabel)
 

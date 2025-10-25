@@ -34,11 +34,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Find the shipping label in database
+    // Allow active, delivered, or in_transit labels (exclude voided/refunded)
     const label = await db.shippingLabel.findFirst({
       where: {
         tenantId: membership.tenantId,
         paceCartonId: parseInt(cartonId),
-        status: 'active', // Only return active labels
+        status: {
+          notIn: ['voided', 'refunded'], // Exclude voided and refunded labels
+        },
       },
       orderBy: {
         createdAt: 'desc', // Get the most recent label if there are multiple
