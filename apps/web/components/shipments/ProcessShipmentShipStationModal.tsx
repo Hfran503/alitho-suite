@@ -121,7 +121,7 @@ export function ProcessShipmentShipStationModal({
 
   // Job items for content selection
   const [jobItems, setJobItems] = useState<{
-    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number }>
+    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number; po?: string }>
     products: Array<{ id: number; description: string; productID?: string }>
     parts: Array<{ id: string; description: string; partName?: string }>
     materials: Array<{ id: number; description: string; materialID?: string; jobPart?: string; qtyRequired?: number; plannedQuantity?: number }>
@@ -974,9 +974,21 @@ export function ProcessShipmentShipStationModal({
     }
     // Add components
     jobItems.components.forEach((comp) => {
+      // Build label: ItemNumber - Description | PO: XXX | Qty: YYY
+      let label = comp.itemNumber || comp.description
+      if (comp.itemNumber && comp.description) {
+        label += ` - ${comp.description}`
+      }
+      if (comp.po) {
+        label += ` | PO: ${comp.po}`
+      }
+      if (comp.qtyOrdered) {
+        label += ` | Qty: ${comp.qtyOrdered}`
+      }
+
       itemGroups.components.push({
         value: `component:${comp.id}`,
-        label: `${comp.itemNumber || comp.description} (Qty: ${comp.qtyOrdered || 0})`,
+        label,
         orderedQty: comp.qtyOrdered,
       })
     })
@@ -1158,7 +1170,7 @@ export function ProcessShipmentShipStationModal({
                                         }}
                                       />
                                       {/* Dropdown - Fixed position centered */}
-                                      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-96 bg-white border border-gray-300 rounded-lg shadow-xl z-[100] max-h-[80vh] overflow-hidden">
+                                      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] bg-white border border-gray-300 rounded-lg shadow-xl z-[100] max-h-[85vh] overflow-hidden">
                                       {/* Header with Add Selected button */}
                                       <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between">
                                         <span className="text-xs font-semibold text-gray-700">
@@ -1209,7 +1221,7 @@ export function ProcessShipmentShipStationModal({
                                       </div>
 
                                       {/* Items grouped by type */}
-                                      <div className="py-1 overflow-y-auto max-h-80">
+                                      <div className="py-1 overflow-y-auto max-h-[calc(85vh-4rem)]">
                                         {itemGroups.job.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">

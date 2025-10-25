@@ -72,7 +72,7 @@ export function ProcessShipmentParcelModal({
 
   // Job items for content selection
   const [jobItems, setJobItems] = useState<{
-    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number }>
+    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number; po?: string }>
     products: Array<{ id: number; description: string; productID?: string }>
     parts: Array<{ id: string; description: string; partName?: string }>
   } | null>(null)
@@ -632,7 +632,7 @@ function Step1ParcelDetails({
   setCartons: (cartons: CartonConfig[]) => void
   shipment: any
   jobItems: {
-    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number }>
+    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number; po?: string }>
     products: Array<{ id: number; description: string; productID?: string }>
     parts: Array<{ id: string; description: string; partName?: string }>
   } | null
@@ -774,8 +774,10 @@ function Step1ParcelDetails({
                           <optgroup label="━━━ Components ━━━">
                             {jobItems.components.map((comp) => (
                               <option key={`component:${comp.id}`} value={`component:${comp.id}`}>
-                                {comp.description} {comp.itemNumber ? `(${comp.itemNumber})` : ''}{' '}
-                                {comp.qtyOrdered ? `- Qty: ${comp.qtyOrdered}` : ''}
+                                {comp.itemNumber || comp.description}
+                                {comp.itemNumber && comp.description ? ` - ${comp.description}` : ''}
+                                {comp.po ? ` | PO: ${comp.po}` : ''}
+                                {comp.qtyOrdered ? ` | Qty: ${comp.qtyOrdered}` : ''}
                               </option>
                             ))}
                           </optgroup>

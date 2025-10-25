@@ -187,6 +187,7 @@ export async function GET(
           description: data.description || `Component ${data.id}`,
           itemNumber: data.u_itemNumber,
           qtyOrdered: data.qtyOrdered,
+          po: data.u_po,
         }
       })
     )
