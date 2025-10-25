@@ -115,14 +115,16 @@ export function ProcessShipmentShipStationModal({
   ])
 
   // Carriers and packages state
+  const [_carriers, setCarriers] = useState<Carrier[]>([])
   const [allCarrierPackages, setAllCarrierPackages] = useState<CarrierPackage[]>([])
-  const [loadingPackages, setLoadingPackages] = useState(false)
+  const [_loadingPackages, setLoadingPackages] = useState(false)
 
   // Job items for content selection
   const [jobItems, setJobItems] = useState<{
     components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number }>
     products: Array<{ id: number; description: string; productID?: string }>
     parts: Array<{ id: string; description: string; partName?: string }>
+    materials: Array<{ id: number; description: string; materialID?: string; jobPart?: string; qtyRequired?: number; plannedQuantity?: number }>
   } | null>(null)
   const [loadingItems, setLoadingItems] = useState(false)
 
@@ -166,6 +168,7 @@ export function ProcessShipmentShipStationModal({
   // Step 4 data - Ship Date and Return Label Options
   const [shipDate, setShipDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [isReturnLabel, setIsReturnLabel] = useState(false)
+  const [returnServiceCode, setReturnServiceCode] = useState<string>('')
   const [rmaNumber, setRmaNumber] = useState('')
   const [labelMessages, setLabelMessages] = useState({
     reference1: '',
@@ -184,6 +187,10 @@ export function ProcessShipmentShipStationModal({
     notificationsEmail: '',
     confirmation: 'none' as 'none' | 'delivery' | 'signature' | 'adult_signature' | 'direct_signature',
   })
+
+  // Multi-select dropdown state
+  const [isMultiSelectOpen, setIsMultiSelectOpen] = useState(false)
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
 
   // Set default reference 1 when modal opens: Job# - CL{ShipmentID}
   useEffect(() => {
@@ -333,6 +340,7 @@ export function ProcessShipmentShipStationModal({
         }
         const carriersData = await carriersResponse.json()
         const loadedCarriers: Carrier[] = carriersData.data.carriers || []
+        setCarriers(loadedCarriers)
 
         // Load packages for all carriers
         const allPackages: CarrierPackage[] = []
@@ -517,6 +525,12 @@ export function ProcessShipmentShipStationModal({
         return
       }
 
+      // Validate return label service selection if return label is requested
+      if (isReturnLabel && !returnServiceCode) {
+        setError('Please select a service for the return label')
+        return
+      }
+
       // Return labels don't require outbound label ID (it's optional for linking)
 
       setIsLoading(true)
@@ -637,7 +651,7 @@ export function ProcessShipmentShipStationModal({
               body: JSON.stringify({
                 shipmentId: shipment.id,
                 carrierId: selectedRate.carrierId,
-                serviceCode: selectedRate.serviceCode,
+                serviceCode: returnServiceCode, // Use the selected return service code
                 shipFrom: toAddress, // Reversed - customer ships back
                 shipTo: fromAddress, // Reversed - to warehouse
                 packages,
@@ -678,6 +692,13 @@ export function ProcessShipmentShipStationModal({
         // Save return label to database if created
         if (newLabelData.return) {
           try {
+            // Get the return service name from the rates
+            const returnRate = rates.find(r =>
+              r.carrierCode === selectedRate.carrierCode &&
+              r.serviceCode === returnServiceCode
+            )
+            const returnServiceName = returnRate?.service || selectedRate.service
+
             const saveReturnLabelResponse = await fetch('/api/labels', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -689,7 +710,7 @@ export function ProcessShipmentShipStationModal({
                 trackingNumber: newLabelData.return.trackingNumber,
                 labelUrl: newLabelData.return.labelUrl,
                 carrier: selectedRate.carrier,
-                service: selectedRate.service,
+                service: returnServiceName, // Use the return service name
                 shipFrom: toAddress, // Reversed for return
                 shipTo: fromAddress, // Reversed for return
                 cost: newLabelData.return.totalCost,
@@ -928,35 +949,63 @@ export function ProcessShipmentShipStationModal({
     setCartons(newCartons)
   }
 
-  // Prepare items for dropdown
-  const allItems: Array<{ value: string; label: string }> = []
+  // Prepare items for dropdown with metadata - grouped by type
+  const itemGroups: {
+    job: Array<{ value: string; label: string; plannedQty?: number; orderedQty?: number }>
+    components: Array<{ value: string; label: string; plannedQty?: number; orderedQty?: number }>
+    products: Array<{ value: string; label: string; plannedQty?: number; orderedQty?: number }>
+    parts: Array<{ value: string; label: string; plannedQty?: number; orderedQty?: number }>
+    materials: Array<{ value: string; label: string; plannedQty?: number; orderedQty?: number }>
+  } = {
+    job: [],
+    components: [],
+    products: [],
+    parts: [],
+    materials: [],
+  }
+
   if (jobItems) {
     // Add job itself as an option
     if (shipment?.job) {
-      allItems.push({
+      itemGroups.job.push({
         value: `job:${shipment.job}`,
-        label: `Job: ${shipment.job}`,
+        label: `Job ${shipment.job}`,
       })
     }
     // Add components
     jobItems.components.forEach((comp) => {
-      allItems.push({
+      itemGroups.components.push({
         value: `component:${comp.id}`,
-        label: `Component: ${comp.itemNumber || comp.description} (Qty: ${comp.qtyOrdered || 0})`,
+        label: `${comp.itemNumber || comp.description} (Qty: ${comp.qtyOrdered || 0})`,
+        orderedQty: comp.qtyOrdered,
       })
     })
     // Add products
     jobItems.products.forEach((prod) => {
-      allItems.push({
+      itemGroups.products.push({
         value: `product:${prod.id}`,
-        label: `Product: ${prod.productID || prod.description}`,
+        label: `${prod.productID || prod.description}`,
       })
     })
     // Add parts
     jobItems.parts.forEach((part) => {
-      allItems.push({
+      itemGroups.parts.push({
         value: part.id, // Already in format "part:jobId:partNum"
-        label: `Part: ${part.partName || part.description}`,
+        label: `${part.partName || part.description}`,
+      })
+    })
+    // Add materials
+    jobItems.materials?.forEach((material) => {
+      const qtyDisplay = material.plannedQuantity
+        ? `Planned: ${material.plannedQuantity}${material.qtyRequired ? ` / Required: ${material.qtyRequired}` : ''}`
+        : material.qtyRequired
+        ? `Required: ${material.qtyRequired}`
+        : ''
+
+      itemGroups.materials.push({
+        value: `material:${material.id}`,
+        label: `${material.materialID || material.description}${material.jobPart ? ` (Part ${material.jobPart})` : ''}${qtyDisplay ? ` - ${qtyDisplay}` : ''}`,
+        plannedQty: material.plannedQuantity,
       })
     })
   }
@@ -1052,7 +1101,11 @@ export function ProcessShipmentShipStationModal({
                     </svg>
                     <div>
                       <h3 className="text-sm font-semibold text-gray-900">Configure Cartons</h3>
-                      <p className="text-xs text-gray-700 mt-0.5">Add cartons with dimensions, weight, and contents.</p>
+                      <p className="text-xs text-gray-700 mt-0.5">
+                        Add cartons with dimensions, weight, and contents.
+                        <span className="font-semibold text-blue-800"> Tip: </span>
+                        Set item quantities per carton, then specify how many identical cartons to ship.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1061,32 +1114,443 @@ export function ProcessShipmentShipStationModal({
                 <div className="space-y-3">
                   {cartons.map((carton, cartonIndex) => (
                     <div key={cartonIndex} className="border-2 border-gray-200 rounded-lg bg-white shadow-sm">
-                      {/* Carton Header */}
-                      <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                        <h4 className="text-sm font-bold text-gray-900">Carton {cartonIndex + 1}</h4>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => addContent(cartonIndex)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            Add
-                          </button>
-                          {cartons.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeCarton(cartonIndex)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                              Remove
-                            </button>
-                          )}
+                      {/* Carton Header - Side by Side Layout */}
+                      <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Left Side - Carton Info */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="text-sm font-bold text-gray-900">Carton {cartonIndex + 1}</h4>
+                                <button
+                                  type="button"
+                                  onClick={() => addContent(cartonIndex)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 hover:border-green-300 transition-colors"
+                                  title="Add another item to this carton"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  Add Item
+                                </button>
+
+                                {/* Multi-select dropdown */}
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsMultiSelectOpen(!isMultiSelectOpen)}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                  >
+                                    + Add Multiple
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </button>
+
+                                  {isMultiSelectOpen && (
+                                    <>
+                                      {/* Backdrop */}
+                                      <div
+                                        className="fixed inset-0 bg-black bg-opacity-25 z-[90]"
+                                        onClick={() => {
+                                          setIsMultiSelectOpen(false)
+                                          setSelectedItems(new Set())
+                                        }}
+                                      />
+                                      {/* Dropdown - Fixed position centered */}
+                                      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-96 bg-white border border-gray-300 rounded-lg shadow-xl z-[100] max-h-[80vh] overflow-hidden">
+                                      {/* Header with Add Selected button */}
+                                      <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between">
+                                        <span className="text-xs font-semibold text-gray-700">
+                                          {selectedItems.size} selected
+                                        </span>
+                                        <div className="flex gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (selectedItems.size > 0) {
+                                                const newCartons = [...cartons]
+                                                const allItemsFlat = [
+                                                  ...itemGroups.job,
+                                                  ...itemGroups.components,
+                                                  ...itemGroups.products,
+                                                  ...itemGroups.parts,
+                                                  ...itemGroups.materials,
+                                                ]
+
+                                                newCartons[cartonIndex].contents = Array.from(selectedItems).map(itemValue => {
+                                                  const item = allItemsFlat.find(i => i.value === itemValue)
+                                                  return {
+                                                    itemId: itemValue,
+                                                    quantity: item?.plannedQty || item?.orderedQty || 0,
+                                                  }
+                                                })
+                                                setCartons(newCartons)
+                                                setSelectedItems(new Set())
+                                                setIsMultiSelectOpen(false)
+                                              }
+                                            }}
+                                            disabled={selectedItems.size === 0}
+                                            className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                          >
+                                            Add Selected
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedItems(new Set())
+                                              setIsMultiSelectOpen(false)
+                                            }}
+                                            className="px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Items grouped by type */}
+                                      <div className="py-1 overflow-y-auto max-h-80">
+                                        {itemGroups.job.length > 0 && (
+                                          <div>
+                                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
+                                              <span>JOB</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const newSelected = new Set(selectedItems)
+                                                  itemGroups.job.forEach(item => newSelected.add(item.value))
+                                                  setSelectedItems(newSelected)
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 text-xs"
+                                              >
+                                                Select All
+                                              </button>
+                                            </div>
+                                            {itemGroups.job.map((item) => (
+                                              <label key={item.value} className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedItems.has(item.value)}
+                                                  onChange={(e) => {
+                                                    const newSelected = new Set(selectedItems)
+                                                    if (e.target.checked) {
+                                                      newSelected.add(item.value)
+                                                    } else {
+                                                      newSelected.delete(item.value)
+                                                    }
+                                                    setSelectedItems(newSelected)
+                                                  }}
+                                                  className="mr-2"
+                                                />
+                                                <span className="text-xs">{item.label}</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {itemGroups.components.length > 0 && (
+                                          <div>
+                                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
+                                              <span>COMPONENTS</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const newSelected = new Set(selectedItems)
+                                                  itemGroups.components.forEach(item => newSelected.add(item.value))
+                                                  setSelectedItems(newSelected)
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 text-xs"
+                                              >
+                                                Select All
+                                              </button>
+                                            </div>
+                                            {itemGroups.components.map((item) => (
+                                              <label key={item.value} className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedItems.has(item.value)}
+                                                  onChange={(e) => {
+                                                    const newSelected = new Set(selectedItems)
+                                                    if (e.target.checked) {
+                                                      newSelected.add(item.value)
+                                                    } else {
+                                                      newSelected.delete(item.value)
+                                                    }
+                                                    setSelectedItems(newSelected)
+                                                  }}
+                                                  className="mr-2"
+                                                />
+                                                <span className="text-xs">{item.label}</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {itemGroups.products.length > 0 && (
+                                          <div>
+                                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
+                                              <span>PRODUCTS</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const newSelected = new Set(selectedItems)
+                                                  itemGroups.products.forEach(item => newSelected.add(item.value))
+                                                  setSelectedItems(newSelected)
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 text-xs"
+                                              >
+                                                Select All
+                                              </button>
+                                            </div>
+                                            {itemGroups.products.map((item) => (
+                                              <label key={item.value} className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedItems.has(item.value)}
+                                                  onChange={(e) => {
+                                                    const newSelected = new Set(selectedItems)
+                                                    if (e.target.checked) {
+                                                      newSelected.add(item.value)
+                                                    } else {
+                                                      newSelected.delete(item.value)
+                                                    }
+                                                    setSelectedItems(newSelected)
+                                                  }}
+                                                  className="mr-2"
+                                                />
+                                                <span className="text-xs">{item.label}</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {itemGroups.parts.length > 0 && (
+                                          <div>
+                                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
+                                              <span>PARTS</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const newSelected = new Set(selectedItems)
+                                                  itemGroups.parts.forEach(item => newSelected.add(item.value))
+                                                  setSelectedItems(newSelected)
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 text-xs"
+                                              >
+                                                Select All
+                                              </button>
+                                            </div>
+                                            {itemGroups.parts.map((item) => (
+                                              <label key={item.value} className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedItems.has(item.value)}
+                                                  onChange={(e) => {
+                                                    const newSelected = new Set(selectedItems)
+                                                    if (e.target.checked) {
+                                                      newSelected.add(item.value)
+                                                    } else {
+                                                      newSelected.delete(item.value)
+                                                    }
+                                                    setSelectedItems(newSelected)
+                                                  }}
+                                                  className="mr-2"
+                                                />
+                                                <span className="text-xs">{item.label}</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {itemGroups.materials.length > 0 && (
+                                          <div>
+                                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
+                                              <span>MATERIALS</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const newSelected = new Set(selectedItems)
+                                                  itemGroups.materials.forEach(item => newSelected.add(item.value))
+                                                  setSelectedItems(newSelected)
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 text-xs"
+                                              >
+                                                Select All
+                                              </button>
+                                            </div>
+                                            {itemGroups.materials.map((item) => (
+                                              <label key={item.value} className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedItems.has(item.value)}
+                                                  onChange={(e) => {
+                                                    const newSelected = new Set(selectedItems)
+                                                    if (e.target.checked) {
+                                                      newSelected.add(item.value)
+                                                    } else {
+                                                      newSelected.delete(item.value)
+                                                    }
+                                                    setSelectedItems(newSelected)
+                                                  }}
+                                                  className="mr-2"
+                                                />
+                                                <span className="text-xs">{item.label}</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              {cartons.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeCarton(cartonIndex)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 hover:border-red-300 transition-colors"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                # of Similar Cartons:
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={carton.count}
+                                onChange={(e) =>
+                                  updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
+                                }
+                                className="w-16 px-2 py-1 border-2 border-gray-300 rounded text-sm font-bold text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="1"
+                                title="How many identical cartons with these same dimensions and contents?"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Right Side - Package Dimensions */}
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <input
+                                type="checkbox"
+                                id={`useCarrierPackage-${cartonIndex}`}
+                                checked={carton.useCarrierPackage}
+                                onChange={(e) => updateCarton(cartonIndex, 'useCarrierPackage', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <label htmlFor={`useCarrierPackage-${cartonIndex}`} className="text-xs font-medium text-gray-700">
+                                Use Carrier Package Type <span className="text-gray-500">(FedEx Box, USPS Flat Rate, etc.)</span>
+                              </label>
+                            </div>
+
+                            {carton.useCarrierPackage ? (
+                              /* Carrier Package - Single Line */
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <select
+                                    value={carton.carrierPackageCode || ''}
+                                    onChange={(e) => {
+                                      const selectedPackage = allCarrierPackages.find(pkg => pkg.package_code === e.target.value)
+                                      updateCarton(cartonIndex, {
+                                        carrierPackageCode: e.target.value,
+                                        carrierPackageName: selectedPackage?.name || '',
+                                        carrierCode: selectedPackage?.carrier_code || ''
+                                      } as any)
+                                    }}
+                                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    disabled={allCarrierPackages.length === 0}
+                                  >
+                                    <option value="">
+                                      {allCarrierPackages.length === 0 ? 'No packages' : 'Select...'}
+                                    </option>
+                                    {Object.entries(
+                                      allCarrierPackages.reduce((acc, pkg) => {
+                                        if (!acc[pkg.carrier_name]) acc[pkg.carrier_name] = []
+                                        acc[pkg.carrier_name].push(pkg)
+                                        return acc
+                                      }, {} as Record<string, CarrierPackage[]>)
+                                    ).map(([carrierName, packages]) => (
+                                      <optgroup key={carrierName} label={carrierName}>
+                                        {packages.map((pkg) => (
+                                          <option key={pkg.package_code} value={pkg.package_code}>
+                                            {pkg.name}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="w-24">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={carton.weight}
+                                    onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
+                                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Wt (lb)"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              /* Custom Dimensions - Single Line */
+                              <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={carton.length}
+                                    onChange={(e) => updateCarton(cartonIndex, 'length', e.target.value)}
+                                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="L (in)"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={carton.width}
+                                    onChange={(e) => updateCarton(cartonIndex, 'width', e.target.value)}
+                                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="W (in)"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={carton.height}
+                                    onChange={(e) => updateCarton(cartonIndex, 'height', e.target.value)}
+                                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="H (in)"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={carton.weight}
+                                    onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
+                                    className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Wt (lb)"
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1095,33 +1559,96 @@ export function ProcessShipmentShipStationModal({
                   {carton.contents.map((content, contentIndex) => (
                     <div
                       key={contentIndex}
-                      className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50"
+                      className="flex items-center gap-1.5 px-3 py-1 hover:bg-gray-50"
                     >
                       {/* Item Selector */}
                       <div className="flex-1">
                         {loadingItems ? (
-                          <div className="px-3 py-2 text-sm text-gray-500">Loading items...</div>
+                          <div className="px-2 py-1 text-xs text-gray-500">Loading items...</div>
                         ) : (
                           <select
                             value={content.itemId || ''}
-                            onChange={(e) =>
-                              updateContent(cartonIndex, contentIndex, 'itemId', e.target.value)
-                            }
+                            onChange={(e) => {
+                              const selectedValue = e.target.value
+                              updateContent(cartonIndex, contentIndex, 'itemId', selectedValue)
+
+                              // Auto-populate quantity based on selected item
+                              // Search across all groups
+                              const allItemsFlat = [
+                                ...itemGroups.job,
+                                ...itemGroups.components,
+                                ...itemGroups.products,
+                                ...itemGroups.parts,
+                                ...itemGroups.materials,
+                              ]
+                              const selectedItem = allItemsFlat.find(item => item.value === selectedValue)
+                              if (selectedItem) {
+                                const autoQty = selectedItem.plannedQty || selectedItem.orderedQty || 0
+                                if (autoQty > 0) {
+                                  updateContent(cartonIndex, contentIndex, 'quantity', autoQty)
+                                }
+                              }
+                            }}
                             required
-                            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="">Select item to ship...</option>
-                            {allItems.map((item) => (
-                              <option key={item.value} value={item.value}>
-                                {item.label}
-                              </option>
-                            ))}
+
+                            {itemGroups.job.length > 0 && (
+                              <optgroup label="━━━ JOB ━━━">
+                                {itemGroups.job.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {itemGroups.components.length > 0 && (
+                              <optgroup label="━━━ COMPONENTS ━━━">
+                                {itemGroups.components.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {itemGroups.products.length > 0 && (
+                              <optgroup label="━━━ PRODUCTS ━━━">
+                                {itemGroups.products.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {itemGroups.parts.length > 0 && (
+                              <optgroup label="━━━ PARTS ━━━">
+                                {itemGroups.parts.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {itemGroups.materials.length > 0 && (
+                              <optgroup label="━━━ MATERIALS ━━━">
+                                {itemGroups.materials.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
                         )}
                       </div>
 
                       {/* Quantity Input */}
-                      <div className="w-24">
+                      <div className="flex items-center gap-1">
                         <input
                           type="number"
                           min="1"
@@ -1136,8 +1663,10 @@ export function ProcessShipmentShipStationModal({
                             )
                           }
                           placeholder="Qty"
-                          className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
+                          title="Quantity of this item in ONE carton"
+                          className="w-16 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
+                        <span className="text-xs text-gray-500 whitespace-nowrap">per carton</span>
                       </div>
 
                       {/* Delete Button */}
@@ -1145,11 +1674,11 @@ export function ProcessShipmentShipStationModal({
                         <button
                           type="button"
                           onClick={() => removeContent(cartonIndex, contentIndex)}
-                          className="text-red-600 hover:text-red-800 p-1"
+                          className="inline-flex items-center justify-center w-6 h-6 text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 hover:border-red-300 transition-colors"
                           title="Remove item"
                         >
                           <svg
-                            className="w-5 h-5"
+                            className="w-3.5 h-3.5"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -1166,191 +1695,6 @@ export function ProcessShipmentShipStationModal({
                     </div>
                   ))}
                 </div>
-
-                      {/* Dimensions, Weight, and Count */}
-                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                        {/* Package Type Toggle */}
-                        <div className="mb-3 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`useCarrierPackage-${cartonIndex}`}
-                            checked={carton.useCarrierPackage}
-                            onChange={(e) => updateCarton(cartonIndex, 'useCarrierPackage', e.target.checked)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <label htmlFor={`useCarrierPackage-${cartonIndex}`} className="text-xs font-medium text-gray-700">
-                            Use Carrier Package Type
-                          </label>
-                        </div>
-
-                        {carton.useCarrierPackage ? (
-                          /* Carrier Package Selection */
-                          <div className="space-y-2">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Package Type <span className="text-red-500">*</span>
-                              </label>
-                              {loadingPackages ? (
-                                <div className="px-3 py-2 text-xs text-gray-500">Loading packages...</div>
-                              ) : (
-                                <select
-                                  value={carton.carrierPackageCode || ''}
-                                  onChange={(e) => {
-                                    const selectedPackage = allCarrierPackages.find(pkg => pkg.package_code === e.target.value)
-                                    updateCarton(cartonIndex, {
-                                      carrierPackageCode: e.target.value,
-                                      carrierPackageName: selectedPackage?.name || '',
-                                      carrierCode: selectedPackage?.carrier_code || ''
-                                    } as any)
-                                  }}
-                                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                  disabled={allCarrierPackages.length === 0}
-                                >
-                                  <option value="">
-                                    {allCarrierPackages.length === 0
-                                      ? 'No packages available'
-                                      : 'Select a package type...'}
-                                  </option>
-                                  {/* Group packages by carrier */}
-                                  {Object.entries(
-                                    allCarrierPackages.reduce((acc, pkg) => {
-                                      if (!acc[pkg.carrier_name]) {
-                                        acc[pkg.carrier_name] = []
-                                      }
-                                      acc[pkg.carrier_name].push(pkg)
-                                      return acc
-                                    }, {} as Record<string, CarrierPackage[]>)
-                                  ).map(([carrierName, packages]) => (
-                                    <optgroup key={carrierName} label={carrierName}>
-                                      {packages.map((pkg) => (
-                                        <option key={pkg.package_code} value={pkg.package_code}>
-                                          {pkg.name}
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
-                              )}
-                              {carton.carrierPackageCode && (
-                                <div className="mt-1">
-                                  <p className="text-xs font-medium text-blue-600">
-                                    Selected: {carton.carrierPackageName || carton.carrierPackageCode}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {allCarrierPackages.find(pkg => pkg.package_code === carton.carrierPackageCode)?.description}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
-                                  Wt(lb) <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={carton.weight}
-                                  onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
-                                  className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="1.0"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
-                                  Qty <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={carton.count}
-                                  onChange={(e) =>
-                                    updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
-                                  }
-                                  className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="1"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Custom Dimensions */
-                          <div className="grid grid-cols-5 gap-2">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              L(in) <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={carton.length}
-                              onChange={(e) => updateCarton(cartonIndex, 'length', e.target.value)}
-                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="12"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              W(in) <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={carton.width}
-                              onChange={(e) => updateCarton(cartonIndex, 'width', e.target.value)}
-                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="8"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              H(in) <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={carton.height}
-                              onChange={(e) => updateCarton(cartonIndex, 'height', e.target.value)}
-                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="6"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Wt(lb) <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={carton.weight}
-                              onChange={(e) => updateCarton(cartonIndex, 'weight', e.target.value)}
-                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="1.0"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Qty <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={carton.count}
-                              onChange={(e) =>
-                                updateCarton(cartonIndex, 'count', parseInt(e.target.value) || 1)
-                              }
-                              className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="1"
-                              required
-                            />
-                          </div>
-                        </div>
-                        )}
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -1649,7 +1993,13 @@ export function ProcessShipmentShipStationModal({
                             type="checkbox"
                             id="isReturnLabel"
                             checked={isReturnLabel}
-                            onChange={(e) => setIsReturnLabel(e.target.checked)}
+                            onChange={(e) => {
+                              setIsReturnLabel(e.target.checked)
+                              // Auto-populate return service with outbound service when checkbox is enabled
+                              if (e.target.checked && selectedRate && !returnServiceCode) {
+                                setReturnServiceCode(selectedRate.serviceCode)
+                              }
+                            }}
                             disabled={isMultiPackage}
                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           />
@@ -1681,6 +2031,66 @@ export function ProcessShipmentShipStationModal({
                           <li>Addresses will be reversed automatically for the return label</li>
                           <li>You'll typically only be charged when the customer uses the return label</li>
                         </ul>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Return Label Service <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={returnServiceCode}
+                          onChange={(e) => setReturnServiceCode(e.target.value)}
+                          className="w-full px-3 py-2 border-2 border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">Select a service for the return label</option>
+                          {(() => {
+                            console.log('🔍 [Return Service Dropdown] selectedRate:', selectedRate)
+                            console.log('🔍 [Return Service Dropdown] rates array length:', rates.length)
+                            console.log('🔍 [Return Service Dropdown] rates array:', rates)
+
+                            if (!selectedRate) {
+                              console.log('🔍 [Return Service Dropdown] No selectedRate, returning null')
+                              return null
+                            }
+
+                            console.log('🔍 [Return Service Dropdown] Filtering rates by carrierCode:', selectedRate.carrierCode)
+
+                            // Get all available services for the selected carrier from the rates
+                            const carrierServices = rates
+                              .filter(rate => {
+                                const matches = rate.carrierCode === selectedRate.carrierCode
+                                console.log('🔍 [Return Service Dropdown] Rate carrier:', rate.carrierCode, 'matches:', matches, 'service:', rate.service)
+                                return matches
+                              })
+                              .map(rate => ({
+                                serviceCode: rate.serviceCode,
+                                serviceName: rate.service,
+                              }))
+                              // Remove duplicates based on serviceCode
+                              .filter((service, index, self) =>
+                                index === self.findIndex(s => s.serviceCode === service.serviceCode)
+                              )
+                              // Sort alphabetically by service name
+                              .sort((a, b) => a.serviceName.localeCompare(b.serviceName))
+
+                            console.log('🔍 [Return Service Dropdown] carrierServices:', carrierServices)
+
+                            if (carrierServices.length === 0) {
+                              console.log('🔍 [Return Service Dropdown] No carrier services found!')
+                              return <option disabled>No services available</option>
+                            }
+
+                            return carrierServices.map(service => (
+                              <option key={service.serviceCode} value={service.serviceCode}>
+                                {service.serviceName}
+                                {service.serviceCode === selectedRate.serviceCode && ' (Same as outbound)'}
+                              </option>
+                            ))
+                          })()}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Choose the shipping service for the return label. This can be different from the outbound service.
+                        </p>
                       </div>
 
                       <div>

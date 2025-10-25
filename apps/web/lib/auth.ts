@@ -122,6 +122,13 @@ export const authOptions: NextAuthOptions = {
             name: true,
             image: true,
             passwordResetRequired: true,
+            memberships: {
+              select: {
+                role: true,
+                tenantId: true,
+              },
+              take: 1, // Get first membership (assuming single tenant for now)
+            },
           },
         })
 
@@ -130,6 +137,8 @@ export const authOptions: NextAuthOptions = {
           token.name = dbUser.name
           token.picture = dbUser.image
           token.passwordResetRequired = dbUser.passwordResetRequired
+          token.role = dbUser.memberships[0]?.role || 'customer_service'
+          token.tenantId = dbUser.memberships[0]?.tenantId
         }
       }
 
@@ -142,6 +151,8 @@ export const authOptions: NextAuthOptions = {
         session.user.name = token.name as string | null
         session.user.image = token.picture as string | null
         ;(session.user as any).passwordResetRequired = token.passwordResetRequired || false
+        ;(session.user as any).role = token.role as string
+        ;(session.user as any).tenantId = token.tenantId as string
       }
       return session
     },

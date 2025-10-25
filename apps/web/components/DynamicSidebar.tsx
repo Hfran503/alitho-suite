@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -194,6 +194,11 @@ const IconMap: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   ),
+  'clipboard-check': (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  ),
 }
 
 // Cache for menu data to avoid refetching on every navigation
@@ -225,6 +230,8 @@ export function clearMenuCache() {
   menuCache = null
   try {
     localStorage.removeItem(LOCALSTORAGE_KEY)
+    // Also clear expanded menus state when menu configuration changes
+    localStorage.removeItem('sidebarExpandedMenus')
   } catch {
     // Ignore localStorage errors
   }
@@ -240,6 +247,7 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
   const { data: session } = useSession()
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load pin state from localStorage on mount
   useEffect(() => {
@@ -252,6 +260,33 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
       }
     }
   }, [onPinChange])
+
+  // Load and validate expanded menus when menuItems are loaded
+  useEffect(() => {
+    if (menuItems.length === 0) return
+
+    const savedExpandedMenus = localStorage.getItem('sidebarExpandedMenus')
+    if (savedExpandedMenus !== null) {
+      try {
+        const expandedMenusArray = JSON.parse(savedExpandedMenus)
+        if (Array.isArray(expandedMenusArray)) {
+          // Validate that the saved menu keys still exist in current menu configuration
+          const validMenuKeys = new Set(menuItems.map(item => item.menuKey))
+          const validExpandedMenus = expandedMenusArray.filter(key => validMenuKeys.has(key))
+
+          // If some keys were filtered out, update localStorage
+          if (validExpandedMenus.length !== expandedMenusArray.length) {
+            localStorage.setItem('sidebarExpandedMenus', JSON.stringify(validExpandedMenus))
+          }
+
+          setExpandedMenus(validExpandedMenus)
+        }
+      } catch (error) {
+        console.error('Failed to parse expanded menus from localStorage:', error)
+        localStorage.removeItem('sidebarExpandedMenus')
+      }
+    }
+  }, [menuItems])
 
   // Fetch menu configuration and user role with multi-layer caching
   useEffect(() => {
@@ -379,11 +414,16 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
   }
 
   const toggleSubmenu = (menuKey: string) => {
-    setExpandedMenus(prev =>
-      prev.includes(menuKey)
+    setExpandedMenus(prev => {
+      const newExpandedMenus = prev.includes(menuKey)
         ? prev.filter(h => h !== menuKey)
         : [...prev, menuKey]
-    )
+
+      // Persist to localStorage
+      localStorage.setItem('sidebarExpandedMenus', JSON.stringify(newExpandedMenus))
+
+      return newExpandedMenus
+    })
   }
 
   const handleLogout = async () => {
@@ -422,11 +462,28 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
     )
   }
 
+  const handleMouseEnter = () => {
+    if (!isPinned) {
+      // Delay to ensure intentional hover, not just passing by
+      hoverTimeoutRef.current = setTimeout(() => {
+        setIsHovered(true)
+      }, 150) // 150ms delay - fast but prevents accidental triggers
+    }
+  }
+
+  const handleMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    setIsHovered(false)
+  }
+
   return (
     <aside
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-gray-900 text-white transition-all duration-300 ease-in-out z-40 ${
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-gray-900 text-white transition-all duration-300 ease-in-out z-40 overflow-hidden ${
         isExpanded ? 'w-64' : 'w-16'
       }`}
     >
@@ -450,7 +507,7 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
                       className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors w-full ${
                         isActive
                           ? 'bg-blue-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                          : `text-gray-300 ${isExpanded ? 'hover:bg-gray-800 hover:text-white' : ''}`
                       }`}
                     >
                       <span className="flex-shrink-0">{getIcon(item.icon)}</span>
@@ -485,7 +542,7 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
                                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
                                   isSubActive
                                     ? 'bg-blue-500 text-white'
-                                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                                    : `text-gray-400 ${isExpanded ? 'hover:bg-gray-800 hover:text-white' : ''}`
                                 }`}
                               >
                                 <span className="flex-shrink-0">{getIcon(subitem.icon)}</span>
@@ -503,7 +560,7 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
                     className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
                       isActive
                         ? 'bg-blue-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                        : `text-gray-300 ${isExpanded ? 'hover:bg-gray-800 hover:text-white' : ''}`
                     }`}
                   >
                     <span className="flex-shrink-0">{getIcon(item.icon)}</span>
@@ -528,7 +585,7 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
             className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors w-full ${
               isPinned
                 ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                : `text-gray-400 ${isExpanded ? 'hover:bg-gray-800 hover:text-white' : ''}`
             }`}
             title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
           >
@@ -556,7 +613,7 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors w-full text-gray-400 hover:bg-red-900 hover:text-white"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors w-full text-gray-400 ${isExpanded ? 'hover:bg-red-900 hover:text-white' : ''}`}
             title="Logout"
           >
             <svg

@@ -61,7 +61,7 @@ export async function GET(
     console.log(`Fetching items for job ${jobId}`)
 
     // Fetch all items in parallel
-    const [componentsIds, productsIds, partsIds] = await Promise.all([
+    const [componentsIds, productsIds, partsIds, materialsIds] = await Promise.all([
       // Fetch JobComponents
       fetch(
         `${paceApiUrl}/FindObjects/findSortAndLimit?${new URLSearchParams({
@@ -127,13 +127,43 @@ export async function GET(
         console.log('JobPart IDs response:', data)
         return data
       }),
+
+      // Fetch JobMaterials
+      fetch(
+        `${paceApiUrl}/FindObjects/findSortAndLimit?${new URLSearchParams({
+          type: 'JobMaterial',
+          xpath: `@job=${encodeURIComponent(jobId)}`,
+          offset: '0',
+          limit: '1000',
+        })}`,
+        {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify([{ xpath: '@id', descending: false }]),
+        }
+      ).then(async res => {
+        if (!res.ok) {
+          const errorText = await res.text()
+          console.error('Failed to fetch JobMaterials:', res.status, errorText)
+          return []
+        }
+        const data = await res.json()
+        console.log('JobMaterial IDs response:', data)
+        return data
+      }),
     ])
 
     console.log('IDs fetched:', {
       components: componentsIds?.length || 0,
       products: productsIds?.length || 0,
       parts: partsIds?.length || 0,
+      materials: materialsIds?.length || 0,
       partsIds: partsIds,
+      materialsIds: materialsIds,
     })
 
     // Fetch details for each component
@@ -221,11 +251,45 @@ export async function GET(
       })
     )
 
+    // Fetch details for each material
+    const materials = await Promise.all(
+      (materialsIds || []).map(async (id: string) => {
+        const response = await fetch(
+          `${paceApiUrl}/ReadObject/readJobMaterial?primaryKey=${id}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+        if (!response.ok) {
+          console.error(`Failed to fetch JobMaterial ${id}:`, response.status, response.statusText)
+          return null
+        }
+        const data = await response.json()
+        console.log('JobMaterial data received:', data)
+        return {
+          id: data.id,
+          description: data.description || `Material ${data.id}`,
+          materialID: data.materialID,
+          jobPart: data.jobPart, // Link to which part this material belongs to
+          qtyRequired: data.qtyRequired,
+          plannedQuantity: data.plannedQuantity,
+          unitCost: data.unitCost,
+          totalCost: data.totalCost,
+        }
+      })
+    )
+
     const result = {
       job: jobId,
       components: components.filter(c => c !== null),
       products: products.filter(p => p !== null),
       parts: parts.filter(p => p !== null),
+      materials: materials.filter(m => m !== null),
     }
 
     console.log('Job items fetched:', {
@@ -233,6 +297,7 @@ export async function GET(
       componentsCount: result.components.length,
       productsCount: result.products.length,
       partsCount: result.parts.length,
+      materialsCount: result.materials.length,
     })
 
     return NextResponse.json({

@@ -6,6 +6,7 @@ type Job = {
   job?: string // The job number/ID
   customer?: string
   customerName?: string
+  customerPORequired?: string // Customer's PO requirement setting
   adminStatus?: string // The JobStatus ID
   adminStatusDescription?: string // The JobStatus description
   description?: string
@@ -16,11 +17,14 @@ type Job = {
   amountToInvoice?: number // Amount to invoice from job
   proposalTotalSellPrice?: number // Total sell price from proposal
   proposalEstimate?: string // Estimate number from proposal
+  proposalPO?: string // PO from proposal
   csr?: string // CSR ID
   csrName?: string // CSR name
   part1Estimate?: string // Estimate number from JobPart Part 1
   jobType?: number // JobType ID
   jobTypeDescription?: string // JobType description
+  poNum?: string // PO number from Job
+  changeOrdersWithZeroPrice?: number // Count of ChangeOrders (type 5001) with zero/missing totalBillAmt
   // Add any other fields you expect from the Job object
 }
 
@@ -117,8 +121,32 @@ export default function OpenJobsPage() {
         // Cache the data with timestamp
         const now = new Date()
         setLastFetchTime(now)
-        localStorage.setItem('open_jobs_cache', JSON.stringify(data.data.items))
-        localStorage.setItem('open_jobs_cache_timestamp', now.toISOString())
+
+        // Try to cache data, handle quota exceeded errors
+        try {
+          localStorage.setItem('open_jobs_cache', JSON.stringify(data.data.items))
+          localStorage.setItem('open_jobs_cache_timestamp', now.toISOString())
+        } catch (storageErr) {
+          // If quota exceeded, clear old caches and try again
+          if (storageErr instanceof DOMException && storageErr.name === 'QuotaExceededError') {
+            console.warn('localStorage quota exceeded, clearing old caches...')
+            // Clear old job caches to make space
+            localStorage.removeItem('open_jobs_cache')
+            localStorage.removeItem('open_jobs_cache_timestamp')
+            localStorage.removeItem('prebilling_jobs_cache')
+            localStorage.removeItem('prebilling_jobs_cache_timestamp')
+
+            // Try one more time with cleared cache
+            try {
+              localStorage.setItem('open_jobs_cache', JSON.stringify(data.data.items))
+              localStorage.setItem('open_jobs_cache_timestamp', now.toISOString())
+            } catch (retryErr) {
+              console.warn('Still unable to cache data after clearing, skipping cache:', retryErr)
+            }
+          } else {
+            console.warn('Failed to cache data:', storageErr)
+          }
+        }
       } else {
         console.error('API returned success: false')
         throw new Error('API returned unsuccessful response')
@@ -233,6 +261,37 @@ export default function OpenJobsPage() {
     }
     if (Math.abs(job.amountToInvoice - job.proposalTotalSellPrice) > 0.01) {
       return true // Invoice difference
+    }
+
+    // Check PO issues (only if customer requires PO)
+    if (job.customerPORequired === '1') {
+      const jobPO = job.poNum?.trim()
+      const proposalPO = job.proposalPO?.trim()
+
+      // Both are empty - ISSUE
+      if (!jobPO && !proposalPO) {
+        return true
+      }
+
+      // Both have values but don't match - ISSUE
+      if (jobPO && proposalPO && jobPO !== proposalPO) {
+        return true
+      }
+    }
+
+    // Check if past due by more than 14 days
+    if (job.promiseDateTime) {
+      const dueDate = new Date(job.promiseDateTime)
+      const now = new Date()
+      const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 14) {
+        return true // Past due by more than 14 days
+      }
+    }
+
+    // Check if there are ChangeOrders (type 5001) with zero or missing price
+    if (job.changeOrdersWithZeroPrice && job.changeOrdersWithZeroPrice > 0) {
+      return true // Has ChangeOrders with zero/missing price
     }
 
     return false // No issues
@@ -375,8 +434,8 @@ export default function OpenJobsPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header Bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between px-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Open Jobs</h1>
             <div className="flex items-center gap-3 mt-1">
@@ -443,7 +502,7 @@ export default function OpenJobsPage() {
       </div>
 
       {/* Filter Bar - Date and Status */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
+      <div className="bg-white border-b border-gray-200 py-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-6">
           <div className="flex items-center gap-6">
             {/* Date Filter - Compact with Icons */}
@@ -700,7 +759,7 @@ export default function OpenJobsPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Error message */}
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
@@ -738,7 +797,7 @@ export default function OpenJobsPage() {
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Table Container with Overflow */}
-            <div className="flex-1 overflow-auto px-6">
+            <div className="flex-1 overflow-auto">
               <table className="w-full border-separate border-spacing-0">
                 <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                   <tr>
@@ -906,16 +965,16 @@ export default function OpenJobsPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
                         {(() => {
-                          // If both values exist and are equal, show single value
+                          // If both values exist and difference is within acceptable range ($100), show only Job value
                           if (job.jobValue && job.proposalEstimatePrice &&
-                              Math.abs(job.jobValue - job.proposalEstimatePrice) <= 0.01) {
+                              Math.abs(job.jobValue - job.proposalEstimatePrice) <= 100) {
                             return (
                               <span className="font-semibold text-sm tabular-nums">
                                 ${job.jobValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             )
                           }
-                          // If values differ or one is missing, show both with labels
+                          // If values differ by more than $100 or one is missing, show both with labels
                           if (job.jobValue || job.proposalEstimatePrice) {
                             return (
                               <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 items-center">
@@ -1128,6 +1187,89 @@ export default function OpenJobsPage() {
                               )
                             }
                             return null
+                          })()}
+
+                          {/* PO Issue - Only check if customer requires PO */}
+                          {(() => {
+                            // Only validate PO if customer requires it (1 = required)
+                            if (job.customerPORequired !== '1') {
+                              return null
+                            }
+
+                            const jobPO = job.poNum?.trim()
+                            const proposalPO = job.proposalPO?.trim()
+
+                            // Both are empty - ISSUE
+                            if (!jobPO && !proposalPO) {
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="text-xs text-red-700">Missing PO (required)</span>
+                                </div>
+                              )
+                            }
+
+                            // Both have values but don't match - ISSUE
+                            if (jobPO && proposalPO && jobPO !== proposalPO) {
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="text-xs text-red-700">PO mismatch: Job({jobPO}) ≠ Prop({proposalPO})</span>
+                                </div>
+                              )
+                            }
+
+                            // One has value, other is empty - OK, no issue shown
+                            return null
+                          })()}
+
+                          {/* Past Due Issue - More than 14 days */}
+                          {(() => {
+                            if (!job.promiseDateTime) {
+                              return null
+                            }
+
+                            const dueDate = new Date(job.promiseDateTime)
+                            const now = new Date()
+                            const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+
+                            if (daysDiff > 14) {
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="text-xs text-red-700">Past due {daysDiff} days</span>
+                                </div>
+                              )
+                            }
+
+                            return null
+                          })()}
+
+                          {/* ChangeOrder with Zero/Missing Price Issue */}
+                          {(() => {
+                            if (!job.changeOrdersWithZeroPrice || job.changeOrdersWithZeroPrice === 0) {
+                              return null
+                            }
+
+                            const count = job.changeOrdersWithZeroPrice
+                            const message = count === 1
+                              ? '1 Change Order with zero/missing price'
+                              : `${count} Change Orders with zero/missing price`
+
+                            return (
+                              <div className="flex items-center gap-1">
+                                <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-xs text-red-700">{message}</span>
+                              </div>
+                            )
                           })()}
                         </div>
                       </td>

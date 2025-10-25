@@ -234,9 +234,72 @@ export async function POST(
       }
     }
 
-    // Process ShipStation labels
+    // Process ShipStation labels (both carton labels and return labels)
     if (shipstationClient) {
+      // First, get all ShipStation labels for this shipment (including return labels without cartonId)
+      const allShipmentLabels = await db.shippingLabel.findMany({
+        where: {
+          tenantId: membership.tenantId,
+          paceShipmentId: parseInt(shipmentId),
+          provider: 'shipstation',
+          status: 'active',
+        },
+      })
+
+      console.log(`Found ${allShipmentLabels.length} ShipStation labels to void for shipment ${shipmentId}`)
+
+      // Void all labels (both outbound and return)
+      for (const label of allShipmentLabels) {
+        if (label.providerLabelId) {
+          try {
+            console.log(`Attempting to void ShipStation label ${label.providerLabelId}${label.isReturnLabel ? ' (RETURN LABEL)' : ''}`)
+
+            // Void the label
+            const voidResponse = await shipstationClient.voidLabel(label.providerLabelId)
+
+            canceledLabels.push({
+              cartonId: label.paceCartonId || 'N/A (Return Label)',
+              trackingNumber: label.trackingNumber,
+              shipstationLabelId: label.providerLabelId,
+              voidStatus: voidResponse.approved ? 'approved' : 'rejected',
+              isReturnLabel: label.isReturnLabel,
+            })
+
+            // Update ShippingLabel status in database
+            await db.shippingLabel.update({
+              where: {
+                id: label.id,
+              },
+              data: {
+                status: 'voided',
+              },
+            })
+
+            console.log(`Successfully voided label ${label.providerLabelId}, approved: ${voidResponse.approved}`)
+          } catch (error: any) {
+            console.error(`Failed to void label ${label.providerLabelId}:`, error)
+            failedCancellations.push({
+              cartonId: label.paceCartonId || 'N/A (Return Label)',
+              trackingNumber: label.trackingNumber,
+              shipstationLabelId: label.providerLabelId,
+              reason: error.message,
+              isReturnLabel: label.isReturnLabel,
+            })
+          }
+        }
+      }
+
+      // Also handle legacy carton labels that might not be in our database
       for (const carton of cartons) {
+        // Check if we already processed this carton's label
+        const alreadyProcessed = allShipmentLabels.some(
+          label => label.paceCartonId === parseInt(carton.id)
+        )
+
+        if (alreadyProcessed) {
+          continue
+        }
+
         // Try to get ShipStation label ID from our ShippingLabel table
         let shipstationLabelId = null
 

@@ -14,8 +14,11 @@ export default function ShipmentDetailsPage() {
 
   const [shipment, setShipment] = useState<JobShipment | null>(null)
   const [cartons, setCartons] = useState<Carton[]>([])
+  const [_labels, setLabels] = useState<any[]>([])
+  const [returnLabels, setReturnLabels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingCartons, setLoadingCartons] = useState(false)
+  const [_loadingLabels, setLoadingLabels] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'details' | 'special' | 'other'>('details')
   const [showProcessModal, setShowProcessModal] = useState(false)
@@ -47,6 +50,7 @@ export default function ShipmentDetailsPage() {
     if (shipmentId) {
       fetchShipment()
       fetchCartons()
+      fetchLabels()
     }
   }, [shipmentId])
 
@@ -206,6 +210,30 @@ export default function ShipmentDetailsPage() {
     }
   }
 
+  const fetchLabels = async () => {
+    setLoadingLabels(true)
+
+    try {
+      const response = await fetch(`/api/labels/by-shipment/${shipmentId}`)
+
+      if (!response.ok) {
+        console.error('Failed to fetch labels')
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        setLabels(data.data.labels || [])
+        setReturnLabels(data.data.returnLabels || [])
+      }
+    } catch (err) {
+      console.error('Fetch labels error:', err)
+    } finally {
+      setLoadingLabels(false)
+    }
+  }
+
   const handleDeleteAllCartons = async () => {
     if (!cartons || cartons.length === 0) return
 
@@ -352,10 +380,17 @@ export default function ShipmentDetailsPage() {
 
     // Check if any cartons have tracking numbers
     const hasTracking = cartons.some(c => c.trackingNumber)
+    const hasReturnLabels = returnLabels.length > 0
 
-    const message = hasTracking
-      ? `Are you sure you want to cancel ALL labels and delete ALL cartons?\n\nThis will:\n• Refund ${cartons.length} EasyPost label(s) (if applicable)\n• Delete all ${cartons.length} carton(s) and their contents\n• Clear tracking and cost data from the shipment\n\nThis action cannot be undone.`
-      : `Are you sure you want to delete ALL ${cartons.length} carton(s) and clear shipment data?\n\nThis action cannot be undone.`
+    let message = hasTracking
+      ? `Are you sure you want to cancel ALL labels and delete ALL cartons?\n\nThis will:\n• Void/refund ${cartons.length} label(s) (if applicable)\n• Delete all ${cartons.length} carton(s) and their contents\n• Clear tracking and cost data from the shipment`
+      : `Are you sure you want to delete ALL ${cartons.length} carton(s) and clear shipment data?`
+
+    if (hasReturnLabels) {
+      message += `\n• Void ${returnLabels.length} return label(s)`
+    }
+
+    message += `\n\nThis action cannot be undone.`
 
     const confirmed = window.confirm(message)
     if (!confirmed) return
@@ -394,6 +429,7 @@ export default function ShipmentDetailsPage() {
       // Refresh data
       await fetchCartons()
       await fetchShipment()
+      await fetchLabels()
     } catch (err) {
       console.error('Cancel labels error:', err)
       setError(err instanceof Error ? err.message : 'Failed to cancel labels')
@@ -1164,6 +1200,70 @@ export default function ShipmentDetailsPage() {
                 </div>
               </div>
             )}
+
+            {/* Return Labels Section */}
+            {returnLabels.length > 0 && (
+              <div className="mt-8 bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Return Labels
+                  </h2>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {returnLabels.map((label, index) => (
+                      <div key={label.id || index} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-gray-500 uppercase">Carrier & Service</label>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">
+                              {label.carrier} - {label.service}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-500 uppercase">Tracking Number</label>
+                            <p className="text-sm font-mono text-gray-900 mt-1">{label.trackingNumber}</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-500 uppercase">Cost</label>
+                            <p className="text-sm font-semibold text-green-600 mt-1">
+                              {label.cost ? `$${typeof label.cost === 'string' ? parseFloat(label.cost).toFixed(2) : label.cost.toFixed(2)}` : '-'}
+                            </p>
+                          </div>
+                        </div>
+                        {label.rmaNumber && (
+                          <div className="mt-3">
+                            <label className="text-xs font-medium text-gray-500 uppercase">RMA Number</label>
+                            <p className="text-sm text-gray-900 mt-1">{label.rmaNumber}</p>
+                          </div>
+                        )}
+                        <div className="mt-4 flex items-center gap-3">
+                          {label.labelUrl && (
+                            <a
+                              href={label.labelUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Download Return Label
+                            </a>
+                          )}
+                          <span className="text-xs text-gray-500">
+                            Created {new Date(label.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
       ) : activeTab === 'special' ? (
@@ -1317,6 +1417,7 @@ export default function ShipmentDetailsPage() {
           }}
           onSuccess={() => {
             fetchCartons()
+            fetchLabels()
             setActiveIntegration(null) // Reset for next time
           }}
           shipment={shipment}
@@ -1332,6 +1433,7 @@ export default function ShipmentDetailsPage() {
           }}
           onSuccess={() => {
             fetchCartons()
+            fetchLabels()
             setActiveIntegration(null) // Reset for next time
           }}
           shipment={shipment}

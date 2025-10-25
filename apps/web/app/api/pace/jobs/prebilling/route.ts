@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { getPaceApiCredentials } from '@/lib/secrets'
 
-// GET /api/pace/jobs/open - Fetch all Open Jobs (StatusType = 5)
+// GET /api/pace/jobs/prebilling - Fetch all Prebilling Jobs (Open jobs excluding certain JobTypes)
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -93,10 +93,15 @@ export async function GET() {
 
     // Step 2: Build XPath query for Jobs with adminStatus matching any of these JobStatus IDs
     // XPath: @adminStatus = 'id1' or @adminStatus = 'id2' or ...
+    // Also exclude JobTypes: 5022, 5013, 5015, 5017
     const adminStatusConditions = jobStatusIds.map(id => `@adminStatus = '${id}'`).join(' or ')
-    const xpath = jobStatusIds.length === 1
+    const adminStatusXPath = jobStatusIds.length === 1
       ? `@adminStatus = '${jobStatusIds[0]}'`
       : `(${adminStatusConditions})`
+
+    // Add JobType exclusion for prebilling
+    const jobTypeExclusion = '@jobType != 5022 and @jobType != 5013 and @jobType != 5015 and @jobType != 5017'
+    const xpath = `${adminStatusXPath} and ${jobTypeExclusion}`
 
     // Build query parameters for PACE API FindObjects
     const queryParams = new URLSearchParams({

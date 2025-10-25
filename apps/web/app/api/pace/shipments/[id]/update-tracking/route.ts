@@ -116,7 +116,7 @@ export async function POST(
 
     const cartons = (await Promise.all(cartonPromises)).filter((c) => c !== null)
 
-    // Step 3: Aggregate data
+    // Step 3: Aggregate data from cartons
     let totalCost = 0
     const trackingNumbers: string[] = []
     let primaryTrackingNumber = ''
@@ -139,6 +139,35 @@ export async function POST(
         }
       }
     })
+
+    // Step 3.5: Add return label costs from ShippingLabel table
+    try {
+      const returnLabels = await db.shippingLabel.findMany({
+        where: {
+          tenantId: membership.tenantId,
+          paceShipmentId: parseInt(shipmentId),
+          isReturnLabel: true,
+          status: 'active', // Only count active return labels
+        },
+      })
+
+      console.log(`Found ${returnLabels.length} return label(s) for shipment ${shipmentId}`)
+
+      returnLabels.forEach((label) => {
+        if (label.cost) {
+          const labelCost = typeof label.cost === 'string'
+            ? parseFloat(label.cost)
+            : typeof label.cost === 'number'
+            ? label.cost
+            : parseFloat(label.cost.toString())
+          totalCost += labelCost
+          console.log(`Adding return label cost: $${labelCost.toFixed(2)}`)
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching return label costs:', error)
+      // Don't fail if we can't get return label costs
+    }
 
     // Step 4: Fetch shipment data ONCE (for both type update and address update)
     // This combines 2 separate reads into 1
