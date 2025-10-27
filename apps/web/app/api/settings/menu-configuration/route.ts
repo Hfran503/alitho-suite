@@ -39,7 +39,17 @@ export async function GET(_req: NextRequest) {
       (config) => config.isActive && config.visibleToRoles.includes(userRole)
     )
 
-    return NextResponse.json({ menuConfigs: visibleMenuConfigs })
+    // Return with no-cache headers to ensure fresh data
+    return NextResponse.json(
+      { menuConfigs: visibleMenuConfigs },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    )
   } catch (error) {
     console.error('Error fetching menu configurations:', error)
     return NextResponse.json(

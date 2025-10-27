@@ -147,7 +147,14 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
     async function fetchMenuConfigs() {
       try {
         setIsLoading(true)
-        const response = await fetch('/api/settings/menu-configuration')
+        // Add cache-busting timestamp to force fresh data
+        const timestamp = new Date().getTime()
+        const response = await fetch(`/api/settings/menu-configuration?_=${timestamp}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        })
 
         if (!response.ok) {
           console.error('Failed to fetch menu configurations:', response.statusText)
