@@ -38,6 +38,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Staff-only pages and API routes (all pages except portal, auth, and root)
+  const isStaffRoute =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/open-jobs') ||
+    pathname.startsWith('/prebilling-jobs') ||
+    pathname.startsWith('/shipments') ||
+    pathname.startsWith('/shipment-track') ||
+    pathname.startsWith('/batch-import') ||
+    pathname.startsWith('/invoices') ||
+    pathname.startsWith('/rates') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/api/orders') ||
+    pathname.startsWith('/api/uploads')
+
   // Check if user needs to change password
   if (token && (token as any).passwordResetRequired) {
     // Allow access to the change password page and API
@@ -51,17 +65,13 @@ export async function middleware(request: NextRequest) {
     }
 
     // Redirect to change password page for all other protected routes
-    if (
-      pathname.startsWith('/dashboard') ||
-      pathname.startsWith('/api/orders') ||
-      pathname.startsWith('/api/uploads')
-    ) {
+    if (isStaffRoute) {
       return NextResponse.redirect(new URL('/auth/change-password', request.url))
     }
   }
 
-  // Dashboard routes - staff access only
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/api/orders') || pathname.startsWith('/api/uploads')) {
+  // Staff routes - staff access only
+  if (isStaffRoute) {
     if (!token) {
       return NextResponse.redirect(new URL('/auth/signin', request.url))
     }
@@ -79,12 +89,24 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Staff-only pages
     '/dashboard/:path*',
+    '/open-jobs/:path*',
+    '/prebilling-jobs/:path*',
+    '/shipments/:path*',
+    '/shipment-track/:path*',
+    '/batch-import/:path*',
+    '/invoices/:path*',
+    '/rates/:path*',
+    '/settings/:path*',
+    // Customer portal pages
     '/portal/:path*',
+    // API routes
     '/api/admin/:path*',
     '/api/orders/:path*',
     '/api/portal/:path*',
     '/api/uploads/:path*',
+    // Auth pages
     '/auth/change-password',
   ],
 }
