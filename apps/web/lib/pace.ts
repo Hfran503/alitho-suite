@@ -202,6 +202,7 @@ export async function fetchCustomerShipments(
                   itemNumber: data.u_itemNumber || data.U_itemNumber,
                   description: data.description,
                   qtyOrdered: data.qtyOrdered,
+                  poNum: data.U_po || data.u_po,
                 }
               } catch (err) {
                 console.error(`Failed to fetch component ${id}:`, err)
@@ -352,6 +353,7 @@ export async function fetchCustomerShipments(
                   itemNumber: data.u_itemNumber || data.U_itemNumber,
                   description: data.description,
                   qtyOrdered: data.qtyOrdered,
+                  poNum: data.U_po || data.u_po,
                 }
               } catch (err) {
                 console.error(`Failed to fetch component ${id}:`, err)

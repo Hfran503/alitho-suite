@@ -8,6 +8,7 @@ interface JobComponent {
   itemNumber: string
   description: string
   qtyOrdered?: number
+  poNum?: string
 }
 
 interface Shipment {
@@ -43,6 +44,7 @@ interface ComponentGroup {
   itemNumber: string
   description: string
   componentId: string
+  poNum?: string
   jobGroups: ShipmentsByJob[]
 }
 
@@ -67,6 +69,11 @@ export default function PortalShipmentsPage() {
       const data = await response.json()
 
       if (response.ok) {
+        console.log('Shipments data:', data.shipments)
+        // Log first shipment's components to see PO data
+        if (data.shipments?.[0]?.jobComponents) {
+          console.log('First shipment components:', data.shipments[0].jobComponents)
+        }
         setShipments(data.shipments || [])
         setCustomerID(data.customerID || '')
 
@@ -127,6 +134,7 @@ export default function PortalShipmentsPage() {
               itemNumber: component.itemNumber || 'N/A',
               description: component.description || 'No description',
               componentId: component.id,
+              poNum: component.poNum,
               jobGroups: [],
             })
           }
@@ -278,6 +286,11 @@ export default function PortalShipmentsPage() {
                         Item #{componentGroup.itemNumber}
                       </h3>
                       <p className="text-sm text-gray-600">{componentGroup.description}</p>
+                      {componentGroup.poNum && (
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          <span className="font-medium">PO:</span> {componentGroup.poNum}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
