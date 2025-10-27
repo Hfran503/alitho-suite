@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
+import { requireAdmin } from '@/lib/authorization'
 
 // DELETE /api/admin/sessions/[sessionId] - Delete a specific session (sign out user)
 export async function DELETE(
@@ -9,14 +8,12 @@ export async function DELETE(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await requireAdmin()
+    if (!authResult.authorized) {
+      return authResult.error
     }
 
-    // TODO: Add role check to ensure only admins can access this
-
+    const session = authResult.session
     const { sessionId } = await params
 
     // Get session info before deleting for audit log

@@ -1,20 +1,17 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
+import { requireAdmin } from '@/lib/authorization'
 import bcrypt from 'bcryptjs'
 
 // POST /api/admin/users/create - Create a new user
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await requireAdmin()
+    if (!authResult.authorized) {
+      return authResult.error
     }
 
-    // TODO: Add role check to ensure only admins can access this
-    // For now, we'll allow any authenticated user
+    const session = authResult.session
 
     const body = await request.json()
     const { name, email, password, role, paceCustomerId, sendInvite, isTemporaryPassword } = body

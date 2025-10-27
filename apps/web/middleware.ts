@@ -23,6 +23,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Admin routes - full_admin and admin roles only
+  if (pathname.startsWith('/api/admin')) {
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (token as any).role
+    // Only full_admin and admin can access admin routes
+    if (userRole !== 'full_admin' && userRole !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 })
+    }
+
+    return NextResponse.next()
+  }
+
   // Check if user needs to change password
   if (token && (token as any).passwordResetRequired) {
     // Allow access to the change password page and API
@@ -66,6 +81,7 @@ export const config = {
   matcher: [
     '/dashboard/:path*',
     '/portal/:path*',
+    '/api/admin/:path*',
     '/api/orders/:path*',
     '/api/portal/:path*',
     '/api/uploads/:path*',

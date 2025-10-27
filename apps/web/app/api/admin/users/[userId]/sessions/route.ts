@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
+import { requireAdmin } from '@/lib/authorization'
 
 // GET handler for build compatibility
 export async function GET() {
@@ -14,14 +13,12 @@ export async function DELETE(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await requireAdmin()
+    if (!authResult.authorized) {
+      return authResult.error
     }
 
-    // TODO: Add role check to ensure only admins can access this
-
+    const session = authResult.session
     const { userId } = await params
 
     // Prevent admin from signing out themselves

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
+import { requireAdmin } from '@/lib/authorization'
 
 // GET /api/admin/users/[userId] - Get user details
 export async function GET(
@@ -9,10 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await requireAdmin()
+    if (!authResult.authorized) {
+      return authResult.error
     }
 
     const { userId } = await params
@@ -50,15 +48,10 @@ export async function PATCH(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await requireAdmin()
+    if (!authResult.authorized) {
+      return authResult.error
     }
-
-    // TODO: Add role check to ensure only admins can access this
-    // For now, we'll allow any authenticated user
-    // In production, you should check if user has admin or owner role
 
     const { userId } = await params
     const body = await request.json()
@@ -114,15 +107,14 @@ export async function DELETE(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await requireAdmin()
+    if (!authResult.authorized) {
+      return authResult.error
     }
 
+    const session = authResult.session
     const { userId } = await params
 
-    // TODO: Add role check to ensure only admins can access this
     // Prevent user from deleting themselves
     if (session.user.id === userId) {
       return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
