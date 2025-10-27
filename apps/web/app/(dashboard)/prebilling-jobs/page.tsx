@@ -62,6 +62,7 @@ export default function PrebillingJobsPage() {
   // Get user session for role check
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role || ''
+  const userName = (session?.user as any)?.name || ''
   const canSyncPrices = userRole === 'full_admin' || userRole === 'admin'
 
   // Update current time every minute to refresh "time ago" display
@@ -99,6 +100,32 @@ export default function PrebillingJobsPage() {
     // If no valid cache, fetch fresh data
     fetchOpenJobs()
   }, [])
+
+  // Auto-filter CSR for customer_service role based on logged-in user's name
+  useEffect(() => {
+    // Only auto-filter if user is customer_service and jobs are loaded
+    if (userRole === 'customer_service' && jobs.length > 0 && userName) {
+      // Get unique CSR names from jobs
+      const uniqueCSRs = Array.from(new Set(jobs.map(j => j.csrName || j.csr).filter(Boolean)))
+
+      // Try to find a matching CSR name (case-insensitive partial match)
+      const matchingCSR = uniqueCSRs.find(csr => {
+        if (!csr) return false
+        const csrLower = csr.toString().toLowerCase()
+        const userNameLower = userName.toLowerCase()
+
+        // Check if CSR name contains any part of the user's name
+        const userParts = userNameLower.split(' ')
+        return userParts.some((part: string) => part && csrLower.includes(part))
+      })
+
+      // Set the filter to the matching CSR if found, only on initial load
+      if (matchingCSR && csrFilter === 'all') {
+        console.log(`Auto-filtering CSR for ${userName}: ${matchingCSR}`)
+        setCSRFilter(matchingCSR)
+      }
+    }
+  }, [jobs, userRole, userName, csrFilter])
 
   const fetchOpenJobs = async () => {
     setLoading(true)
