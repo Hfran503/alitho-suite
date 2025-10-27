@@ -37,6 +37,7 @@ interface Shipment {
 interface ShipmentsByJob {
   job: string
   componentQty: number | undefined
+  poNum?: string
   shipments: Shipment[]
 }
 
@@ -44,7 +45,6 @@ interface ComponentGroup {
   itemNumber: string
   description: string
   componentId: string
-  poNum?: string
   jobGroups: ShipmentsByJob[]
 }
 
@@ -134,7 +134,6 @@ export default function PortalShipmentsPage() {
               itemNumber: component.itemNumber || 'N/A',
               description: component.description || 'No description',
               componentId: component.id,
-              poNum: component.poNum,
               jobGroups: [],
             })
           }
@@ -147,6 +146,7 @@ export default function PortalShipmentsPage() {
             jobGroup = {
               job,
               componentQty: component.qtyOrdered,
+              poNum: component.poNum,
               shipments: [],
             }
             group.jobGroups.push(jobGroup)
@@ -286,11 +286,6 @@ export default function PortalShipmentsPage() {
                         Item #{componentGroup.itemNumber}
                       </h3>
                       <p className="text-sm text-gray-600">{componentGroup.description}</p>
-                      {componentGroup.poNum && (
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          <span className="font-medium">PO:</span> {componentGroup.poNum}
-                        </p>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -322,7 +317,12 @@ export default function PortalShipmentsPage() {
                             <div className="flex items-center gap-3">
                               <Briefcase className="w-4 h-4 text-gray-600" />
                               <div className="text-left">
-                                <span className="font-medium text-gray-900">Job: {jobGroup.job}</span>
+                                <span className="font-medium text-gray-900">
+                                  {jobGroup.poNum && (
+                                    <span className="text-gray-600">PO: {jobGroup.poNum} - </span>
+                                  )}
+                                  Job: {jobGroup.job}
+                                </span>
                                 {jobGroup.componentQty !== undefined && jobGroup.componentQty !== null && (
                                   <span className="ml-3 text-sm text-gray-600">
                                     Component Qty: {formatNumber(jobGroup.componentQty)}
