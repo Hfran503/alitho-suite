@@ -581,3 +581,147 @@ export async function deleteNetSuiteCredentials(tenantId: string): Promise<void>
     }
   }
 }
+
+// ============================================
+// EMAIL INTEGRATION CREDENTIALS
+// ============================================
+
+export interface EmailCredentials {
+  provider: 'smtp' | 'sendgrid' | 'ses' | 'resend'
+
+  // SMTP credentials
+  smtpHost?: string
+  smtpPort?: number
+  smtpSecure?: boolean
+  smtpUser?: string
+  smtpPassword?: string
+
+  // SendGrid credentials
+  sendgridApiKey?: string
+
+  // AWS SES credentials
+  sesRegion?: string
+  sesAccessKeyId?: string
+  sesSecretAccessKey?: string
+
+  // Resend credentials
+  resendApiKey?: string
+
+  // Common fields
+  fromEmail?: string
+  fromName?: string
+}
+
+/**
+ * Get email credentials from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to get credentials for
+ * @returns The email credentials
+ */
+export async function getEmailCredentials(tenantId: string): Promise<EmailCredentials> {
+  const secretName = `calitho-suite/integrations/email/${tenantId}`
+
+  try {
+    const secret = await getSecret(secretName, true)
+    return secret as EmailCredentials
+  } catch (error) {
+    throw new Error(`Email credentials not found for tenant ${tenantId}`)
+  }
+}
+
+/**
+ * Save email credentials to AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to save credentials for
+ * @param credentials - The email credentials to save
+ */
+export async function saveEmailCredentials(
+  tenantId: string,
+  credentials: Partial<EmailCredentials>
+): Promise<void> {
+  const secretName = `calitho-suite/integrations/email/${tenantId}`
+
+  // Get existing credentials if they exist
+  let existingSecret: EmailCredentials = { provider: 'smtp' }
+  try {
+    existingSecret = await getSecret(secretName, true)
+  } catch (error) {
+    // Secret doesn't exist yet, will create new one
+  }
+
+  // Merge with new credentials (only update provided fields)
+  const secretValue: EmailCredentials = {
+    provider: credentials.provider ?? existingSecret.provider,
+    smtpHost: credentials.smtpHost ?? existingSecret.smtpHost,
+    smtpPort: credentials.smtpPort ?? existingSecret.smtpPort,
+    smtpSecure: credentials.smtpSecure ?? existingSecret.smtpSecure,
+    smtpUser: credentials.smtpUser ?? existingSecret.smtpUser,
+    smtpPassword: credentials.smtpPassword ?? existingSecret.smtpPassword,
+    sendgridApiKey: credentials.sendgridApiKey ?? existingSecret.sendgridApiKey,
+    sesRegion: credentials.sesRegion ?? existingSecret.sesRegion,
+    sesAccessKeyId: credentials.sesAccessKeyId ?? existingSecret.sesAccessKeyId,
+    sesSecretAccessKey: credentials.sesSecretAccessKey ?? existingSecret.sesSecretAccessKey,
+    resendApiKey: credentials.resendApiKey ?? existingSecret.resendApiKey,
+    fromEmail: credentials.fromEmail ?? existingSecret.fromEmail,
+    fromName: credentials.fromName ?? existingSecret.fromName,
+  }
+
+  const secretString = JSON.stringify(secretValue)
+
+  try {
+    // Try to update existing secret first
+    const updateCommand = new UpdateSecretCommand({
+      SecretId: secretName,
+      SecretString: secretString,
+    })
+
+    await client.send(updateCommand)
+
+    // Update cache
+    secretsCache.set(secretName, secretValue)
+  } catch (error: any) {
+    // If secret doesn't exist, create it
+    if (error.name === 'ResourceNotFoundException') {
+      const createCommand = new CreateSecretCommand({
+        Name: secretName,
+        SecretString: secretString,
+        Description: `Email service credentials for tenant ${tenantId}`,
+        Tags: [
+          { Key: 'Application', Value: 'calitho-suite' },
+          { Key: 'Integration', Value: 'email' },
+          { Key: 'TenantId', Value: tenantId },
+        ],
+      })
+
+      await client.send(createCommand)
+
+      // Update cache
+      secretsCache.set(secretName, secretValue)
+    } else {
+      throw error
+    }
+  }
+}
+
+/**
+ * Delete email credentials from AWS Secrets Manager for a specific tenant
+ * @param tenantId - The tenant ID to delete credentials for
+ */
+export async function deleteEmailCredentials(tenantId: string): Promise<void> {
+  const secretName = `calitho-suite/integrations/email/${tenantId}`
+
+  try {
+    const deleteCommand = new DeleteSecretCommand({
+      SecretId: secretName,
+      ForceDeleteWithoutRecovery: false, // Allow 30-day recovery window
+    })
+
+    await client.send(deleteCommand)
+
+    // Clear from cache
+    secretsCache.delete(secretName)
+  } catch (error: any) {
+    // Ignore if secret doesn't exist
+    if (error.name !== 'ResourceNotFoundException') {
+      throw error
+    }
+  }
+}

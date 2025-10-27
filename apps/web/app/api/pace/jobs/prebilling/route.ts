@@ -369,6 +369,54 @@ export async function GET() {
 
     console.log(`✅ Enriched jobs with CSR names`)
 
+    // Enrich jobs with Planner names and emails
+    const uniquePlanners = [...new Set(jobs.map(j => j.u_planner).filter(Boolean))]
+    console.log(`Fetching ${uniquePlanners.length} unique Planner names and emails...`)
+
+    const plannerPromises = uniquePlanners.map(async (plannerId) => {
+      try {
+        const plannerResponse = await fetch(
+          `${paceApiUrl}/ReadObject/readUDO_Planner?primaryKey=${encodeURIComponent(plannerId!)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          }
+        )
+
+        if (plannerResponse.ok) {
+          const plannerData = await plannerResponse.json()
+          return {
+            plannerId,
+            plannerName: plannerData.name || plannerData.id,
+            plannerEmail: plannerData.email || null
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching Planner ${plannerId}:`, err)
+      }
+      return { plannerId, plannerName: null, plannerEmail: null }
+    })
+
+    const plannerResults = await Promise.all(plannerPromises)
+    const plannerNameMap = new Map(plannerResults.map(r => [r.plannerId, r.plannerName]))
+    const plannerEmailMap = new Map(plannerResults.map(r => [r.plannerId, r.plannerEmail]))
+
+    // Add Planner name and email to each job
+    jobs.forEach(job => {
+      if (job.u_planner && plannerNameMap.has(job.u_planner)) {
+        job.plannerName = plannerNameMap.get(job.u_planner) || null
+      }
+      if (job.u_planner && plannerEmailMap.has(job.u_planner)) {
+        job.plannerEmail = plannerEmailMap.get(job.u_planner) || null
+      }
+    })
+
+    console.log(`✅ Enriched jobs with Planner names and emails`)
+
     // Enrich jobs with JobType descriptions
     const uniqueJobTypes = [...new Set(jobs.map(j => j.jobType).filter(Boolean))]
     console.log(`Fetching ${uniqueJobTypes.length} unique JobType descriptions...`)

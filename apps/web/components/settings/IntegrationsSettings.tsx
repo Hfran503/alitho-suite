@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { EasyPostIntegrationModal } from './EasyPostIntegrationModal'
 import ShipStationIntegrationModal from './ShipStationIntegrationModal'
 import { NetSuiteIntegrationModal } from './NetSuiteIntegrationModal'
+import { SendEmailIntegrationModal } from './SendEmailIntegrationModal'
 
 interface Integration {
   provider: string
@@ -20,6 +21,7 @@ export function IntegrationsSettings() {
   const [isEasyPostModalOpen, setIsEasyPostModalOpen] = useState(false)
   const [isShipStationModalOpen, setIsShipStationModalOpen] = useState(false)
   const [isNetSuiteModalOpen, setIsNetSuiteModalOpen] = useState(false)
+  const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false)
 
   useEffect(() => {
     fetchIntegrations()
@@ -38,6 +40,10 @@ export function IntegrationsSettings() {
       // Fetch NetSuite integration status
       const netsuiteResponse = await fetch('/api/integrations/netsuite')
       const netsuiteData = await netsuiteResponse.json()
+
+      // Fetch Send Emails integration status
+      const emailResponse = await fetch('/api/integrations/email')
+      const emailData = await emailResponse.json()
 
       const integrationsList: Integration[] = [
         {
@@ -64,6 +70,14 @@ export function IntegrationsSettings() {
           configured: netsuiteData.data?.configured || false,
           enabled: netsuiteData.data?.sandboxEnabled || netsuiteData.data?.productionEnabled || false,
         },
+        {
+          provider: 'email',
+          name: 'Send Emails',
+          description: 'Configure email sending via SMTP, SendGrid, AWS SES, or Resend.',
+          icon: '📧',
+          configured: emailData.data?.configured || false,
+          enabled: emailData.data?.enabled || false,
+        },
       ]
 
       setIntegrations(integrationsList)
@@ -81,6 +95,8 @@ export function IntegrationsSettings() {
       setIsShipStationModalOpen(true)
     } else if (provider === 'netsuite') {
       setIsNetSuiteModalOpen(true)
+    } else if (provider === 'email') {
+      setIsSendEmailModalOpen(true)
     }
   }
 
@@ -89,6 +105,7 @@ export function IntegrationsSettings() {
     setIsEasyPostModalOpen(false)
     setIsShipStationModalOpen(false)
     setIsNetSuiteModalOpen(false)
+    setIsSendEmailModalOpen(false)
   }
 
   if (isLoading) {
@@ -193,6 +210,14 @@ export function IntegrationsSettings() {
         <NetSuiteIntegrationModal
           isOpen={isNetSuiteModalOpen}
           onClose={() => setIsNetSuiteModalOpen(false)}
+          onSuccess={handleIntegrationUpdated}
+        />
+      )}
+
+      {isSendEmailModalOpen && (
+        <SendEmailIntegrationModal
+          isOpen={isSendEmailModalOpen}
+          onClose={() => setIsSendEmailModalOpen(false)}
           onSuccess={handleIntegrationUpdated}
         />
       )}

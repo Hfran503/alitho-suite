@@ -10,15 +10,20 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.682.0",
     "@aws-sdk/client-secrets-manager": "^3.911.0",
+    "@aws-sdk/client-ses": "^3.918.0",
     "@repo/database": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/types": "workspace:*",
+    "@sendgrid/mail": "^8.1.6",
+    "@types/nodemailer": "^7.0.3",
     "bullmq": "^5.22.6",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
     "ioredis": "^5.4.1",
-    "playwright": "^1.48.2"
+    "nodemailer": "^7.0.10",
+    "playwright": "^1.48.2",
+    "resend": "^6.3.0"
   },
   "devDependencies": {
     "@types/node": "^20.16.11",
