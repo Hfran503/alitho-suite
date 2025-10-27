@@ -236,17 +236,21 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
       // Call logout API to clear server-side session
       await fetch('/api/auth/logout', { method: 'POST' })
 
+      // Use window.location.origin to ensure correct domain (calithosuite.com)
+      const callbackUrl = `${window.location.origin}/auth/signin`
+
       // Sign out using NextAuth
       await signOut({
         redirect: true,
-        callbackUrl: '/auth/signin'
+        callbackUrl
       })
     } catch (error) {
       console.error('Logout error:', error)
       // Still try to sign out even if API call fails
+      const callbackUrl = `${window.location.origin}/auth/signin`
       await signOut({
         redirect: true,
-        callbackUrl: '/auth/signin'
+        callbackUrl
       })
     }
   }

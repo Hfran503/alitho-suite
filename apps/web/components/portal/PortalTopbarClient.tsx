@@ -49,7 +49,11 @@ export function PortalTopbarClient({ user }: PortalTopbarClientProps) {
           {/* Sign Out Button */}
           {user && (
             <button
-              onClick={() => signOut({ callbackUrl: '/auth/portal-signin' })}
+              onClick={() => {
+                // Use window.location.origin to ensure correct domain (calithosuite.com)
+                const callbackUrl = `${window.location.origin}/auth/portal-signin`
+                signOut({ callbackUrl })
+              }}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <LogOut className="h-4 w-4" />
