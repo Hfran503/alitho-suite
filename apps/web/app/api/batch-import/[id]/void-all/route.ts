@@ -104,7 +104,7 @@ export async function POST(
 
       // Process this batch in parallel
       const batchResults = await Promise.allSettled(
-        batch.map(async (row) => {
+        batch.map(async (row: typeof successRows[number]) => {
           // Void the label using ShipStation client
           if (!row.shipstationLabelId) {
             return {
