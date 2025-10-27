@@ -53,6 +53,7 @@ model User {
   image         String?
   password      String?   // hashed, nullable for SSO-only users
   passwordResetRequired Boolean @default(false) // Force password change on next login
+  paceCustomerId String?  // PACE Customer ID for customer role users
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -65,6 +66,7 @@ model User {
   auditLogs   AuditLog[]
 
   @@index([email])
+  @@index([paceCustomerId])
 }
 
 model Membership {

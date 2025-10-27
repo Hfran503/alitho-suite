@@ -16,6 +16,7 @@ export function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) 
     email: string
     password: string
     role: typeof USER_ROLES[keyof typeof USER_ROLES]
+    paceCustomerId: string
     sendInvite: boolean
     isTemporaryPassword: boolean
   }>({
@@ -23,6 +24,7 @@ export function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) 
     email: '',
     password: '',
     role: USER_ROLES.CUSTOMER_SERVICE,
+    paceCustomerId: '',
     sendInvite: true,
     isTemporaryPassword: true,
   })
@@ -58,15 +60,16 @@ export function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) 
 
       if (response.ok) {
         setSuccess(true)
-        setFormData({
-          name: '',
-          email: '',
-          password: '',
-          role: USER_ROLES.CUSTOMER_SERVICE,
-          sendInvite: true,
-          isTemporaryPassword: true,
-        })
         setTimeout(() => {
+          setFormData({
+            name: '',
+            email: '',
+            password: '',
+            role: USER_ROLES.CUSTOMER_SERVICE,
+            paceCustomerId: '',
+            sendInvite: true,
+            isTemporaryPassword: true,
+          })
           onSuccess()
           onClose()
         }, 1500)
@@ -177,6 +180,26 @@ export function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) 
               {ROLE_DESCRIPTIONS[formData.role]}
             </p>
           </div>
+
+          {/* PACE Customer ID (only for customer role) */}
+          {formData.role === USER_ROLES.CUSTOMER && (
+            <div>
+              <label htmlFor="paceCustomerId" className="block text-sm font-medium text-gray-700 mb-2">
+                PACE Customer ID
+              </label>
+              <input
+                type="text"
+                id="paceCustomerId"
+                value={formData.paceCustomerId}
+                onChange={(e) => setFormData({ ...formData, paceCustomerId: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter PACE Customer ID"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Used to fetch customer information from PACE
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Invitation Options */}

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     // For now, we'll allow any authenticated user
 
     const body = await request.json()
-    const { name, email, password, role, sendInvite, isTemporaryPassword } = body
+    const { name, email, password, role, paceCustomerId, sendInvite, isTemporaryPassword } = body
 
     // Validation
     if (!name || !email) {
@@ -75,6 +75,7 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         password: hashedPassword,
         passwordResetRequired: isTemporaryPassword || false, // Force password change if temporary
+        paceCustomerId: paceCustomerId || null, // Add PACE Customer ID
         memberships: {
           create: {
             role: role || 'customer_service',

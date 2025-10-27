@@ -9,6 +9,7 @@ interface User {
   email: string
   name: string | null
   image: string | null
+  paceCustomerId: string | null
   memberships: {
     id: string
     role: string
@@ -30,6 +31,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: EditUserModa
   const [formData, setFormData] = useState({
     name: user.name || '',
     email: user.email,
+    paceCustomerId: user.paceCustomerId || '',
   })
   const [membershipRoles, setMembershipRoles] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -58,6 +60,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: EditUserModa
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
+          paceCustomerId: formData.paceCustomerId,
           memberships: Object.entries(membershipRoles).map(([id, role]) => ({
             id,
             role,
@@ -172,6 +175,26 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: EditUserModa
                 required
               />
             </div>
+
+            {/* PACE Customer ID - show if user has customer role */}
+            {user.memberships.some(m => m.role === USER_ROLES.CUSTOMER) && (
+              <div>
+                <label htmlFor="paceCustomerId" className="block text-sm font-medium text-gray-700 mb-2">
+                  PACE Customer ID
+                </label>
+                <input
+                  type="text"
+                  id="paceCustomerId"
+                  value={formData.paceCustomerId}
+                  onChange={(e) => setFormData({ ...formData, paceCustomerId: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter PACE Customer ID"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Used to fetch customer information from PACE
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

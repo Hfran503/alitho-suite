@@ -11,6 +11,7 @@ interface User {
   email: string
   name: string | null
   image: string | null
+  paceCustomerId: string | null
   createdAt: string
   memberships: {
     id: string

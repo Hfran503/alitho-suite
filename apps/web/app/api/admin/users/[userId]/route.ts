@@ -62,7 +62,7 @@ export async function PATCH(
 
     const { userId } = await params
     const body = await request.json()
-    const { name, email, memberships } = body
+    const { name, email, paceCustomerId, memberships } = body
 
     // Update user basic info
     await db.user.update({
@@ -70,6 +70,7 @@ export async function PATCH(
       data: {
         name,
         email,
+        paceCustomerId: paceCustomerId || null,
       },
     })
 

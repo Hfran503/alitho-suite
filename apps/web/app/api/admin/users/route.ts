@@ -22,6 +22,7 @@ export async function GET() {
         email: true,
         name: true,
         image: true,
+        paceCustomerId: true,
         createdAt: true,
         memberships: {
           include: {
