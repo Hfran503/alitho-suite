@@ -37,9 +37,11 @@ function(record, search, log, error, cache) {
 
             // Extract invoice header fields
             invoiceNumber = invoiceData.invoiceNum;
+            var paceInvoiceId = invoiceData.id;
             var customerExternalId = invoiceData.customerId;
             var invoiceDate = invoiceData.invoiceDate; // Format: YYYY-MM-DD
             var poNumber = invoiceData.poNumber;
+            var jobNum = invoiceData.jobNum;
             var customerName = invoiceData.customerName;
             var taxAmount = invoiceData.taxAmount || 0;
             var invoiceAmount = invoiceData.invoiceAmount || 0;
@@ -140,11 +142,10 @@ function(record, search, log, error, cache) {
             invoiceRecord.setValue({ fieldId: 'trandate', value: formattedDate });
             invoiceRecord.setValue({ fieldId: 'tranid', value: invoiceNumber });
             invoiceRecord.setValue({ fieldId: 'otherrefnum', value: poNumber || '' });
+            invoiceRecord.setValue({ fieldId: 'custbody1', value: paceInvoiceId });
 
-            // Set memo with customer name and details
-            var memoText = 'PACE Invoice for ' + customerName +
-                           '\nPO#: ' + (poNumber || 'N/A') +
-                           '\nAmount: $' + invoiceAmount.toFixed(2);
+            // Set memo with job number
+            var memoText = jobNum || '';
             invoiceRecord.setValue({ fieldId: 'memo', value: memoText });
 
             // Add sales distribution line items
