@@ -165,20 +165,8 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if job is already scheduled
-    const existing = await db.jobSchedule.findFirst({
-      where: {
-        paceJobNumber,
-        tenantId: membership.tenantId,
-      },
-    })
-
-    if (existing) {
-      return NextResponse.json(
-        { error: 'Job is already scheduled' },
-        { status: 400 }
-      )
-    }
+    // Note: Allowing same job to be scheduled multiple times on different dates/machines
+    // Removed duplicate check to support multi-scheduling
 
     // Verify equipment if provided
     if (equipmentId) {
