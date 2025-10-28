@@ -14,6 +14,13 @@ interface DepartmentJobType {
   jobTypeName: string
 }
 
+interface Equipment {
+  id: string
+  name: string
+  description: string | null
+  isActive: boolean
+}
+
 interface Department {
   id: string
   name: string
@@ -21,6 +28,7 @@ interface Department {
   color: string | null
   isActive: boolean
   jobTypes: DepartmentJobType[]
+  equipment?: Equipment[]
 }
 
 export function DepartmentsSettings() {
@@ -33,6 +41,14 @@ export function DepartmentsSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Equipment management state
+  const [showEquipmentModal, setShowEquipmentModal] = useState(false)
+  const [selectedDepartmentForEquipment, setSelectedDepartmentForEquipment] = useState<Department | null>(null)
+  const [equipmentForm, setEquipmentForm] = useState({
+    name: '',
+    description: '',
+  })
 
   const [formData, setFormData] = useState({
     name: '',
@@ -214,6 +230,85 @@ export function DepartmentsSettings() {
         ? prev.selectedJobTypes.filter(id => id !== jobTypeId)
         : [...prev.selectedJobTypes, jobTypeId],
     }))
+  }
+
+  // Equipment management functions
+  const openEquipmentModal = (department: Department) => {
+    setSelectedDepartmentForEquipment(department)
+    setEquipmentForm({ name: '', description: '' })
+    setShowEquipmentModal(true)
+  }
+
+  const closeEquipmentModal = () => {
+    setShowEquipmentModal(false)
+    setSelectedDepartmentForEquipment(null)
+    setEquipmentForm({ name: '', description: '' })
+  }
+
+  const handleAddEquipment = async () => {
+    if (!selectedDepartmentForEquipment || !equipmentForm.name) {
+      setError('Equipment name is required')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError('')
+
+      const res = await fetch('/api/equipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: equipmentForm.name,
+          description: equipmentForm.description || null,
+          departmentId: selectedDepartmentForEquipment.id,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to add equipment')
+      }
+
+      setSuccess('Equipment added successfully!')
+      await loadDepartments()
+      closeEquipmentModal()
+
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteEquipment = async (equipmentId: string, equipmentName: string) => {
+    if (!confirm(`Are you sure you want to delete "${equipmentName}"?`)) {
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError('')
+
+      const res = await fetch(`/api/equipment/${equipmentId}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to delete equipment')
+      }
+
+      setSuccess('Equipment deleted successfully!')
+      await loadDepartments()
+
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
@@ -400,6 +495,48 @@ export function DepartmentsSettings() {
                       </div>
                     )}
                   </div>
+
+                  {/* Equipment Section */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-gray-700">
+                        Equipment/Machines ({department.equipment?.length || 0}):
+                      </p>
+                      <button
+                        onClick={() => openEquipmentModal(department)}
+                        disabled={saving}
+                        className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 text-xs"
+                      >
+                        + Add Equipment
+                      </button>
+                    </div>
+                    {!department.equipment || department.equipment.length === 0 ? (
+                      <p className="text-sm text-gray-500">No equipment added</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {department.equipment.map((eq) => (
+                          <div
+                            key={eq.id}
+                            className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm"
+                          >
+                            <div className="flex-1">
+                              <span className="font-medium">{eq.name}</span>
+                              {eq.description && (
+                                <span className="text-gray-600 ml-2">- {eq.description}</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleDeleteEquipment(eq.id, eq.name)}
+                              disabled={saving}
+                              className="text-red-600 hover:text-red-800 text-xs px-2"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex gap-2 ml-4">
@@ -423,6 +560,70 @@ export function DepartmentsSettings() {
           ))
         )}
       </div>
+
+      {/* Add Equipment Modal */}
+      {showEquipmentModal && selectedDepartmentForEquipment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">
+                Add Equipment to {selectedDepartmentForEquipment.name}
+              </h3>
+              <button
+                onClick={closeEquipmentModal}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Equipment Name *
+                </label>
+                <input
+                  type="text"
+                  value={equipmentForm.name}
+                  onChange={(e) => setEquipmentForm({ ...equipmentForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Press 1, Cutter A, Folder 3"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={equipmentForm.description}
+                  onChange={(e) => setEquipmentForm({ ...equipmentForm, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Additional details about this equipment"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button
+                  onClick={handleAddEquipment}
+                  disabled={saving || !equipmentForm.name}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Adding...' : 'Add Equipment'}
+                </button>
+                <button
+                  onClick={closeEquipmentModal}
+                  disabled={saving}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -5,8 +5,8 @@ import { db } from '@repo/database'
 
 // GET /api/departments/[id] - Get a single department
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -23,9 +23,11 @@ export async function GET(
       return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
     }
 
+    const { id } = await params
+
     const department = await db.department.findFirst({
       where: {
-        id: params.id,
+        id,
         tenantId: membership.tenantId,
       },
       include: {
@@ -79,7 +81,7 @@ export async function GET(
 // PUT /api/departments/[id] - Update a department
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -96,10 +98,12 @@ export async function PUT(
       return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
     }
 
+    const { id } = await params
+
     // Check if department exists and belongs to tenant
     const existingDepartment = await db.department.findFirst({
       where: {
-        id: params.id,
+        id,
         tenantId: membership.tenantId,
       },
     })
@@ -114,29 +118,15 @@ export async function PUT(
     const body = await request.json()
     const { name, description, color, jobTypes } = body
 
-    // Update department
-    const department = await db.department.update({
+    // Update department basic fields
+    await db.department.update({
       where: {
-        id: params.id,
+        id,
       },
       data: {
         name,
         description,
         color,
-      },
-      include: {
-        jobTypes: true,
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
       },
     })
 
@@ -145,7 +135,7 @@ export async function PUT(
       // Delete all existing job types
       await db.departmentJobType.deleteMany({
         where: {
-          departmentId: params.id,
+          departmentId: id,
         },
       })
 
@@ -153,7 +143,7 @@ export async function PUT(
       if (jobTypes.length > 0) {
         await db.departmentJobType.createMany({
           data: jobTypes.map((jt: { paceJobTypeId: number; jobTypeName: string }) => ({
-            departmentId: params.id,
+            departmentId: id,
             paceJobTypeId: jt.paceJobTypeId,
             jobTypeName: jt.jobTypeName,
           })),
@@ -161,10 +151,10 @@ export async function PUT(
       }
     }
 
-    // Fetch updated department with relations
+    // Fetch updated department with all relations
     const updatedDepartment = await db.department.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         jobTypes: {
@@ -209,8 +199,8 @@ export async function PUT(
 
 // DELETE /api/departments/[id] - Delete a department
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -227,10 +217,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
     }
 
+    const { id } = await params
+
     // Check if department exists and belongs to tenant
     const existingDepartment = await db.department.findFirst({
       where: {
-        id: params.id,
+        id,
         tenantId: membership.tenantId,
       },
     })
@@ -245,7 +237,7 @@ export async function DELETE(
     // Delete department (cascade will delete related jobTypes and members)
     await db.department.delete({
       where: {
-        id: params.id,
+        id,
       },
     })
 

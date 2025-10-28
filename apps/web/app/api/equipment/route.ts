@@ -3,8 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 
-// GET /api/departments - List all departments
-export async function GET() {
+// GET /api/equipment - List all equipment (optionally filtered by department)
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -20,34 +20,26 @@ export async function GET() {
       return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
     }
 
-    // Fetch all departments for this tenant
-    const departments = await db.department.findMany({
-      where: {
-        tenantId: membership.tenantId,
-      },
+    // Parse query params
+    const { searchParams } = new URL(request.url)
+    const departmentId = searchParams.get('departmentId')
+
+    const where: any = {
+      tenantId: membership.tenantId,
+    }
+
+    if (departmentId) {
+      where.departmentId = departmentId
+    }
+
+    // Fetch equipment
+    const equipment = await db.equipment.findMany({
+      where,
       include: {
-        jobTypes: {
-          orderBy: {
-            jobTypeName: 'asc',
-          },
-        },
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        equipment: {
-          where: {
-            isActive: true,
-          },
-          orderBy: {
-            name: 'asc',
+        department: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -58,10 +50,10 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: departments,
+      data: equipment,
     })
   } catch (error) {
-    console.error('Get departments error:', error)
+    console.error('Get equipment error:', error)
 
     if (error instanceof Error) {
       return NextResponse.json(
@@ -77,7 +69,7 @@ export async function GET() {
   }
 }
 
-// POST /api/departments - Create a new department
+// POST /api/equipment - Create new equipment
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -95,42 +87,44 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { name, description, color, jobTypes } = body
+    const { name, description, departmentId, metadata } = body
 
-    if (!name) {
+    if (!name || !departmentId) {
       return NextResponse.json(
-        { error: 'Department name is required' },
+        { error: 'Name and departmentId are required' },
         { status: 400 }
       )
     }
 
-    // Create department with job types
-    const department = await db.department.create({
+    // Verify department belongs to tenant
+    const department = await db.department.findFirst({
+      where: {
+        id: departmentId,
+        tenantId: membership.tenantId,
+      },
+    })
+
+    if (!department) {
+      return NextResponse.json(
+        { error: 'Department not found' },
+        { status: 404 }
+      )
+    }
+
+    // Create equipment
+    const equipment = await db.equipment.create({
       data: {
         name,
         description,
-        color,
+        departmentId,
+        metadata,
         tenantId: membership.tenantId,
-        jobTypes: jobTypes
-          ? {
-              create: jobTypes.map((jt: { paceJobTypeId: number; jobTypeName: string }) => ({
-                paceJobTypeId: jt.paceJobTypeId,
-                jobTypeName: jt.jobTypeName,
-              })),
-            }
-          : undefined,
       },
       include: {
-        jobTypes: true,
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
+        department: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -138,10 +132,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      data: department,
+      data: equipment,
     })
   } catch (error) {
-    console.error('Create department error:', error)
+    console.error('Create equipment error:', error)
 
     if (error instanceof Error) {
       return NextResponse.json(

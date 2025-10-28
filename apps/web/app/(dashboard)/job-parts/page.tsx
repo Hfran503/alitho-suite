@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 
 type JobPartDetail = {
   id?: string
@@ -39,8 +38,6 @@ export default function JobPartsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(50)
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
-
-  const { data: session } = useSession()
 
   // Update current time every minute
   useEffect(() => {

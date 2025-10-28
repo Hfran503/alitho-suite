@@ -23,6 +23,7 @@ model Tenant {
   batchImports           BatchImport[]
   carrierServiceMappings CarrierServiceMapping[]
   departments            Department[]
+  equipment              Equipment[]
   integrations           Integration[]
   invoiceIntegrations    InvoiceIntegration[]
   JobSchedule            JobSchedule[]
@@ -498,6 +499,7 @@ model Department {
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   jobTypes    DepartmentJobType[]
   members     DepartmentMember[]
+  equipment   Equipment[]
   JobSchedule JobSchedule[]
 
   @@unique([tenantId, name])
@@ -534,17 +536,40 @@ model DepartmentMember {
   @@index([departmentId])
 }
 
+model Equipment {
+  id           String        @id @default(cuid())
+  name         String        // e.g., "Press 1", "Cutter A", "Folder 3"
+  description  String?
+  departmentId String
+  isActive     Boolean       @default(true)
+  metadata     Json?         // Additional specs, capacity, etc.
+  tenantId     String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  department   Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedules    JobSchedule[]
+
+  @@unique([tenantId, departmentId, name])
+  @@index([departmentId])
+  @@index([tenantId])
+  @@index([isActive])
+}
+
 model JobSchedule {
-  id             String     @id
+  id             String      @id
   paceJobNumber  String
   paceJobData    Json?
   departmentId   String
+  equipmentId    String?     // Optional: assign to specific equipment/machine
   assignedToId   String?
   assignedToName String?
   scheduledDate  DateTime
-  position       Int        @default(0)
-  status         String     @default("scheduled")
-  priority       String     @default("normal")
+  position       Int         @default(0)
+  status         String      @default("scheduled")
+  priority       String      @default("normal")
   notes          String?
   estimatedHours Float?
   actualHours    Float?
@@ -554,16 +579,19 @@ model JobSchedule {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime
   completedAt    DateTime?
-  User           User?      @relation(fields: [assignedToId], references: [id])
-  Department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  Tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  User           User?       @relation(fields: [assignedToId], references: [id])
+  Department     Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  Equipment      Equipment?  @relation(fields: [equipmentId], references: [id])
+  Tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([assignedToId])
   @@index([departmentId])
+  @@index([equipmentId])
   @@index([paceJobNumber])
   @@index([scheduledDate])
   @@index([status])
   @@index([tenantId, departmentId, scheduledDate])
+  @@index([tenantId, departmentId, equipmentId, scheduledDate])
   @@index([tenantId])
 }
 
