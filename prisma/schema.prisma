@@ -9,88 +9,70 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
-// ============================================
-// TENANT & MULTI-TENANCY
-// ============================================
-
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  plan      String   @default("free") // free, pro, enterprise
-  status    String   @default("active") // active, suspended, deleted
-
-  // Metadata
-  metadata  Json?
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  memberships          Membership[]
-  orders               Order[]
-  attachments          Attachment[]
-  auditLogs            AuditLog[]
-  integrations         Integration[]
-  netsuiteIntegration  NetSuiteIntegration?
-  invoiceIntegrations  InvoiceIntegration[]
-  shippingLabels       ShippingLabel[]
-  shipmentTypeMappings ShipmentTypeMapping[]
+  id                     String                  @id @default(cuid())
+  name                   String
+  slug                   String                  @unique
+  plan                   String                  @default("free")
+  status                 String                  @default("active")
+  metadata               Json?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  attachments            Attachment[]
+  auditLogs              AuditLog[]
+  batchImports           BatchImport[]
   carrierServiceMappings CarrierServiceMapping[]
-  batchImports         BatchImport[]
-  menuConfigurations   MenuConfiguration[]
+  departments            Department[]
+  integrations           Integration[]
+  invoiceIntegrations    InvoiceIntegration[]
+  JobSchedule            JobSchedule[]
+  memberships            Membership[]
+  menuConfigurations     MenuConfiguration[]
+  netsuiteIntegration    NetSuiteIntegration?
+  orders                 Order[]
+  shipmentTypeMappings   ShipmentTypeMapping[]
+  shippingLabels         ShippingLabel[]
 
   @@index([slug])
   @@index([status])
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified DateTime?
-  name          String?
-  image         String?
-  password      String?   // hashed, nullable for SSO-only users
-  passwordResetRequired Boolean @default(false) // Force password change on next login
-  paceCustomerId String?  // PACE Customer ID for customer role users
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  memberships Membership[]
-  accounts    Account[]
-  sessions    Session[]
-  auditLogs   AuditLog[]
+  id                    String             @id @default(cuid())
+  email                 String             @unique
+  emailVerified         DateTime?
+  name                  String?
+  image                 String?
+  password              String?
+  passwordResetRequired Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  paceCustomerId        String?
+  accounts              Account[]
+  auditLogs             AuditLog[]
+  departmentMemberships DepartmentMember[]
+  JobSchedule           JobSchedule[]
+  memberships           Membership[]
+  sessions              Session[]
 
   @@index([email])
   @@index([paceCustomerId])
 }
 
 model Membership {
-  id       String @id @default(cuid())
-  role     String @default("customer_service") // full_admin, admin, customer_service, estimator, logistics, accounting
-
-  // Relations
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
+  id        String   @id @default(cuid())
+  role      String   @default("customer_service")
+  userId    String
+  tenantId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tenantId])
   @@index([userId])
   @@index([tenantId])
 }
-
-// ============================================
-// NEXTAUTH MODELS
-// ============================================
 
 model Account {
   id                String  @id @default(cuid())
@@ -105,8 +87,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -130,46 +111,28 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ============================================
-// BUSINESS ENTITIES
-// ============================================
-
 model Order {
-  id           String   @id @default(cuid())
-  orderNumber  String   @unique
-  status       String   @default("pending") // pending, processing, shipped, delivered, cancelled
-
-  // Customer info
-  customerName  String
-  customerEmail String
-  customerPhone String?
-
-  // Amounts
-  subtotal     Decimal  @db.Decimal(10, 2)
-  tax          Decimal  @db.Decimal(10, 2)
-  total        Decimal  @db.Decimal(10, 2)
-  currency     String   @default("USD")
-
-  // Shipping
+  id              String       @id @default(cuid())
+  orderNumber     String       @unique
+  status          String       @default("pending")
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  subtotal        Decimal      @db.Decimal(10, 2)
+  tax             Decimal      @db.Decimal(10, 2)
+  total           Decimal      @db.Decimal(10, 2)
+  currency        String       @default("USD")
   shippingAddress Json?
   billingAddress  Json?
-
-  // Additional data
-  notes        String?
-  metadata     Json?
-
-  // Tenant
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Relations
-  items        OrderItem[]
-  attachments  Attachment[]
-  auditLogs    AuditLog[]
+  notes           String?
+  metadata        Json?
+  tenantId        String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  attachments     Attachment[]
+  auditLogs       AuditLog[]
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
 
   @@index([tenantId])
   @@index([orderNumber])
@@ -179,102 +142,61 @@ model Order {
 }
 
 model OrderItem {
-  id          String  @id @default(cuid())
-
-  // Product info
+  id          String   @id @default(cuid())
   sku         String?
   name        String
   description String?
   quantity    Int
-  unitPrice   Decimal @db.Decimal(10, 2)
-  total       Decimal @db.Decimal(10, 2)
-
-  // Additional data
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  total       Decimal  @db.Decimal(10, 2)
   metadata    Json?
-
-  // Order relation
   orderId     String
-  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
 
-// ============================================
-// FILE STORAGE
-// ============================================
-
 model Attachment {
-  id          String   @id @default(cuid())
-
-  // File info
-  filename    String
-  mimeType    String
-  size        Int      // bytes
-
-  // S3/MinIO location
-  bucket      String
-  key         String   // S3 object key
-  url         String?  // presigned URL (temporary)
-
-  // Metadata
-  metadata    Json?
-
-  // Relations (polymorphic - can attach to multiple entity types)
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  orderId     String?
-  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  // Uploader tracking
-  uploadedBy  String?
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  filename   String
+  mimeType   String
+  size       Int
+  bucket     String
+  key        String
+  url        String?
+  metadata   Json?
+  tenantId   String
+  orderId    String?
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([orderId])
   @@index([key])
 }
 
-// ============================================
-// AUDIT LOG
-// ============================================
-
 model AuditLog {
-  id          String   @id @default(cuid())
-
-  // Event info
-  action      String   // e.g., "order.created", "order.updated", "user.invited"
-  entityType  String   // e.g., "order", "user", "tenant"
-  entityId    String?  // ID of the entity affected
-
-  // Actor
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  actorName   String?  // Cached for display
-  actorEmail  String?
-
-  // Context
-  ipAddress   String?
-  userAgent   String?
-  metadata    Json?    // Additional context (old/new values, etc.)
-
-  // Tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Relations (optional)
-  orderId     String?
-  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  // Timestamp
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  userId     String?
+  actorName  String?
+  actorEmail String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  tenantId   String
+  orderId    String?
+  createdAt  DateTime @default(now())
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([userId])
@@ -283,31 +205,16 @@ model AuditLog {
   @@index([createdAt])
 }
 
-// ============================================
-// INTEGRATIONS
-// ============================================
-
 model Integration {
-  id          String   @id @default(cuid())
-
-  // Integration info
-  provider    String   // e.g., "easypost", "stripe", "sendgrid"
-  enabled     Boolean  @default(true)
-
-  // Configuration metadata (non-sensitive data only)
-  // Actual credentials are stored in AWS Secrets Manager
-  config      Json?    // e.g., {"mode": "test", "webhookUrl": "..."}
-
-  // AWS Secrets Manager reference
-  secretName  String?  // e.g., "calitho-suite/integrations/easypost/{tenantId}"
-
-  // Tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  provider   String
+  enabled    Boolean  @default(true)
+  config     Json?
+  secretName String?
+  tenantId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, provider])
   @@index([tenantId])
@@ -315,83 +222,49 @@ model Integration {
   @@index([enabled])
 }
 
-// ============================================
-// NETSUITE INTEGRATION
-// ============================================
-
 model NetSuiteIntegration {
-  id              String   @id @default(cuid())
-
-  // Configuration (credentials stored in AWS Secrets Manager)
-  sandboxEnabled         Boolean  @default(false)
-  productionEnabled      Boolean  @default(false)
-  currentMode            String   @default("sandbox") // "sandbox" or "production"
-
-  // Tenant (one NetSuite integration per tenant)
-  tenantId        String   @unique
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(cuid())
+  sandboxEnabled    Boolean  @default(false)
+  productionEnabled Boolean  @default(false)
+  currentMode       String   @default("sandbox")
+  tenantId          String   @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([currentMode])
 }
 
-// ============================================
-// Shipment Type Mappings
-// Maps planned shipment types to their completed counterparts
-// ============================================
-
 model ShipmentTypeMapping {
-  id                    String   @id @default(cuid())
-
-  // PACE shipment type IDs
-  plannedTypeId         Int      // e.g., "1" for "UPS Ground - Planned"
-  plannedTypeName       String   // e.g., "UPS Ground - Planned" (for display)
-  completedTypeId       Int      // e.g., "2" for "UPS Ground - Completed"
-  completedTypeName     String   // e.g., "UPS Ground - Completed" (for display)
-
-  // Tenant
-  tenantId              String
-  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                String   @id @default(cuid())
+  plannedTypeId     Int
+  plannedTypeName   String
+  completedTypeId   Int
+  completedTypeName String
+  tenantId          String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, plannedTypeId])
   @@unique([tenantId, completedTypeId])
   @@index([tenantId])
 }
 
-// ============================================
-// Carrier Service Mappings
-// Maps ShipStation carrier/service to PACE ShipVia
-// ============================================
-
 model CarrierServiceMapping {
-  id                    String   @id @default(cuid())
-
-  // ShipStation carrier/service info
-  shipstationCarrierId  String   // ShipStation carrier ID
-  shipstationCarrierCode String  // ShipStation carrier code (e.g., "ups", "fedex")
-  shipstationServiceCode String  // ShipStation service code (e.g., "ups_ground", "fedex_2day")
-  carrierName           String   // Display name (e.g., "UPS")
-  serviceName           String   // Display name (e.g., "Ground")
-
-  // PACE Ship Via ID
-  paceShipViaId         Int      // PACE ShipVia.id
-  paceShipViaName       String   // PACE ShipVia name for display
-
-  // Tenant
-  tenantId              String
-  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  shipstationCarrierId   String
+  shipstationCarrierCode String
+  shipstationServiceCode String
+  carrierName            String
+  serviceName            String
+  paceShipViaId          Int
+  paceShipViaName        String
+  tenantId               String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, shipstationCarrierId, shipstationServiceCode])
   @@index([tenantId])
@@ -399,69 +272,39 @@ model CarrierServiceMapping {
   @@index([shipstationServiceCode])
 }
 
-// ============================================
-// SHIPPING LABELS
-// ============================================
-
 model ShippingLabel {
-  id          String   @id @default(cuid())
-
-  // PACE references (optional for manual labels)
-  paceShipmentId  Int?     // PACE JobShipment ID (null for manual labels)
-  paceCartonId    Int?     // PACE Carton ID (optional, for multi-carton shipments)
-
-  // Shipping provider info
-  provider        String   // "easypost" or "shipstation"
-  providerShipmentId  String?  // External shipment ID from provider
-  providerLabelId     String?  // External label ID from provider
-
-  // Label details
-  trackingNumber  String
-  labelUrl        String   // URL to download the label PDF
-  labelFormat     String?  // e.g., "pdf", "zpl", "png"
-
-  // Carrier info
-  carrier         String   // e.g., "USPS", "UPS", "FedEx"
-  service         String   // e.g., "Priority Mail", "Ground"
-
-  // Shipping addresses (JSON for flexibility)
-  shipFrom        Json
-  shipTo          Json
-
-  // Package details
-  weight          Decimal? @db.Decimal(10, 2)
-  length          Decimal? @db.Decimal(10, 2)
-  width           Decimal? @db.Decimal(10, 2)
-  height          Decimal? @db.Decimal(10, 2)
-
-  // Cost details
-  cost            Decimal  @db.Decimal(10, 2)
-  currency        String   @default("USD")
-
-  // Status
-  status          String   @default("active") // active, voided, refunded, delivered
-  voidedAt        DateTime?
-  refundedAt      DateTime?
-
-  // Tracking status
-  trackingStatus  String?  // unknown, accepted, in_transit, delivered, exception, attempted_delivery, not_yet_in_system
-  lastTrackedAt   DateTime? // Last time tracking info was updated
-
-  // Return label info
-  isReturnLabel   Boolean  @default(false)
-  outboundLabelId String?  // Reference to the outbound label ID if this is a return label
-  rmaNumber       String?  // Return Merchandise Authorization number
-
-  // Additional metadata
-  metadata        Json?    // Store any additional provider-specific data
-
-  // Tenant
-  tenantId        String
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  paceShipmentId     Int?
+  paceCartonId       Int?
+  provider           String
+  providerShipmentId String?
+  providerLabelId    String?
+  trackingNumber     String
+  labelUrl           String
+  labelFormat        String?
+  carrier            String
+  service            String
+  shipFrom           Json
+  shipTo             Json
+  weight             Decimal?  @db.Decimal(10, 2)
+  length             Decimal?  @db.Decimal(10, 2)
+  width              Decimal?  @db.Decimal(10, 2)
+  height             Decimal?  @db.Decimal(10, 2)
+  cost               Decimal   @db.Decimal(10, 2)
+  currency           String    @default("USD")
+  status             String    @default("active")
+  voidedAt           DateTime?
+  refundedAt         DateTime?
+  isReturnLabel      Boolean   @default(false)
+  outboundLabelId    String?
+  rmaNumber          String?
+  metadata           Json?
+  tenantId           String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastTrackedAt      DateTime?
+  trackingStatus     String?
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([paceShipmentId])
@@ -474,28 +317,16 @@ model ShippingLabel {
   @@index([trackingStatus])
 }
 
-// ============================================
-// JOB QUEUE (optional - for tracking job status in DB)
-// ============================================
-
 model Job {
-  id          String   @id @default(cuid())
-
-  // Job info
-  type        String   // e.g., "export-csv", "generate-pdf"
-  status      String   @default("pending") // pending, processing, completed, failed
-
-  // Payload and result
+  id          String    @id @default(cuid())
+  type        String
+  status      String    @default("pending")
   payload     Json?
   result      Json?
   error       String?
-
-  // Progress tracking
-  progress    Int      @default(0) // 0-100
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  progress    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
   @@index([type])
@@ -503,63 +334,39 @@ model Job {
   @@index([createdAt])
 }
 
-// ============================================
-// BATCH IMPORT FOR SHIPMENTS
-// ============================================
-
 model BatchImport {
-  id                String              @id @default(cuid())
-
-  // File info
-  fileName          String
-  fileUrl           String?             // S3 URL if you want to store original file
-  sheetName         String?             // Excel sheet name
-
-  // Status tracking
-  status            BatchImportStatus   @default(PENDING)
-  totalRows         Int                 @default(0)
-  processedRows     Int                 @default(0)
-  successfulRows    Int                 @default(0)
-  failedRows        Int                 @default(0)
-
-  // Shipping configuration (ShipStation only)
-  carrierId         String?
-  carrierCode       String?
-  serviceCode       String?
-  carrier           String?             // Display name (e.g., "UPS")
-  service           String?             // Display name (e.g., "Ground")
-
-  // Billing configuration
-  billToParty       String              @default("sender") // sender, recipient, third_party
-  billToAccount     String?
-  billToCountryCode String              @default("US")
-  billToPostalCode  String?
-
-  // Advanced options
-  containsAlcohol   Boolean             @default(false)
-  saturdayDelivery  Boolean             @default(false)
-  confirmation      String              @default("none") // none, delivery, signature, adult_signature, direct_signature
+  id                 String            @id @default(cuid())
+  fileName           String
+  fileUrl            String?
+  sheetName          String?
+  status             BatchImportStatus @default(PENDING)
+  totalRows          Int               @default(0)
+  processedRows      Int               @default(0)
+  successfulRows     Int               @default(0)
+  failedRows         Int               @default(0)
+  carrierId          String?
+  carrierCode        String?
+  serviceCode        String?
+  carrier            String?
+  service            String?
+  billToParty        String            @default("sender")
+  billToAccount      String?
+  billToCountryCode  String            @default("US")
+  billToPostalCode   String?
+  containsAlcohol    Boolean           @default(false)
+  saturdayDelivery   Boolean           @default(false)
+  confirmation       String            @default("none")
   notificationsEmail String?
-
-  // From address (stored as JSON)
-  fromAddress       Json?
-
-  // Column mapping used (for reference/debugging)
-  columnMapping     Json?               // { "csvColumn": "systemField" }
-
-  // Tenant relation
-  tenantId          String
-  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Metadata
-  createdBy         String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  startedAt         DateTime?
-  completedAt       DateTime?
-
-  // Relations
-  rows              BatchImportRow[]
+  fromAddress        Json?
+  columnMapping      Json?
+  tenantId           String
+  createdBy          String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  startedAt          DateTime?
+  completedAt        DateTime?
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rows               BatchImportRow[]
 
   @@index([tenantId])
   @@index([status])
@@ -567,75 +374,51 @@ model BatchImport {
 }
 
 model BatchImportRow {
-  id                String              @id @default(cuid())
-  batchImportId     String
-  batchImport       BatchImport         @relation(fields: [batchImportId], references: [id], onDelete: Cascade)
-
-  rowNumber         Int                 // Original row number in spreadsheet
-  status            BatchRowStatus      @default(PENDING)
-
-  // Grouping key (for multi-parcel shipments)
-  // Hash of Job# + Address to group cartons into single shipments
-  groupKey          String?
-
-  // Parsed data from CSV
-  shipDate          DateTime?
-  jobNumber         String?
-  totalPackages     Int?
-  packageNumber     Int?                // 1, 2, 3... for ordering within shipment
-
-  // Ship To Address
-  shipToName        String?
-  shipToCompany     String?
-  shipToAddress1    String?
-  shipToAddress2    String?
-  shipToCity        String?
-  shipToState       String?
-  shipToZip         String?
-  shipToCountry     String              @default("US")
-  shipToPhone       String?
-
-  // Package details
-  weight            Float?
-  length            Float?
-  width             Float?
-  height            Float?
-
-  // References (for label messages)
-  reference1        String?
-  reference2        String?
-  reference3        String?
-
-  // Item/Contents (always JobProduct for now)
-  itemNumber        String?             // JobProduct identifier
-  itemQuantity      Int?
-
-  // Processing results
-  trackingNumber    String?
-  trackingUrl       String?
-  labelUrl          String?
-  shippingCost      Float?              // Individual carton cost
-  errorMessage      String?             // Error details if failed
-  notes             String?             // Processing notes (e.g., "Address auto-corrected by ShipStation")
-
-  // Retry tracking
-  retryCount        Int                 @default(0)
-  maxRetries        Int                 @default(3)
-  lastAttemptAt     DateTime?
-  isTransientError  Boolean             @default(false) // Distinguish retryable errors from permanent failures
-
-  // PACE record IDs
-  paceJobShipmentId Int?                // Created JobShipment.id
-  paceCartonId      Int?                // Created Carton.id
-
-  // ShipStation IDs (for voiding)
+  id                    String         @id @default(cuid())
+  batchImportId         String
+  rowNumber             Int
+  status                BatchRowStatus @default(PENDING)
+  groupKey              String?
+  shipDate              DateTime?
+  jobNumber             String?
+  totalPackages         Int?
+  packageNumber         Int?
+  shipToName            String?
+  shipToCompany         String?
+  shipToAddress1        String?
+  shipToAddress2        String?
+  shipToCity            String?
+  shipToState           String?
+  shipToZip             String?
+  shipToCountry         String         @default("US")
+  shipToPhone           String?
+  weight                Float?
+  length                Float?
+  width                 Float?
+  height                Float?
+  reference1            String?
+  reference2            String?
+  reference3            String?
+  itemNumber            String?
+  itemQuantity          Int?
+  trackingNumber        String?
+  trackingUrl           String?
+  labelUrl              String?
+  shippingCost          Float?
+  errorMessage          String?
+  notes                 String?
+  retryCount            Int            @default(0)
+  maxRetries            Int            @default(3)
+  lastAttemptAt         DateTime?
+  isTransientError      Boolean        @default(false)
+  paceJobShipmentId     Int?
+  paceCartonId          Int?
   shipstationShipmentId String?
   shipstationLabelId    String?
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  processedAt       DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  processedAt           DateTime?
+  batchImport           BatchImport    @relation(fields: [batchImportId], references: [id], onDelete: Cascade)
 
   @@index([batchImportId])
   @@index([batchImportId, status])
@@ -645,74 +428,35 @@ model BatchImportRow {
 }
 
 model BatchImportMapping {
-  id              String    @id @default(cuid())
-
-  // User/Tenant
-  userId          String?
-  tenantId        String?
-
-  // Mapping info
-  mappingName     String
-  columnMappings  Json      // { "CSV Column Name": "systemFieldName" }
-  isDefault       Boolean   @default(false)
-
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(cuid())
+  userId         String?
+  tenantId       String?
+  mappingName    String
+  columnMappings Json
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([userId])
   @@index([tenantId])
 }
 
-enum BatchImportStatus {
-  PENDING         // Upload complete, not started
-  PROCESSING      // Worker is processing
-  COMPLETE        // All rows processed (some may have failed)
-  CANCELLED       // User cancelled
-}
-
-enum BatchRowStatus {
-  PENDING         // Not yet processed
-  PROCESSING      // Currently being processed
-  SUCCESS         // Label created, JobShipment + Carton created
-  FAILED          // Processing failed (bad address, API error, etc.)
-  CANCELLED       // User cancelled/voided this row
-}
-
-// ============================================
-// INVOICE INTEGRATIONS (PACE to NetSuite)
-// ============================================
-
 model InvoiceIntegration {
-  id                    String   @id @default(cuid())
-
-  // Tenant relationship
-  tenantId              String
-  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Invoice reference
-  invoiceNumber         String   @unique
-
-  // Status tracking
-  status                String   @default("pending") // pending, processing, sent, failed, completed
-
-  // PACE invoice data (stored as JSONB for easy forwarding to NetSuite)
-  payload               Json     // The full invoice JSON from PACE
-
-  // NetSuite integration tracking
-  netsuiteResponse      Json?    // Response from NetSuite API (for debugging/auditing)
-  netsuiteInvoiceId     String?  // NetSuite internal ID if successfully created
-  errorMessage          String?  // Error details if integration fails
-
-  // Retry mechanism
-  retryCount            Int      @default(0)
-  maxRetries            Int      @default(3)
-  lastAttemptAt         DateTime?
-
-  // Timestamps
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  sentToNetsuiteAt      DateTime?
+  id                String    @id @default(cuid())
+  invoiceNumber     String    @unique
+  status            String    @default("pending")
+  payload           Json
+  netsuiteResponse  Json?
+  netsuiteInvoiceId String?
+  errorMessage      String?
+  retryCount        Int       @default(0)
+  maxRetries        Int       @default(3)
+  lastAttemptAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sentToNetsuiteAt  DateTime?
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([status])
@@ -721,37 +465,119 @@ model InvoiceIntegration {
   @@index([status, retryCount])
 }
 
-// ============================================
-// MENU CONFIGURATION (Role-Based Navigation)
-// ============================================
-
 model MenuConfiguration {
-  id          String   @id @default(cuid())
-
-  // Menu item details
-  menuKey     String   // Unique identifier: "dashboard", "shipments", "batch-import"
-  label       String   // Display name shown in sidebar
-  href        String   // Route path
-  icon        String?  // Icon identifier or SVG string
-  parentKey   String?  // For submenu items, references parent menuKey
-  order       Int      @default(0) // Display order (lower numbers appear first)
-
-  // Role-based visibility
-  visibleToRoles String[] // Array of roles: ["full_admin", "admin", "customer_service", "estimator", "logistics", "accounting"]
-
-  // Status
-  isActive    Boolean  @default(true) // Allow disabling without deleting
-
-  // Tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  menuKey        String
+  label          String
+  href           String
+  icon           String?
+  parentKey      String?
+  order          Int      @default(0)
+  visibleToRoles String[]
+  isActive       Boolean  @default(true)
+  tenantId       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, menuKey])
   @@index([tenantId])
   @@index([tenantId, isActive])
   @@index([order])
+}
+
+model Department {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  color       String?
+  isActive    Boolean             @default(true)
+  tenantId    String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobTypes    DepartmentJobType[]
+  members     DepartmentMember[]
+  JobSchedule JobSchedule[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([isActive])
+}
+
+model DepartmentJobType {
+  id            String     @id @default(cuid())
+  departmentId  String
+  paceJobTypeId Int
+  jobTypeName   String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  department    Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, paceJobTypeId])
+  @@index([departmentId])
+  @@index([paceJobTypeId])
+}
+
+model DepartmentMember {
+  id           String     @id @default(cuid())
+  departmentId String
+  userId       String
+  role         String     @default("member")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, userId])
+  @@index([userId])
+  @@index([departmentId])
+}
+
+model JobSchedule {
+  id             String     @id
+  paceJobNumber  String
+  paceJobData    Json?
+  departmentId   String
+  assignedToId   String?
+  assignedToName String?
+  scheduledDate  DateTime
+  position       Int        @default(0)
+  status         String     @default("scheduled")
+  priority       String     @default("normal")
+  notes          String?
+  estimatedHours Float?
+  actualHours    Float?
+  metadata       Json?
+  tenantId       String
+  createdBy      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime
+  completedAt    DateTime?
+  User           User?      @relation(fields: [assignedToId], references: [id])
+  Department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  Tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([assignedToId])
+  @@index([departmentId])
+  @@index([paceJobNumber])
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([tenantId, departmentId, scheduledDate])
+  @@index([tenantId])
+}
+
+enum BatchImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETE
+  CANCELLED
+}
+
+enum BatchRowStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
 }
