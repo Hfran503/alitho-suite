@@ -13,6 +13,7 @@ interface User {
   image: string | null
   paceCustomerId: string | null
   createdAt: string
+  lastActivity: string | null
   memberships: {
     id: string
     role: string
@@ -159,6 +160,9 @@ export function UsersSettings() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Joined
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Last Activity
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -167,7 +171,7 @@ export function UsersSettings() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   No users found
                 </td>
               </tr>
@@ -216,6 +220,22 @@ export function UsersSettings() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(user.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {user.lastActivity ? (
+                      <div className="flex flex-col">
+                        <span>{new Date(user.lastActivity).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}</span>
+                        <span className="text-xs text-gray-400">
+                          {new Date(user.lastActivity).toLocaleTimeString('en-US', {
+                            timeZone: 'America/Los_Angeles',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic">Never</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
