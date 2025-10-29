@@ -88,6 +88,8 @@ interface Rate {
   rateDetails?: RateDetail[]
   rateAttributes?: string[] // best_value, cheapest, fastest
   warningMessages?: string[]
+  hasProcessingCost?: boolean
+  processingCost?: number
 }
 
 export function ProcessShipmentShipStationModal({
@@ -1749,7 +1751,7 @@ export function ProcessShipmentShipStationModal({
                     </svg>
                     <div>
                       <h3 className="text-sm font-semibold text-gray-900">Select Shipping Rate</h3>
-                      <p className="text-xs text-gray-700 mt-0.5">Compare rates across carriers. Badges show recommended options.</p>
+                      <p className="text-xs text-gray-700 mt-0.5">Compare rates across carriers. Badges show recommended options. Click "Details" to see cost breakdown.</p>
                     </div>
                   </div>
                 </div>
@@ -1869,7 +1871,7 @@ export function ProcessShipmentShipStationModal({
                                   </div>
 
                                   {/* Cost Breakdown */}
-                                  {hasDetails && (
+                                  {(hasDetails || rate.hasProcessingCost) && (
                                     <div className="mt-2 pt-2 border-t border-gray-200">
                                       <details className="group">
                                         <summary className="cursor-pointer text-xs font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1">
@@ -1891,6 +1893,12 @@ export function ProcessShipmentShipStationModal({
                                               <span className="text-amber-800 ml-2">+${detail.amount.toFixed(2)}</span>
                                             </div>
                                           ))}
+                                          {rate.hasProcessingCost && rate.processingCost && (
+                                            <div className="flex justify-between">
+                                              <span className="text-blue-700 truncate">Processing Cost</span>
+                                              <span className="text-blue-800 ml-2">+${rate.processingCost.toFixed(2)}</span>
+                                            </div>
+                                          )}
                                         </div>
                                       </details>
                                     </div>

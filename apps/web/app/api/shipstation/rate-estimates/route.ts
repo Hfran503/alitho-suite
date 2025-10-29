@@ -61,10 +61,13 @@ export async function POST(req: NextRequest) {
 
     // Get carrier markup configuration
     const carriers = (integration.config as any)?.carriers || []
-    const carrierMarkupMap = new Map<string, number>()
+    const carrierMarkupMap = new Map<string, { percent: number; dollar: number }>()
     carriers.forEach((carrier: any) => {
-      if (carrier.id && carrier.estimateRateMarkup) {
-        carrierMarkupMap.set(carrier.id, carrier.estimateRateMarkup)
+      if (carrier.id) {
+        carrierMarkupMap.set(carrier.id, {
+          percent: carrier.estimateRateMarkup || 0,
+          dollar: carrier.estimateRateMarkupDollar || 0
+        })
       }
     })
 
@@ -201,14 +204,27 @@ export async function POST(req: NextRequest) {
     // Convert map to array and apply markup
     const rates = Array.from(ratesByService.values()).map((rate) => {
       // Check if this carrier has a markup configured
-      const markupPercent = carrierMarkupMap.get(rate.carrierId) || 0
+      const markup = carrierMarkupMap.get(rate.carrierId)
 
-      if (markupPercent > 0) {
-        // Apply markup to the total amount
-        const markupMultiplier = 1 + (markupPercent / 100)
-        rate.amount = rate.amount * markupMultiplier
-        rate.hasMarkup = true
-        rate.markupPercent = markupPercent
+      if (markup) {
+        let hasMarkup = false
+
+        // Apply percentage markup if configured
+        if (markup.percent > 0) {
+          const markupMultiplier = 1 + (markup.percent / 100)
+          rate.amount = rate.amount * markupMultiplier
+          hasMarkup = true
+        }
+
+        // Apply dollar markup if configured
+        if (markup.dollar > 0) {
+          rate.amount = rate.amount + markup.dollar
+          hasMarkup = true
+        }
+
+        if (hasMarkup) {
+          rate.hasMarkup = true
+        }
       }
 
       return rate

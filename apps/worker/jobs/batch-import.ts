@@ -797,6 +797,33 @@ async function createShippingLabels(
       throw labelError
     }
 
+    // Get processing cost from carrier configuration
+    let processingCostPerCarton = 0
+    try {
+      const integration = await db.integration.findUnique({
+        where: {
+          tenantId_provider: {
+            tenantId: tenantId,
+            provider: 'shipstation',
+          },
+        },
+        select: {
+          config: true,
+        },
+      })
+
+      if (integration?.config) {
+        const carriers = (integration.config as any)?.carriers || []
+        const carrier = carriers.find((c: any) => c.id === batch.carrierId)
+        if (carrier?.estimateRateMarkupDollar) {
+          processingCostPerCarton = carrier.estimateRateMarkupDollar
+          console.log(`[batch-import] 💵 Processing cost configured: $${processingCostPerCarton.toFixed(2)} per carton`)
+        }
+      }
+    } catch (error) {
+      console.error('[batch-import] Error loading processing cost configuration:', error)
+    }
+
     // Parse the response and map labels to rows
     const labels = labelResponse.label_download?.pdf ? (() => {
       const totalCost = labelResponse.shipment_cost?.amount || 0
@@ -822,10 +849,17 @@ async function createShippingLabels(
           costPerPackage = totalCost / packageCount
         }
 
+        // Add processing cost per carton
+        if (processingCostPerCarton > 0) {
+          costPerPackage += processingCostPerCarton
+        }
+
         console.log(`[batch-import] 💰 Package ${index + 1}:`, {
           weight: rows[index]?.weight || 0,
           totalWeight,
-          costAllocation: `$${costPerPackage.toFixed(2)}`,
+          carrierCost: `$${(costPerPackage - processingCostPerCarton).toFixed(2)}`,
+          processingCost: processingCostPerCarton > 0 ? `$${processingCostPerCarton.toFixed(2)}` : '$0.00',
+          totalCost: `$${costPerPackage.toFixed(2)}`,
           totalShipmentCost: `$${totalCost}`,
           method: packageCost ? 'individual' : totalWeight > 0 ? 'weight-based' : 'equal-split',
         })

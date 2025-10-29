@@ -60,6 +60,15 @@ export async function POST(req: NextRequest) {
     const configCarrierIds = (integration.config as any)?.carrierIds || []
     const requestCarrierIds = carrierIds || configCarrierIds
 
+    // Get carrier processing cost configuration
+    const carriers = (integration.config as any)?.carriers || []
+    const carrierProcessingCostMap = new Map<string, number>()
+    carriers.forEach((carrier: any) => {
+      if (carrier.id && carrier.estimateRateMarkupDollar) {
+        carrierProcessingCostMap.set(carrier.id, carrier.estimateRateMarkupDollar)
+      }
+    })
+
     // Helper to clean string values - convert empty strings to undefined
     const cleanString = (value: any): string | undefined => {
       if (!value || (typeof value === 'string' && value.trim() === '')) {
@@ -154,7 +163,14 @@ export async function POST(req: NextRequest) {
           const insuranceAmount = rate.insurance_amount?.amount || 0
           const confirmationAmount = rate.confirmation_amount?.amount || 0
           const otherAmount = rate.other_amount?.amount || 0
-          const totalAmount = shippingAmount + insuranceAmount + confirmationAmount + otherAmount
+          let totalAmount = shippingAmount + insuranceAmount + confirmationAmount + otherAmount
+
+          // Apply processing cost if configured for this carrier
+          const processingCost = carrierProcessingCostMap.get(rate.carrier_id) || 0
+          const hasProcessingCost = processingCost > 0
+          if (hasProcessingCost) {
+            totalAmount += processingCost
+          }
 
           return {
             rateId: rate.rate_id,
@@ -166,8 +182,10 @@ export async function POST(req: NextRequest) {
             shipDate: rate.ship_date,
             deliveryDays: rate.delivery_days,
             estimatedDeliveryDate: rate.estimated_delivery_date,
-            // Total amount includes all surcharges
+            // Total amount includes all surcharges + processing cost
             amount: totalAmount,
+            hasProcessingCost: hasProcessingCost,
+            processingCost: processingCost,
             // Component breakdown
             shippingAmount: shippingAmount,
             insuranceAmount: insuranceAmount,

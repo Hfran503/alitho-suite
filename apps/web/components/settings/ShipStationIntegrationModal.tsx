@@ -23,8 +23,8 @@ export default function ShipStationIntegrationModal({
   const [productionApiKey, setProductionApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [mode, setMode] = useState<'test' | 'production'>('test')
-  const [carriers, setCarriers] = useState<Array<{ id: string; name: string; estimateRateMarkup?: number }>>([
-    { id: '', name: '', estimateRateMarkup: 0 },
+  const [carriers, setCarriers] = useState<Array<{ id: string; name: string; estimateRateMarkup?: number; estimateRateMarkupDollar?: number }>>([
+    { id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 },
   ])
   const [isConfigured, setIsConfigured] = useState(false)
   const [enabled, setEnabled] = useState(false)
@@ -66,13 +66,14 @@ export default function ShipStationIntegrationModal({
                 ? data.data.config.carriers.map((c: any) => ({
                     id: c.id,
                     name: c.name,
-                    estimateRateMarkup: c.estimateRateMarkup ?? 0
+                    estimateRateMarkup: c.estimateRateMarkup ?? 0,
+                    estimateRateMarkupDollar: c.estimateRateMarkupDollar ?? 0
                   }))
-                : [{ id: '', name: '', estimateRateMarkup: 0 }]
+                : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 }]
             )
           } else if (data.data.config.carrierIds) {
             // Legacy support: convert old carrierIds array to new format
-            setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '', estimateRateMarkup: 0 })))
+            setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 })))
           }
 
           // Load default ship-from address
@@ -205,17 +206,17 @@ export default function ShipStationIntegrationModal({
   }
 
   const addCarrier = () => {
-    setCarriers([...carriers, { id: '', name: '', estimateRateMarkup: 0 }])
+    setCarriers([...carriers, { id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 }])
   }
 
   const removeCarrier = (index: number) => {
     const newCarriers = carriers.filter((_, i) => i !== index)
-    setCarriers(newCarriers.length > 0 ? newCarriers : [{ id: '', name: '', estimateRateMarkup: 0 }])
+    setCarriers(newCarriers.length > 0 ? newCarriers : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 }])
   }
 
-  const updateCarrier = (index: number, field: 'id' | 'name' | 'estimateRateMarkup', value: string | number) => {
+  const updateCarrier = (index: number, field: 'id' | 'name' | 'estimateRateMarkup' | 'estimateRateMarkupDollar', value: string | number) => {
     const newCarriers = [...carriers]
-    if (field === 'estimateRateMarkup') {
+    if (field === 'estimateRateMarkup' || field === 'estimateRateMarkupDollar') {
       newCarriers[index][field] = typeof value === 'number' ? value : parseFloat(value) || 0
     } else {
       newCarriers[index][field] = value as string
@@ -451,24 +452,34 @@ export default function ShipStationIntegrationModal({
             </p>
           </div>
           <div className="space-y-2">
+            {/* Table Headers */}
+            <div className="grid grid-cols-[1fr_1fr_120px_120px_auto] gap-2 items-center px-2 pb-2 border-b border-gray-200">
+              <div className="text-xs font-medium text-gray-700">Name</div>
+              <div className="text-xs font-medium text-gray-700">Carrier ID</div>
+              <div className="text-xs font-medium text-gray-700">Markup %</div>
+              <div className="text-xs font-medium text-gray-700">Markup $</div>
+              <div className="w-10"></div>
+            </div>
+
+            {/* Carrier Rows */}
             {carriers.map((carrier, index) => (
-              <div key={index} className="flex gap-2 items-center">
+              <div key={index} className="grid grid-cols-[1fr_1fr_120px_120px_auto] gap-2 items-center">
                 <input
                   type="text"
                   value={carrier.name}
                   onChange={(e) => updateCarrier(index, 'name', e.target.value)}
                   placeholder="Carrier name (e.g., USPS)"
-                  className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
                 <input
                   type="text"
                   value={carrier.id}
                   onChange={(e) => updateCarrier(index, 'id', e.target.value)}
                   placeholder="Carrier ID (e.g., se-123456)"
-                  className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   required
                 />
-                <div className="flex items-center gap-1 w-32">
+                <div className="flex items-center gap-1">
                   <input
                     type="number"
                     value={carrier.estimateRateMarkup ?? 0}
@@ -479,6 +490,18 @@ export default function ShipStationIntegrationModal({
                     className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                   <span className="text-sm text-gray-500">%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-gray-500">$</span>
+                  <input
+                    type="number"
+                    value={carrier.estimateRateMarkupDollar ?? 0}
+                    onChange={(e) => updateCarrier(index, 'estimateRateMarkupDollar', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
                 </div>
                 {carriers.length > 1 && (
                   <button
