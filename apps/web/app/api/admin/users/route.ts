@@ -49,7 +49,7 @@ export async function GET() {
     })
 
     // Transform users to include lastActivity from sessions
-    const usersWithActivity = users.map(user => {
+    const usersWithActivity = users.map((user: any) => {
       let lastActivity = null
 
       // Use the session's updatedAt timestamp as last activity
