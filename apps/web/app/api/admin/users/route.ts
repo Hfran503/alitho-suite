@@ -35,11 +35,11 @@ export async function GET() {
             },
           },
           orderBy: {
-            expires: 'desc',
+            updatedAt: 'desc',
           },
           take: 1,
           select: {
-            expires: true,
+            updatedAt: true,
           },
         },
       },
@@ -52,15 +52,10 @@ export async function GET() {
     const usersWithActivity = users.map(user => {
       let lastActivity = null
 
-      // If user has an active session, use current time as last activity
-      // Since sessions are only updated when user is active, if they have an active session
-      // it means they were recently active (session gets updated on each page visit)
-      if (user.sessions[0]?.expires) {
-        // The session was just updated when they visited, so their last activity is approximately now
-        // More precisely: expires - 30 days = when the session was last updated (last activity)
-        const sessionExpires = new Date(user.sessions[0].expires)
-        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000
-        lastActivity = new Date(sessionExpires.getTime() - thirtyDaysInMs)
+      // Use the session's updatedAt timestamp as last activity
+      // Sessions are updated whenever the track-session endpoint is called (on each page visit)
+      if (user.sessions[0]?.updatedAt) {
+        lastActivity = user.sessions[0].updatedAt.toISOString()
       }
 
       return {
@@ -71,7 +66,7 @@ export async function GET() {
         paceCustomerId: user.paceCustomerId,
         createdAt: user.createdAt,
         memberships: user.memberships,
-        lastActivity: lastActivity ? lastActivity.toISOString() : null,
+        lastActivity,
       }
     })
 

@@ -59,6 +59,15 @@ export async function POST(req: NextRequest) {
     // Get carrier IDs from config
     const configCarrierIds = (integration.config as any)?.carrierIds || []
 
+    // Get carrier markup configuration
+    const carriers = (integration.config as any)?.carriers || []
+    const carrierMarkupMap = new Map<string, number>()
+    carriers.forEach((carrier: any) => {
+      if (carrier.id && carrier.estimateRateMarkup) {
+        carrierMarkupMap.set(carrier.id, carrier.estimateRateMarkup)
+      }
+    })
+
     // Build rate estimate requests (one per carton)
     const rateEstimates = []
 
@@ -189,8 +198,21 @@ export async function POST(req: NextRequest) {
       existing.cartonCount += 1
     })
 
-    // Convert map to array and sort by amount
-    const rates = Array.from(ratesByService.values()).sort((a, b) => a.amount - b.amount)
+    // Convert map to array and apply markup
+    const rates = Array.from(ratesByService.values()).map((rate) => {
+      // Check if this carrier has a markup configured
+      const markupPercent = carrierMarkupMap.get(rate.carrierId) || 0
+
+      if (markupPercent > 0) {
+        // Apply markup to the total amount
+        const markupMultiplier = 1 + (markupPercent / 100)
+        rate.amount = rate.amount * markupMultiplier
+        rate.hasMarkup = true
+        rate.markupPercent = markupPercent
+      }
+
+      return rate
+    }).sort((a, b) => a.amount - b.amount)
 
     return NextResponse.json({
       success: true,

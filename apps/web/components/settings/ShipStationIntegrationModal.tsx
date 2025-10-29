@@ -23,8 +23,8 @@ export default function ShipStationIntegrationModal({
   const [productionApiKey, setProductionApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [mode, setMode] = useState<'test' | 'production'>('test')
-  const [carriers, setCarriers] = useState<Array<{ id: string; name: string }>>([
-    { id: '', name: '' },
+  const [carriers, setCarriers] = useState<Array<{ id: string; name: string; estimateRateMarkup?: number }>>([
+    { id: '', name: '', estimateRateMarkup: 0 },
   ])
   const [isConfigured, setIsConfigured] = useState(false)
   const [enabled, setEnabled] = useState(false)
@@ -63,12 +63,16 @@ export default function ShipStationIntegrationModal({
           if (data.data.config.carriers && Array.isArray(data.data.config.carriers)) {
             setCarriers(
               data.data.config.carriers.length > 0
-                ? data.data.config.carriers
-                : [{ id: '', name: '' }]
+                ? data.data.config.carriers.map((c: any) => ({
+                    id: c.id,
+                    name: c.name,
+                    estimateRateMarkup: c.estimateRateMarkup ?? 0
+                  }))
+                : [{ id: '', name: '', estimateRateMarkup: 0 }]
             )
           } else if (data.data.config.carrierIds) {
             // Legacy support: convert old carrierIds array to new format
-            setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '' })))
+            setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '', estimateRateMarkup: 0 })))
           }
 
           // Load default ship-from address
@@ -201,17 +205,21 @@ export default function ShipStationIntegrationModal({
   }
 
   const addCarrier = () => {
-    setCarriers([...carriers, { id: '', name: '' }])
+    setCarriers([...carriers, { id: '', name: '', estimateRateMarkup: 0 }])
   }
 
   const removeCarrier = (index: number) => {
     const newCarriers = carriers.filter((_, i) => i !== index)
-    setCarriers(newCarriers.length > 0 ? newCarriers : [{ id: '', name: '' }])
+    setCarriers(newCarriers.length > 0 ? newCarriers : [{ id: '', name: '', estimateRateMarkup: 0 }])
   }
 
-  const updateCarrier = (index: number, field: 'id' | 'name', value: string) => {
+  const updateCarrier = (index: number, field: 'id' | 'name' | 'estimateRateMarkup', value: string | number) => {
     const newCarriers = [...carriers]
-    newCarriers[index][field] = value
+    if (field === 'estimateRateMarkup') {
+      newCarriers[index][field] = typeof value === 'number' ? value : parseFloat(value) || 0
+    } else {
+      newCarriers[index][field] = value as string
+    }
     setCarriers(newCarriers)
   }
 
@@ -460,6 +468,18 @@ export default function ShipStationIntegrationModal({
                   className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   required
                 />
+                <div className="flex items-center gap-1 w-32">
+                  <input
+                    type="number"
+                    value={carrier.estimateRateMarkup ?? 0}
+                    onChange={(e) => updateCarrier(index, 'estimateRateMarkup', e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    step="0.01"
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                  <span className="text-sm text-gray-500">%</span>
+                </div>
                 {carriers.length > 1 && (
                   <button
                     type="button"
