@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       })
 
       // Remove the moving schedule from array
-      const filteredSchedules = schedules.filter(s => s.id !== scheduleId)
+      const filteredSchedules = schedules.filter((s: typeof schedules[number]) => s.id !== scheduleId)
 
       // Insert at new position
       filteredSchedules.splice(newPosition - 1, 0, schedule)
