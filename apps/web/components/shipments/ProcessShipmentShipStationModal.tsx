@@ -667,12 +667,14 @@ export function ProcessShipmentShipStationModal({
 
             if (returnResponse.ok) {
               const returnData = await returnResponse.json()
+              // Only add processing cost if sender pays (not third party)
+              const processingCost = advancedOptions.billToParty === 'third_party' ? 0 : (selectedRate.processingCost || 0)
               newLabelData.return = {
                 trackingNumber: returnData.data.trackingNumber,
                 labelUrl: returnData.data.labelUrl,
                 shipmentId: returnData.data.shipmentId,
                 labelId: returnData.data.labelId,
-                totalCost: returnData.data.totalCost,
+                totalCost: returnData.data.totalCost + processingCost,
                 currency: returnData.data.currency,
                 rmaNumber: rmaNumber,
               }
@@ -781,6 +783,9 @@ export function ProcessShipmentShipStationModal({
               packageData,
             })
 
+            // Only add processing cost if sender pays (not third party)
+            const processingCostPerCarton = advancedOptions.billToParty === 'third_party' ? 0 : (selectedRate.processingCost || 0)
+
             const cartonResponse = await fetch(
               `/api/pace/shipments/${shipment.id}/create-parcel-carton`,
               {
@@ -793,7 +798,7 @@ export function ProcessShipmentShipStationModal({
                   trackingLink: `https://www.shipengine.com/tracking/${trackingNumber}`,
                   carrier: selectedRate.carrier,
                   service: selectedRate.service,
-                  shippingCost: createData.data.totalCost / packagesData.length, // Distribute cost
+                  shippingCost: (createData.data.totalCost / packagesData.length) + processingCostPerCarton, // Distribute base cost, then add processing markup per carton (if sender pays)
                   shipstationShipmentId: createData.data.shipmentId,
                   shipstationLabelId: labelId, // For voiding labels later
                   labelUrl: labelUrl,

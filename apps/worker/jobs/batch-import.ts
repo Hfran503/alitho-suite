@@ -798,30 +798,37 @@ async function createShippingLabels(
     }
 
     // Get processing cost from carrier configuration
+    // Note: Only apply processing cost if sender (you) pays for shipping, not third party
     let processingCostPerCarton = 0
-    try {
-      const integration = await db.integration.findUnique({
-        where: {
-          tenantId_provider: {
-            tenantId: tenantId,
-            provider: 'shipstation',
-          },
-        },
-        select: {
-          config: true,
-        },
-      })
+    const isThirdPartyBilling = batch.billToParty === 'third_party'
 
-      if (integration?.config) {
-        const carriers = (integration.config as any)?.carriers || []
-        const carrier = carriers.find((c: any) => c.id === batch.carrierId)
-        if (carrier?.estimateRateMarkupDollar) {
-          processingCostPerCarton = carrier.estimateRateMarkupDollar
-          console.log(`[batch-import] 💵 Processing cost configured: $${processingCostPerCarton.toFixed(2)} per carton`)
+    if (!isThirdPartyBilling) {
+      try {
+        const integration = await db.integration.findUnique({
+          where: {
+            tenantId_provider: {
+              tenantId: tenantId,
+              provider: 'shipstation',
+            },
+          },
+          select: {
+            config: true,
+          },
+        })
+
+        if (integration?.config) {
+          const carriers = (integration.config as any)?.carriers || []
+          const carrier = carriers.find((c: any) => c.id === batch.carrierId)
+          if (carrier?.estimateRateMarkupDollar) {
+            processingCostPerCarton = carrier.estimateRateMarkupDollar
+            console.log(`[batch-import] 💵 Processing cost configured: $${processingCostPerCarton.toFixed(2)} per carton`)
+          }
         }
+      } catch (error) {
+        console.error('[batch-import] Error loading processing cost configuration:', error)
       }
-    } catch (error) {
-      console.error('[batch-import] Error loading processing cost configuration:', error)
+    } else {
+      console.log(`[batch-import] 💳 Third party billing - skipping processing cost markup`)
     }
 
     // Parse the response and map labels to rows
