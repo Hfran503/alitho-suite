@@ -57,7 +57,8 @@ export async function GET(req: NextRequest) {
     ])
 
     // Calculate voided count for each batch
-    const batchesWithVoidedCount = batches.map(batch => ({
+    type BatchWithRows = typeof batches[number]
+    const batchesWithVoidedCount = batches.map((batch: BatchWithRows) => ({
       id: batch.id,
       fileName: batch.fileName,
       sheetName: batch.sheetName,

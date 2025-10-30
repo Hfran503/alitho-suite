@@ -12,6 +12,50 @@ const SHIPSTATION_BASE_URL = 'https://api.shipengine.com/v1'
 interface ShipStationConfig {
   apiKey: string
   baseUrl?: string
+  mode?: 'test' | 'production' // Determines rate limits: test=20/min, production=200/min
+}
+
+/**
+ * Simple rate limiter to prevent exceeding API limits
+ */
+class RateLimiter {
+  private queue: Array<() => void> = []
+  private processing = false
+  private minInterval: number
+
+  constructor(requestsPerSecond: number) {
+    this.minInterval = 1000 / requestsPerSecond
+  }
+
+  async throttle(): Promise<void> {
+    return new Promise((resolve) => {
+      this.queue.push(resolve)
+      this.processQueue()
+    })
+  }
+
+  private async processQueue() {
+    if (this.processing || this.queue.length === 0) {
+      return
+    }
+
+    this.processing = true
+    const resolve = this.queue.shift()
+
+    if (resolve) {
+      resolve()
+      await this.delay(this.minInterval)
+    }
+
+    this.processing = false
+    if (this.queue.length > 0) {
+      this.processQueue()
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
 }
 
 /**
@@ -20,44 +64,90 @@ interface ShipStationConfig {
 export class ShipStationClient {
   private apiKey: string
   private baseUrl: string
+  private rateLimiter: RateLimiter
+  private mode: 'test' | 'production'
 
   constructor(config: ShipStationConfig) {
     this.apiKey = config.apiKey
     this.baseUrl = config.baseUrl || SHIPSTATION_BASE_URL
+    this.mode = config.mode || 'production'
+
+    // ShipEngine rate limits:
+    // - Production: 200 requests per minute (3.33 req/sec)
+    // - Sandbox: 20 requests per minute (0.33 req/sec)
+    const requestsPerSecond = this.mode === 'production' ? 3.2 : 0.3 // Slightly conservative
+    this.rateLimiter = new RateLimiter(requestsPerSecond)
+
+    console.log(`[ShipStation] Initialized in ${this.mode} mode (${requestsPerSecond} req/sec limit)`)
   }
 
   /**
-   * Make a request to the ShipStation API
+   * Make a request to the ShipStation API with rate limiting and retry logic
    */
   public async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount = 0
   ): Promise<T> {
+    const maxRetries = 3
+    const baseDelay = 2000 // 2 seconds
+
+    // Wait for rate limiter
+    await this.rateLimiter.throttle()
+
     const url = `${this.baseUrl}${endpoint}`
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'API-Key': this.apiKey,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({})) as any
-      console.error('ShipStation API Error Details:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: error,
-        endpoint: endpoint,
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'API-Key': this.apiKey,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
       })
-      throw new Error(
-        `ShipStation API error: ${response.status} - ${error.message || JSON.stringify(error) || response.statusText}`
-      )
-    }
 
-    return response.json() as Promise<T>
+      // Handle rate limiting (429) - use Retry-After header if provided
+      if (response.status === 429) {
+        if (retryCount < maxRetries) {
+          // ShipStation provides a Retry-After header in seconds
+          const retryAfter = response.headers.get('Retry-After')
+          const delay = retryAfter
+            ? parseInt(retryAfter) * 1000
+            : baseDelay * Math.pow(2, retryCount) // Fallback to exponential backoff
+
+          console.warn(`[ShipStation] Rate limited (429). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`)
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          return this.request<T>(endpoint, options, retryCount + 1)
+        } else {
+          throw new Error('ShipStation API error: 429 - API rate limit exceeded after retries')
+        }
+      }
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({})) as any
+        console.error('ShipStation API Error Details:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: error,
+          endpoint: endpoint,
+        })
+        throw new Error(
+          `ShipStation API error: ${response.status} - ${error.message || JSON.stringify(error) || response.statusText}`
+        )
+      }
+
+      return response.json() as Promise<T>
+    } catch (error) {
+      // Retry on network errors
+      if (retryCount < maxRetries && error instanceof Error && !error.message.includes('API error:')) {
+        const delay = baseDelay * Math.pow(2, retryCount)
+        console.warn(`[ShipStation] Network error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        return this.request<T>(endpoint, options, retryCount + 1)
+      }
+      throw error
+    }
   }
 
   /**
@@ -269,7 +359,10 @@ export async function getShipStationClient(tenantId: string): Promise<ShipStatio
   const mode = (integration?.config as any)?.mode || 'test'
 
   const apiKey = await getShipStationApiKey(tenantId, mode)
-  return new ShipStationClient({ apiKey })
+  return new ShipStationClient({
+    apiKey,
+    mode: mode as 'test' | 'production'
+  })
 }
 
 /**

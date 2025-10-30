@@ -1300,8 +1300,11 @@ export function batchImportWorker(connection: Redis) {
         let totalFailed = 0
 
         // Configuration for parallel processing
-        const CONCURRENCY_LIMIT = 10 // Process 10 shipment groups in parallel
+        // ShipStation limits: Production=200/min (3.33/sec), Sandbox=20/min (0.33/sec)
+        // Process 5 groups in parallel (rate limiter handles individual request spacing)
+        const CONCURRENCY_LIMIT = 5 // Process 5 shipment groups in parallel
         const DB_UPDATE_INTERVAL = 10 // Update database every 10 groups processed
+        const CHUNK_DELAY = 1000 // Wait 1 second between chunks for safety
 
         // Process shipment groups in parallel with concurrency limit
         console.log(`[batch-import] 🚀 Processing ${shipmentGroups.length} groups with concurrency limit of ${CONCURRENCY_LIMIT}`)
@@ -1312,7 +1315,10 @@ export function batchImportWorker(connection: Redis) {
         // Process groups in batches (chunks of CONCURRENCY_LIMIT)
         for (let i = 0; i < shipmentGroups.length; i += CONCURRENCY_LIMIT) {
           const chunk = shipmentGroups.slice(i, i + CONCURRENCY_LIMIT)
-          console.log(`[batch-import] 📦 Processing batch ${Math.floor(i / CONCURRENCY_LIMIT) + 1}/${Math.ceil(shipmentGroups.length / CONCURRENCY_LIMIT)} (${chunk.length} groups)`)
+          const chunkNumber = Math.floor(i / CONCURRENCY_LIMIT) + 1
+          const totalChunks = Math.ceil(shipmentGroups.length / CONCURRENCY_LIMIT)
+
+          console.log(`[batch-import] 📦 Processing batch ${chunkNumber}/${totalChunks} (${chunk.length} groups)`)
 
           // Process this chunk in parallel
           const chunkResults = await Promise.all(
@@ -1326,6 +1332,12 @@ export function batchImportWorker(connection: Redis) {
           // Calculate totals
           totalSuccess = results.reduce((sum, r) => sum + r.successCount, 0)
           totalFailed = results.reduce((sum, r) => sum + r.failCount, 0)
+
+          // Wait between chunks to avoid overwhelming the API (except for last chunk)
+          if (i + CONCURRENCY_LIMIT < shipmentGroups.length) {
+            console.log(`[batch-import] ⏳ Waiting ${CHUNK_DELAY}ms before next chunk...`)
+            await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY))
+          }
 
           // Batch database updates - only update every DB_UPDATE_INTERVAL groups or at the end
           if (processedCount % DB_UPDATE_INTERVAL === 0 || processedCount === shipmentGroups.length) {
