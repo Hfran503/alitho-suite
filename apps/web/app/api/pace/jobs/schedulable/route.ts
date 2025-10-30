@@ -130,9 +130,9 @@ export async function GET(request: Request) {
     }
 
     // Step 2: Build XPath for jobs matching department job types
-    const jobTypeIds = department.jobTypes.map(jt => jt.paceJobTypeId)
-    const jobTypeConditions = jobTypeIds.map(id => `@jobType = ${id}`).join(' or ')
-    const statusConditions = jobStatusIds.map(id => `@adminStatus = '${id}'`).join(' or ')
+    const jobTypeIds = department.jobTypes.map((jt: typeof department.jobTypes[number]) => jt.paceJobTypeId)
+    const jobTypeConditions = jobTypeIds.map((id) => `@jobType = ${id}`).join(' or ')
+    const statusConditions = jobStatusIds.map((id) => `@adminStatus = '${id}'`).join(' or ')
 
     const statusXPath = jobStatusIds.length === 1
       ? `@adminStatus = '${jobStatusIds[0]}'`
@@ -221,7 +221,7 @@ export async function GET(request: Request) {
     }
 
     // Step 5: Enrich with customer names
-    const uniqueCustomers = [...new Set(jobs.map(j => j.customer).filter(Boolean))]
+    const uniqueCustomers = [...new Set(jobs.map((j: any) => j.customer).filter(Boolean))]
     console.log(`Fetching ${uniqueCustomers.length} unique customer names...`)
 
     const customerNameMap = new Map()
@@ -257,7 +257,7 @@ export async function GET(request: Request) {
 
     // Step 6: Enrich with JobType descriptions
     const jobTypeDescriptionMap = new Map()
-    department.jobTypes.forEach(jt => {
+    department.jobTypes.forEach((jt: typeof department.jobTypes[number]) => {
       jobTypeDescriptionMap.set(jt.paceJobTypeId, jt.jobTypeName)
     })
 
@@ -265,7 +265,7 @@ export async function GET(request: Request) {
     const scheduledJobNumbers = await db.jobSchedule.findMany({
       where: {
         paceJobNumber: {
-          in: jobs.map(j => j.job),
+          in: jobs.map((j: any) => j.job),
         },
         tenantId: membership.tenantId,
       },
@@ -281,7 +281,7 @@ export async function GET(request: Request) {
     )
 
     // Step 8: Build response with enriched data
-    const enrichedJobs = jobs.map(job => ({
+    const enrichedJobs = jobs.map((job: any) => ({
       jobNumber: job.job,
       customer: job.customer,
       customerName: customerNameMap.get(job.customer) || null,
