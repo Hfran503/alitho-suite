@@ -153,7 +153,7 @@ export async function POST(
 
       console.log(`Found ${returnLabels.length} return label(s) for shipment ${shipmentId}`)
 
-      returnLabels.forEach((label) => {
+      returnLabels.forEach((label: typeof returnLabels[number]) => {
         if (label.cost) {
           const labelCost = typeof label.cost === 'string'
             ? parseFloat(label.cost)
