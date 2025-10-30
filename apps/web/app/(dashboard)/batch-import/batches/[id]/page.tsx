@@ -1,14 +1,10 @@
 'use client'
 
-import { use } from 'react'
+import { use, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { Step5Processing } from '@/components/batch-import/Step5Processing'
 
-export default function BatchDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+function BatchContent({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
 
@@ -40,5 +36,26 @@ export default function BatchDetailPage({
 
       <Step5Processing batchId={id} />
     </div>
+  )
+}
+
+export default function BatchDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <BatchContent params={params} />
+    </Suspense>
   )
 }

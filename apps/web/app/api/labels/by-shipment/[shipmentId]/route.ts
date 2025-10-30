@@ -48,8 +48,8 @@ export async function GET(
     })
 
     // Separate outbound and return labels
-    const outboundLabels = labels.filter(l => !l.isReturnLabel)
-    const returnLabels = labels.filter(l => l.isReturnLabel)
+    const outboundLabels = labels.filter((l: typeof labels[number]) => !l.isReturnLabel)
+    const returnLabels = labels.filter((l: typeof labels[number]) => l.isReturnLabel)
 
     return NextResponse.json({
       success: true,
