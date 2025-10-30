@@ -232,6 +232,8 @@ async function sendToNetSuite(invoiceIntegration: any) {
       url: restletUrl,
       mode: netsuiteIntegration.currentMode,
       invoiceNumber: invoiceIntegration.invoiceNumber,
+      accountId: accountId?.slice(0, 4) + '***' + accountId?.slice(-4), // Masked for security
+      credentialsSource: netsuiteIntegration.currentMode === 'sandbox' ? 'Sandbox Credentials' : 'Production Credentials',
     })
 
     // Send to NetSuite RESTlet

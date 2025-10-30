@@ -18,6 +18,13 @@ interface InvoiceIntegration {
   sentToNetsuiteAt: string | null
 }
 
+interface NetSuiteConfig {
+  currentMode: 'sandbox' | 'production'
+  sandboxEnabled: boolean
+  productionEnabled: boolean
+  configured: boolean
+}
+
 export default function InvoiceIntegrationsPage() {
   const [invoices, setInvoices] = useState<InvoiceIntegration[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,6 +34,10 @@ export default function InvoiceIntegrationsPage() {
   const [sendingToNetsuite, setSendingToNetsuite] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendSuccess, setSendSuccess] = useState<string | null>(null)
+  const [netsuiteConfig, setNetsuiteConfig] = useState<NetSuiteConfig | null>(null)
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
+  const [diagnosticData, setDiagnosticData] = useState<any>(null)
+  const [loadingDiagnostic, setLoadingDiagnostic] = useState(false)
 
   const fetchInvoices = async () => {
     setLoading(true)
@@ -56,7 +67,35 @@ export default function InvoiceIntegrationsPage() {
 
   useEffect(() => {
     fetchInvoices()
+    fetchNetSuiteConfig()
   }, [])
+
+  const fetchNetSuiteConfig = async () => {
+    try {
+      const response = await fetch('/api/integrations/netsuite')
+      if (response.ok) {
+        const data = await response.json()
+        setNetsuiteConfig(data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch NetSuite config:', err)
+    }
+  }
+
+  const handleDiagnostic = async () => {
+    setLoadingDiagnostic(true)
+    try {
+      const response = await fetch('/api/integrations/netsuite/diagnostic')
+      const data = await response.json()
+      setDiagnosticData(data.data)
+      setShowDiagnostic(true)
+    } catch (err) {
+      console.error('Failed to fetch diagnostic data:', err)
+      alert('Failed to load diagnostic information')
+    } finally {
+      setLoadingDiagnostic(false)
+    }
+  }
 
   const filteredInvoices = statusFilter === 'all'
     ? invoices
@@ -148,23 +187,67 @@ export default function InvoiceIntegrationsPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Invoice Integrations</h1>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">Invoice Integrations</h1>
+              {netsuiteConfig && (
+                <div className="flex items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    netsuiteConfig.currentMode === 'production'
+                      ? 'bg-green-100 text-green-800 border border-green-300'
+                      : 'bg-yellow-100 text-yellow-800 border border-yellow-300'
+                  }`}>
+                    {netsuiteConfig.currentMode === 'production' ? '🟢 Production Mode' : '⚠️ Sandbox Mode'}
+                  </span>
+                  {!netsuiteConfig[`${netsuiteConfig.currentMode}Enabled`] && (
+                    <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-300">
+                      Disabled
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
               PACE to NetSuite invoice sync status
             </p>
           </div>
 
-          <button
-            onClick={fetchInvoices}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
-          >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleDiagnostic}
+              disabled={loadingDiagnostic}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2 text-sm"
+              title="Check NetSuite Configuration"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {loadingDiagnostic ? 'Checking...' : 'Diagnostic'}
+            </button>
+            {netsuiteConfig && netsuiteConfig.currentMode === 'sandbox' && (
+              <a
+                href="/settings#integrations"
+                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors font-medium flex items-center gap-2 text-sm"
+                title="Switch to Production mode in Settings"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Switch to Production
+              </a>
+            )}
+            <button
+              onClick={fetchInvoices}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+            >
+              <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 
@@ -600,6 +683,158 @@ export default function InvoiceIntegrationsPage() {
           </div>
         )}
       </div>
+
+      {/* Diagnostic Modal */}
+      {showDiagnostic && diagnosticData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">NetSuite Configuration Diagnostic</h2>
+              <button
+                onClick={() => setShowDiagnostic(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Issues */}
+              {diagnosticData.issues && diagnosticData.issues.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-red-900 mb-3">⚠️ Issues Found</h3>
+                  <ul className="space-y-2">
+                    {diagnosticData.issues.map((issue: string, idx: number) => (
+                      <li key={idx} className="text-sm text-red-800">{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Current Configuration */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-blue-900 mb-3">Current Configuration</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-blue-700 font-medium">Mode:</span>
+                    <span className="ml-2 font-mono text-blue-900">{diagnosticData.currentMode}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700 font-medium">Mode Enabled:</span>
+                    <span className="ml-2 font-mono text-blue-900">{diagnosticData.currentModeEnabled ? '✅ Yes' : '❌ No'}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700 font-medium">Sandbox Enabled:</span>
+                    <span className="ml-2 font-mono text-blue-900">{diagnosticData.sandboxEnabled ? '✅ Yes' : '❌ No'}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700 font-medium">Production Enabled:</span>
+                    <span className="ml-2 font-mono text-blue-900">{diagnosticData.productionEnabled ? '✅ Yes' : '❌ No'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-blue-700 font-medium">RESTlet URL:</span>
+                    <span className="ml-2 font-mono text-xs text-blue-900 break-all">{diagnosticData.restletUrl}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Credentials */}
+              <div className={`border-2 rounded-lg p-4 ${diagnosticData.activeCredentials.hasAllCredentials ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+                <h3 className="text-sm font-semibold mb-3" style={{color: diagnosticData.activeCredentials.hasAllCredentials ? '#166534' : '#991b1b'}}>
+                  Active Credentials ({diagnosticData.activeCredentials.mode})
+                </h3>
+                <div className="space-y-2 text-sm font-mono">
+                  <div>
+                    <span className="font-medium">Account ID:</span>
+                    <span className="ml-2">{diagnosticData.activeCredentials.accountId}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Consumer Key:</span>
+                    <span className="ml-2">{diagnosticData.activeCredentials.consumerKey}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Consumer Secret:</span>
+                    <span className="ml-2">{diagnosticData.activeCredentials.consumerSecret}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Token ID:</span>
+                    <span className="ml-2">{diagnosticData.activeCredentials.tokenId}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Token Secret:</span>
+                    <span className="ml-2">{diagnosticData.activeCredentials.tokenSecret}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sandbox Credentials */}
+              <div className={`border rounded-lg p-4 ${diagnosticData.sandboxCredentials.hasAllCredentials ? 'bg-gray-50 border-gray-300' : 'bg-yellow-50 border-yellow-300'}`}>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Sandbox Credentials</h3>
+                <div className="space-y-2 text-sm font-mono">
+                  <div>
+                    <span className="font-medium">Account ID:</span>
+                    <span className="ml-2">{diagnosticData.sandboxCredentials.accountId}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Consumer Key:</span>
+                    <span className="ml-2">{diagnosticData.sandboxCredentials.consumerKey}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Consumer Secret:</span>
+                    <span className="ml-2">{diagnosticData.sandboxCredentials.consumerSecret}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Token ID:</span>
+                    <span className="ml-2">{diagnosticData.sandboxCredentials.tokenId}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Token Secret:</span>
+                    <span className="ml-2">{diagnosticData.sandboxCredentials.tokenSecret}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Production Credentials */}
+              <div className={`border rounded-lg p-4 ${diagnosticData.productionCredentials.hasAllCredentials ? 'bg-gray-50 border-gray-300' : 'bg-yellow-50 border-yellow-300'}`}>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Production Credentials</h3>
+                <div className="space-y-2 text-sm font-mono">
+                  <div>
+                    <span className="font-medium">Account ID:</span>
+                    <span className="ml-2">{diagnosticData.productionCredentials.accountId}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Consumer Key:</span>
+                    <span className="ml-2">{diagnosticData.productionCredentials.consumerKey}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Consumer Secret:</span>
+                    <span className="ml-2">{diagnosticData.productionCredentials.consumerSecret}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Token ID:</span>
+                    <span className="ml-2">{diagnosticData.productionCredentials.tokenId}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Token Secret:</span>
+                    <span className="ml-2">{diagnosticData.productionCredentials.tokenSecret}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowDiagnostic(false)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
