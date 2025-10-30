@@ -209,7 +209,7 @@ export async function GET(request: Request) {
 
     for (let i = 0; i < jobIds.length; i += batchSize) {
       const batch = jobIds.slice(i, i + batchSize)
-      const batchResults = await Promise.all(batch.map(fetchJobDetail))
+      const batchResults = await Promise.all(batch.map((id: string) => fetchJobDetail(id)))
 
       for (const result of batchResults) {
         if (result?.job) {
@@ -250,8 +250,8 @@ export async function GET(request: Request) {
       return { customerId, customerName: null }
     }
 
-    const customerResults = await Promise.all(uniqueCustomers.map(fetchCustomerName))
-    customerResults.forEach(r => {
+    const customerResults = await Promise.all(uniqueCustomers.map((customerId: string) => fetchCustomerName(customerId)))
+    customerResults.forEach((r: { customerId: string; customerName: string | null }) => {
       customerNameMap.set(r.customerId, r.customerName)
     })
 
@@ -277,7 +277,7 @@ export async function GET(request: Request) {
     })
 
     const scheduledMap = new Map(
-      scheduledJobNumbers.map(s => [s.paceJobNumber, s])
+      scheduledJobNumbers.map((s: typeof scheduledJobNumbers[number]) => [s.paceJobNumber, s])
     )
 
     // Step 8: Build response with enriched data
