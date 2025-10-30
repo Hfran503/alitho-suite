@@ -128,7 +128,7 @@ export async function GET(_req: NextRequest) {
       select: { href: true, menuKey: true }
     })
 
-    const existingPaths = new Set(existingMenus.map(m => m.href))
+    const existingPaths = new Set(existingMenus.map((m: typeof existingMenus[number]) => m.href))
 
     // Scan the app directory
     // In production standalone builds, the structure is different
