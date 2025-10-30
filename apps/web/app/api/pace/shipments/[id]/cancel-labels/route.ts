@@ -293,7 +293,7 @@ export async function POST(
       for (const carton of cartons) {
         // Check if we already processed this carton's label
         const alreadyProcessed = allShipmentLabels.some(
-          label => label.paceCartonId === parseInt(carton.id)
+          (label: typeof allShipmentLabels[number]) => label.paceCartonId === parseInt(carton.id)
         )
 
         if (alreadyProcessed) {
