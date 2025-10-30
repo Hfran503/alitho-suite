@@ -131,8 +131,8 @@ export async function GET(request: Request) {
 
     // Step 2: Build XPath for jobs matching department job types
     const jobTypeIds = department.jobTypes.map((jt: typeof department.jobTypes[number]) => jt.paceJobTypeId)
-    const jobTypeConditions = jobTypeIds.map((id) => `@jobType = ${id}`).join(' or ')
-    const statusConditions = jobStatusIds.map((id) => `@adminStatus = '${id}'`).join(' or ')
+    const jobTypeConditions = jobTypeIds.map((id: number) => `@jobType = ${id}`).join(' or ')
+    const statusConditions = jobStatusIds.map((id: string) => `@adminStatus = '${id}'`).join(' or ')
 
     const statusXPath = jobStatusIds.length === 1
       ? `@adminStatus = '${jobStatusIds[0]}'`
