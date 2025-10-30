@@ -29,6 +29,7 @@ model Tenant {
   JobSchedule            JobSchedule[]
   memberships            Membership[]
   menuConfigurations     MenuConfiguration[]
+  estimateSettings       EstimateSettings?
   netsuiteIntegration    NetSuiteIntegration?
   orders                 Order[]
   shipmentTypeMappings   ShipmentTypeMapping[]
@@ -487,6 +488,18 @@ model MenuConfiguration {
   @@index([tenantId])
   @@index([tenantId, isActive])
   @@index([order])
+}
+
+model EstimateSettings {
+  id                        String   @id @default(cuid())
+  allowedJobProductTypeIds  String[] // Array of Job Product Type IDs allowed in estimates (deprecated, use allowedJobProductTypes)
+  allowedJobProductTypes    Json?    // Array of objects: { jobProductTypeId, customName?, customDescription?, allowedInventoryItemIds[] }
+  tenantId                  String   @unique
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  tenant                    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model Department {

@@ -64,6 +64,16 @@ export function MenuConfigurationSettings() {
   const [detecting, setDetecting] = useState(false)
   const [detectedPages, setDetectedPages] = useState<DetectedPageSelection[]>([])
   const [addingPages, setAddingPages] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [creatingMenuItem, setCreatingMenuItem] = useState(false)
+  const [newMenuItem, setNewMenuItem] = useState({
+    menuKey: '',
+    label: '',
+    href: '',
+    icon: '',
+    parentKey: null as string | null,
+    visibleToRoles: ['full_admin', 'admin'] as string[]
+  })
 
   useEffect(() => {
     fetchMenuConfigs()
@@ -311,6 +321,76 @@ export function MenuConfigurationSettings() {
     )
   }
 
+  const handleCreateMenuItem = async () => {
+    // Validation
+    if (!newMenuItem.label.trim()) {
+      alert('Please enter a label')
+      return
+    }
+    if (!newMenuItem.menuKey.trim()) {
+      alert('Please enter a menu key')
+      return
+    }
+    if (!newMenuItem.href.trim()) {
+      alert('Please enter a href (use # for labels without pages)')
+      return
+    }
+    if (newMenuItem.visibleToRoles.length === 0) {
+      alert('Please select at least one role')
+      return
+    }
+
+    try {
+      setCreatingMenuItem(true)
+      const res = await fetch('/api/settings/menu-configuration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          menuKey: newMenuItem.menuKey,
+          label: newMenuItem.label,
+          href: newMenuItem.href,
+          icon: newMenuItem.icon || null,
+          parentKey: newMenuItem.parentKey,
+          visibleToRoles: newMenuItem.visibleToRoles,
+          order: menuConfigs.filter(m => !m.parentKey).length // Put at end
+        })
+      })
+
+      if (res.ok) {
+        clearMenuCache()
+        await fetchMenuConfigs()
+        setShowCreateModal(false)
+        // Reset form
+        setNewMenuItem({
+          menuKey: '',
+          label: '',
+          href: '',
+          icon: '',
+          parentKey: null,
+          visibleToRoles: ['full_admin', 'admin']
+        })
+        alert('Menu item created successfully!')
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to create menu item')
+      }
+    } catch (error) {
+      console.error('Error creating menu item:', error)
+      alert('Failed to create menu item')
+    } finally {
+      setCreatingMenuItem(false)
+    }
+  }
+
+  const toggleNewMenuItemRole = (role: string) => {
+    setNewMenuItem(prev => ({
+      ...prev,
+      visibleToRoles: prev.visibleToRoles.includes(role)
+        ? prev.visibleToRoles.filter(r => r !== role)
+        : [...prev.visibleToRoles, role]
+    }))
+  }
+
   // Filter menu items based on selected role (for preview)
   const getVisibleMenusForRole = (role: string) => {
     return menuConfigs.filter(
@@ -378,6 +458,15 @@ export function MenuConfigurationSettings() {
             </p>
           </div>
           <div className="flex gap-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Menu Item
+            </button>
             <button
               onClick={handleDetectPages}
               className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -743,6 +832,159 @@ export function MenuConfigurationSettings() {
                   {addingPages ? 'Adding...' : 'Add to Menu'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Menu Item Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Create New Menu Item</h3>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Create a new menu item or menu label. Use "#" as href for labels without pages.
+              </p>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {/* Label */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Label <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newMenuItem.label}
+                  onChange={(e) => setNewMenuItem(prev => ({ ...prev, label: e.target.value }))}
+                  placeholder="e.g., Test, Reports, Analytics"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">The display name shown in the menu</p>
+              </div>
+
+              {/* Menu Key */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Menu Key <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newMenuItem.menuKey}
+                  onChange={(e) => setNewMenuItem(prev => ({ ...prev, menuKey: e.target.value }))}
+                  placeholder="e.g., test-menu, reports, analytics"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">Unique identifier (lowercase, use hyphens)</p>
+              </div>
+
+              {/* Href */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Href (URL Path) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newMenuItem.href}
+                  onChange={(e) => setNewMenuItem(prev => ({ ...prev, href: e.target.value }))}
+                  placeholder="e.g., /scheduler, /reports, or # for labels"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">Use "#" if this is just a label without a page</p>
+              </div>
+
+              {/* Icon */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Icon (optional)
+                </label>
+                <input
+                  type="text"
+                  value={newMenuItem.icon}
+                  onChange={(e) => setNewMenuItem(prev => ({ ...prev, icon: e.target.value }))}
+                  placeholder="e.g., clipboard-check, document, package"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Available: home, package, list, plus, search, upload, dollar, briefcase, settings, document, clipboard-check
+                </p>
+              </div>
+
+              {/* Parent Menu */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Parent Menu (optional)
+                </label>
+                <select
+                  value={newMenuItem.parentKey || ''}
+                  onChange={(e) => setNewMenuItem(prev => ({ ...prev, parentKey: e.target.value || null }))}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">None (Top-level item)</option>
+                  {parentMenus.map(menu => (
+                    <option key={menu.menuKey} value={menu.menuKey}>
+                      {menu.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Select a parent to make this a submenu item</p>
+              </div>
+
+              {/* Role Visibility */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Visible to Roles <span className="text-red-500">*</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {AVAILABLE_ROLES.map(role => {
+                    const isVisible = newMenuItem.visibleToRoles.includes(role)
+                    return (
+                      <button
+                        key={role}
+                        onClick={() => toggleNewMenuItemRole(role)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          isVisible
+                            ? ROLE_COLORS[role]
+                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                        }`}
+                      >
+                        {ROLE_LABELS[role]}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Select at least one role</p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateMenuItem}
+                disabled={creatingMenuItem}
+                className="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creatingMenuItem ? 'Creating...' : 'Create Menu Item'}
+              </button>
             </div>
           </div>
         </div>
