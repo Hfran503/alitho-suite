@@ -85,7 +85,7 @@ const DEFAULT_MENU_ITEMS = [
   {
     menuKey: 'invoice-integrations',
     label: 'Invoice Integrations',
-    href: '/invoices/integrations',
+    href: '/netsuite/Invoices',
     icon: 'document',
     order: 4,
     visibleToRoles: ['full_admin', 'admin', 'accounting']

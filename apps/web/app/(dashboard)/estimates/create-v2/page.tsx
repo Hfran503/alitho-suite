@@ -702,9 +702,11 @@ export default function CreateEstimatePage() {
                 </label>
                 {customers.length > 0 ? (
                   <select
+                    name="customer"
                     value={customer}
                     onChange={(e) => handleCustomerChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                    autoComplete="off"
                     required
                   >
                     <option value="">Select a customer...</option>
@@ -716,9 +718,11 @@ export default function CreateEstimatePage() {
                   </select>
                 ) : (
                   <Input
+                    name="customer"
                     value={customer}
                     onChange={(e) => setCustomer(e.target.value)}
                     placeholder="Enter customer ID (e.g., 00001005)"
+                    autoComplete="off"
                     required
                   />
                 )}
@@ -733,6 +737,7 @@ export default function CreateEstimatePage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Salesperson</label>
                 <Input
+                  name="salesperson"
                   type="text"
                   value={
                     salesPerson
@@ -742,6 +747,7 @@ export default function CreateEstimatePage() {
                   readOnly
                   className="bg-gray-100 cursor-not-allowed"
                   placeholder="Auto-populated from customer"
+                  autoComplete="off"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Auto-populated from customer's salesperson
@@ -752,6 +758,7 @@ export default function CreateEstimatePage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Estimator</label>
                 <Input
+                  name="estimator"
                   type="text"
                   value={
                     estimator
@@ -760,6 +767,7 @@ export default function CreateEstimatePage() {
                   }
                   readOnly
                   className="bg-gray-100 cursor-not-allowed"
+                  autoComplete="off"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Fixed estimator ID: 5043
@@ -773,9 +781,11 @@ export default function CreateEstimatePage() {
                 Description <span className="text-red-500">*</span>
               </label>
               <Input
+                name="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description of the estimate"
+                autoComplete="off"
                 required
               />
             </div>
@@ -832,11 +842,13 @@ export default function CreateEstimatePage() {
                       Job Product Type <span className="text-red-500">*</span>
                     </label>
                     <select
+                      name={`part-${index}-jobProductType`}
                       value={part.jobProductTypeId}
                       onChange={(e) =>
                         updatePart(index, 'jobProductTypeId', e.target.value)
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white"
+                      autoComplete="off"
                       required
                     >
                       <option value="">Select a type...</option>
@@ -871,11 +883,13 @@ export default function CreateEstimatePage() {
                         Description <span className="text-red-500">*</span>
                       </label>
                       <Input
+                        name={`part-${index}-description`}
                         value={part.description}
                         onChange={(e) =>
                           updatePart(index, 'description', e.target.value)
                         }
                         placeholder="Override default description"
+                        autoComplete="off"
                         required
                       />
                     </div>
@@ -888,11 +902,13 @@ export default function CreateEstimatePage() {
                       {inventoryItems.length > 0 ? (
                         <>
                           <select
+                            name={`part-${index}-inventoryItem`}
                             value={part.inventoryItem || ''}
                             onChange={(e) =>
                               updatePart(index, 'inventoryItem', e.target.value)
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white"
+                            autoComplete="off"
                             required
                             disabled={!part.jobProductTypeId}
                           >
@@ -919,11 +935,13 @@ export default function CreateEstimatePage() {
                         </>
                       ) : (
                         <Input
+                          name={`part-${index}-inventoryItem`}
                           value={part.inventoryItem || ''}
                           onChange={(e) =>
                             updatePart(index, 'inventoryItem', e.target.value)
                           }
                           placeholder="Loading..."
+                          autoComplete="off"
                           disabled
                         />
                       )}
@@ -939,6 +957,7 @@ export default function CreateEstimatePage() {
                       </label>
                       <div className="flex items-center gap-2">
                         <Input
+                          name={`part-${index}-finalSizeWidth`}
                           type="number"
                           step="0.01"
                           value={part.finalSizeWidth || ''}
@@ -947,10 +966,12 @@ export default function CreateEstimatePage() {
                           }
                           placeholder="Width"
                           className="flex-1"
+                          autoComplete="off"
                           required
                         />
                         <span className="text-gray-500 font-medium">×</span>
                         <Input
+                          name={`part-${index}-finalSizeHeight`}
                           type="number"
                           step="0.01"
                           value={part.finalSizeHeight || ''}
@@ -959,6 +980,7 @@ export default function CreateEstimatePage() {
                           }
                           placeholder="Height"
                           className="flex-1"
+                          autoComplete="off"
                           required
                         />
                       </div>
@@ -970,6 +992,7 @@ export default function CreateEstimatePage() {
                         # of versions <span className="text-red-500">*</span>
                       </label>
                       <Input
+                        name={`part-${index}-numSigs`}
                         type="number"
                         min="1"
                         value={part.numSigs || 1}
@@ -977,6 +1000,7 @@ export default function CreateEstimatePage() {
                           updatePart(index, 'numSigs', parseInt(e.target.value) || 1)
                         }
                         placeholder="Number of versions"
+                        autoComplete="off"
                         required
                       />
                     </div>
@@ -1002,6 +1026,7 @@ export default function CreateEstimatePage() {
                         {part.quantities.map((qty, qtyIndex) => (
                           <div key={qtyIndex} className="flex items-center gap-2">
                             <Input
+                              name={`part-${index}-quantity-${qtyIndex}`}
                               type="number"
                               min="1"
                               value={qty}
@@ -1010,6 +1035,7 @@ export default function CreateEstimatePage() {
                               }
                               className="flex-1"
                               placeholder="Quantity"
+                              autoComplete="off"
                               required
                             />
                             {part.quantities.length > 1 && (
@@ -1054,11 +1080,13 @@ export default function CreateEstimatePage() {
                             Sequence <span className="text-red-500">*</span>
                           </label>
                           <Input
+                            name={`part-${index}-sequence`}
                             type="number"
                             value={part.sequence || ''}
                             onChange={(e) =>
                               updatePart(index, 'sequence', parseInt(e.target.value) || undefined)
                             }
+                            autoComplete="off"
                             required
                             className="w-full md:w-1/2"
                           />

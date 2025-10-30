@@ -82,17 +82,22 @@ export function netsuiteInvoiceWorker(connection: Redis) {
           }
         } else {
           // Update as failed
+          // Ensure errorMessage is a string
+          const errorMessage = typeof result.error === 'string'
+            ? result.error
+            : JSON.stringify(result.error)
+
           await db.invoiceIntegration.update({
             where: { id: invoiceIntegrationId },
             data: {
               status: 'failed',
-              errorMessage: result.error,
+              errorMessage,
               netsuiteResponse: result.response as any,
               retryCount: invoiceIntegration.retryCount + 1,
             },
           })
 
-          throw new Error(result.error || 'Failed to send invoice to NetSuite')
+          throw new Error(errorMessage || 'Failed to send invoice to NetSuite')
         }
       } catch (error) {
         console.error(`❌ [Job ${job.id}] Error processing invoice ${invoiceNumber}:`, error)
@@ -260,9 +265,24 @@ async function sendToNetSuite(invoiceIntegration: any) {
         netsuiteInvoiceId: responseData.invoiceId || responseData.invoiceNumber || null,
       }
     } else {
+      // Format error message for better readability
+      let errorMessage: string
+      if (typeof responseData.error === 'string') {
+        errorMessage = responseData.error
+      } else if (responseData.error && typeof responseData.error === 'object') {
+        // If error is an object with code and message, format it nicely
+        if (responseData.error.code && responseData.error.message) {
+          errorMessage = `[${responseData.error.code}] ${responseData.error.message}`
+        } else {
+          errorMessage = JSON.stringify(responseData.error)
+        }
+      } else {
+        errorMessage = 'Unknown error from NetSuite'
+      }
+
       return {
         success: false,
-        error: responseData.error || 'Unknown error from NetSuite',
+        error: errorMessage,
         response: responseData,
       }
     }

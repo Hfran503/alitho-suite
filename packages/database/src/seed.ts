@@ -331,7 +331,7 @@ async function main() {
       {
         menuKey: 'invoice-integrations',
         label: 'Invoice Integrations',
-        href: '/invoices/integrations',
+        href: '/netsuite/Invoices',
         icon: 'document',
         parentKey: null,
         order: 4,
