@@ -68,6 +68,8 @@ export async function GET(
       failedRows: batch.failedRows,
       voidedRows: voidedRows,
       progress: queueStatus?.progress ?? progress,
+      originalData: batch.originalData || null,
+      columnMapping: batch.columnMapping || null,
       rows: batch.rows.map((row: any) => ({
         id: row.id,
         rowNumber: row.rowNumber,

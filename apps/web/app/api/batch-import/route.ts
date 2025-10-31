@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { fileName, sheetName, rows, shippingConfig, columnMapping } = body
+    const { fileName, sheetName, rows, shippingConfig, columnMapping, originalData } = body
 
     // Log first row's shipDate for debugging
     if (rows && rows.length > 0 && rows[0].shipDate) {
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
         confirmation: shippingConfig.confirmation || 'none',
         notificationsEmail: shippingConfig.notificationsEmail,
         columnMapping: columnMapping || {},
+        originalData: originalData || null,
         rows: {
           create: rows.map((row: any) => {
             // Log shipDate conversion for debugging

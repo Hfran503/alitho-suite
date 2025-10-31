@@ -49,6 +49,8 @@ interface BatchStatus {
   failedRows: number
   voidedRows: number
   progress: number
+  originalData?: any[]
+  columnMapping?: Record<string, string>
   rows: RowStatus[]
 }
 
@@ -434,8 +436,17 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
   }
 
   const handleExportFailedRows = () => {
-    if (!batchStatus || !originalData || !columnMapping) {
-      alert('Original data not available for export')
+    if (!batchStatus) {
+      alert('Batch status not available')
+      return
+    }
+
+    // Use originalData and columnMapping from batch status (stored in DB) or from props (during import flow)
+    const originalDataFromBatch = batchStatus.originalData || originalData
+    const columnMappingFromBatch = batchStatus.columnMapping || columnMapping
+
+    if (!originalDataFromBatch || !columnMappingFromBatch) {
+      alert('Original data not available for export. This batch may have been created before this feature was added.')
       return
     }
 
@@ -448,7 +459,7 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
     }
 
     // Get original column headers from the first row of original data
-    const originalHeaders = originalData.length > 0 ? Object.keys(originalData[0]) : []
+    const originalHeaders = originalDataFromBatch.length > 0 ? Object.keys(originalDataFromBatch[0]) : []
 
     if (originalHeaders.length === 0) {
       alert('Unable to determine original column headers')
@@ -462,7 +473,7 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
     const rows = failedRows.map((failedRow) => {
       // Find the corresponding original row (row numbers are 1-based, array is 0-based)
       const originalRowIndex = failedRow.rowNumber - 2 // -2 because row 1 is header, row 2 is index 0
-      const originalRow = originalData[originalRowIndex] || {}
+      const originalRow = originalDataFromBatch[originalRowIndex] || {}
 
       // Create array with original column values
       const rowData = originalHeaders.map((header) => {
@@ -968,39 +979,54 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
       )}
 
       {/* Original Data Tab */}
-      {activeTab === 'original' && originalData && originalData.length > 0 && (
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              This tab shows the exact data that was imported from your CSV/Excel file ({originalData.length} rows).
-            </p>
-          </div>
+      {activeTab === 'original' && (() => {
+        // Use originalData from batch status if available, otherwise use props
+        const dataToShow = batchStatus?.originalData || originalData
+        const mappingToShow = batchStatus?.columnMapping || columnMapping
 
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                      Row #
-                    </th>
-                    {originalData[0] && Object.keys(originalData[0]).map((header) => (
-                      <th
-                        key={header}
-                        className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase"
-                      >
-                        {header}
-                        {columnMapping && columnMapping[header] && (
-                          <div className="text-[10px] text-blue-600 font-normal normal-case mt-0.5">
-                            → {columnMapping[header]}
-                          </div>
-                        )}
+        if (!dataToShow || dataToShow.length === 0) {
+          return (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                Original data is not available. This batch may have been created before this feature was added.
+              </p>
+            </div>
+          )
+        }
+
+        return (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                This tab shows the exact data that was imported from your CSV/Excel file ({dataToShow.length} rows).
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                        Row #
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {originalData.map((row, idx) => (
+                      {dataToShow[0] && Object.keys(dataToShow[0]).map((header) => (
+                        <th
+                          key={header}
+                          className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase"
+                        >
+                          {header}
+                          {mappingToShow && mappingToShow[header] && (
+                            <div className="text-[10px] text-blue-600 font-normal normal-case mt-0.5">
+                              → {mappingToShow[header]}
+                            </div>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {dataToShow.map((row, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
                         {idx + 1}
@@ -1012,26 +1038,27 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
                           </div>
                         </td>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
 
-          {/* Reset Button for Original Data Tab */}
-          {!isProcessing && onReset && (
-            <div className="flex justify-center pt-6 border-t border-gray-200">
-              <button
-                onClick={onReset}
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
-              >
-                Start New Batch Import
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+            {/* Reset Button for Original Data Tab */}
+            {!isProcessing && onReset && (
+              <div className="flex justify-center pt-6 border-t border-gray-200">
+                <button
+                  onClick={onReset}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
+                >
+                  Start New Batch Import
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Service Selector Modal */}
       {changingServiceRow && (

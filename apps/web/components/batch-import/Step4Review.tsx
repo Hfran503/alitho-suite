@@ -126,6 +126,7 @@ export function Step4Review({
           rows: mappedRows,
           shippingConfig,
           columnMapping,
+          originalData: data, // Store original CSV/Excel data for exports
         }),
       })
 
