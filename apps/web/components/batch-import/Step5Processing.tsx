@@ -429,6 +429,63 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
     URL.revokeObjectURL(url)
   }
 
+  const handleExportFailedRows = () => {
+    if (!batchStatus) return
+
+    // Filter only failed rows
+    const failedRows = batchStatus.rows.filter((row) => row.status === 'FAILED')
+
+    if (failedRows.length === 0) {
+      alert('No failed rows to export')
+      return
+    }
+
+    // Create CSV with failed rows only
+    const headers = [
+      'Row',
+      'Job#',
+      'Ship To Name',
+      'Company',
+      'Address 1',
+      'Address 2',
+      'City',
+      'State',
+      'Zip',
+      'Phone',
+      'Pkg',
+      'Status',
+      'Error',
+      'Retry Count',
+      'Is Transient Error',
+    ]
+    const rows = failedRows.map((row) => [
+      row.rowNumber,
+      row.jobNumber,
+      row.shipToName || '',
+      row.shipToCompany || '',
+      row.shipToAddress1 || '',
+      row.shipToAddress2 || '',
+      row.shipToCity || '',
+      row.shipToState || '',
+      row.shipToZip || '',
+      row.shipToPhone || '',
+      `${row.packageNumber}/${row.totalPackages}`,
+      row.status,
+      row.errorMessage || '',
+      row.retryCount || 0,
+      row.isTransientError ? 'Yes' : 'No',
+    ])
+
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `batch-import-${batchId}-failed-rows.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -568,6 +625,14 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
             className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-sm"
           >
             Export Results CSV
+          </button>
+          <button
+            onClick={handleExportFailedRows}
+            disabled={batchStatus.failedRows === 0}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
+            title="Export only failed rows for troubleshooting"
+          >
+            Export Failed Rows ({batchStatus.failedRows})
           </button>
         </div>
       )}

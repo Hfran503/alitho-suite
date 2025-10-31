@@ -149,7 +149,8 @@ export default function LabelsPage() {
     try {
       setLoading(true)
       // Fetch all labels without status filter (we'll filter client-side)
-      const response = await fetch('/api/labels')
+      // Set a very high limit to get all labels
+      const response = await fetch('/api/labels?limit=10000')
 
       if (!response.ok) {
         throw new Error('Failed to fetch labels')

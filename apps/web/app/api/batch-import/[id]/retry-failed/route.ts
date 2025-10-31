@@ -97,6 +97,16 @@ export async function POST(
       },
     })
 
+    // Reset batch status back to PROCESSING so worker picks it up
+    await db.batchImport.update({
+      where: { id: batchId },
+      data: {
+        status: 'PROCESSING',
+        errorMessage: null,
+        // Keep completedAt to track when initial batch finished
+      },
+    })
+
     // Re-queue the batch for processing
     console.log(`[retry-failed] Re-queueing batch ${batchId}`)
     await queueBatchImport(batchId, membership.tenantId)

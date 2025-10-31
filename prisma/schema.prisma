@@ -21,6 +21,7 @@ model Tenant {
   attachments            Attachment[]
   auditLogs              AuditLog[]
   batchImports           BatchImport[]
+  batchImportsV2         BatchImportV2[]
   carrierServiceMappings CarrierServiceMapping[]
   departments            Department[]
   equipment              Equipment[]
@@ -34,6 +35,7 @@ model Tenant {
   orders                 Order[]
   shipmentTypeMappings   ShipmentTypeMapping[]
   shippingLabels         ShippingLabel[]
+  warehouses             Warehouse[]
 
   @@index([slug])
   @@index([status])
@@ -443,6 +445,51 @@ model BatchImportMapping {
 
   @@index([userId])
   @@index([tenantId])
+}
+
+model BatchImportV2 {
+  id                  String   @id @default(cuid())
+  shipEngineBatchId   String   @unique
+  externalBatchId     String?
+  fileName            String
+  sheetName           String?
+  status              String   @default("open") // open, queued, processing, completed, invalid, completed_with_errors
+  totalShipments      Int      @default(0)
+  completedShipments  Int      @default(0)
+  failedShipments     Int      @default(0)
+  shippingConfig      Json?
+  columnMapping       Json?
+  shipmentMapping     Json?    // Maps groupKey to shipment_id and rows
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([shipEngineBatchId])
+  @@index([status])
+}
+
+model Warehouse {
+  id                      String   @id @default(cuid())
+  name                    String
+  shipEngineWarehouseId   String?  @unique
+  companyName             String?
+  addressLine1            String
+  addressLine2            String?
+  cityLocality            String
+  stateProvince           String
+  postalCode              String
+  countryCode             String   @default("US")
+  phone                   String?
+  isDefault               Boolean  @default(false)
+  tenantId                String
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([shipEngineWarehouseId])
 }
 
 model InvoiceIntegration {

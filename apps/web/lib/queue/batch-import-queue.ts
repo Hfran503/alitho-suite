@@ -52,6 +52,22 @@ export interface BatchImportJobData {
 
 // Helper function to add a batch processing job
 export async function queueBatchImport(batchId: string, tenantId: string) {
+  // Remove existing job if it exists (to allow retry)
+  const existingJobId = `batch-${batchId}`
+  const existingJob = await batchImportQueue.getJob(existingJobId)
+
+  if (existingJob) {
+    const state = await existingJob.getState()
+    // Only remove if completed or failed, not if actively processing
+    if (state === 'completed' || state === 'failed') {
+      console.log(`[Queue] Removing existing ${state} job for batch ${batchId}`)
+      await existingJob.remove()
+    } else if (state === 'active' || state === 'waiting') {
+      console.log(`[Queue] Job already ${state} for batch ${batchId}, skipping`)
+      return existingJob
+    }
+  }
+
   return await batchImportQueue.add(
     'process-batch',
     {
@@ -59,7 +75,7 @@ export async function queueBatchImport(batchId: string, tenantId: string) {
       tenantId,
     } as BatchImportJobData,
     {
-      jobId: `batch-${batchId}`, // Unique job ID prevents duplicate processing
+      jobId: existingJobId, // Unique job ID prevents duplicate processing
     }
   )
 }

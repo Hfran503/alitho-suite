@@ -511,7 +511,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { job, date, shipmentType, shipVia, description } = body
+    const { job, date, shipmentType, shipVia, description, name } = body
 
     if (!job) {
       return NextResponse.json({ error: 'Job number is required' }, { status: 400 })
@@ -545,6 +545,11 @@ export async function POST(req: NextRequest) {
     // Add optional fields
     if (date) {
       shipmentData.dateTime = new Date(date).toISOString().substring(0, 19)
+    }
+
+    if (name) {
+      // Truncate to 60 characters to respect PACE limit
+      shipmentData.name = name.length > 60 ? name.substring(0, 57) + '...' : name
     }
 
     if (shipmentType) {

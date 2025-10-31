@@ -27,6 +27,21 @@ async function initWorker() {
         return { success: true, batchId }
       } catch (error) {
         console.error(`[Worker] Failed batch import: ${batchId}`, error)
+
+        // Update batch status to FAILED so it doesn't stay stuck in PROCESSING
+        try {
+          await db.batchImport.update({
+            where: { id: batchId },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date(),
+              errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            },
+          })
+        } catch (updateError) {
+          console.error(`[Worker] Failed to update batch status to FAILED:`, updateError)
+        }
+
         throw error
       }
     },
@@ -114,19 +129,38 @@ async function processBatch(
   let successCount = 0
   let failedCount = 0
 
-  // 4. Process each shipment group
-  for (const group of groups) {
-    try {
-      console.log(`[Batch ${batchId}] Processing group ${processed + 1}/${total}`)
-      await processShipmentGroup(group, batch)
-      successCount += group.length
-    } catch (error: any) {
-      console.error(`[Batch ${batchId}] Failed to process group:`, error.message)
-      await markGroupAsFailed(group, error.message)
-      failedCount += group.length
+  // 4. Process shipment groups in parallel (3 at a time to respect rate limits)
+  const CONCURRENCY = 3 // Process 3 shipments concurrently (respects 3.33 req/sec limit)
+
+  for (let i = 0; i < groups.length; i += CONCURRENCY) {
+    const batch_slice = groups.slice(i, i + CONCURRENCY)
+
+    const results = await Promise.allSettled(
+      batch_slice.map(async (group) => {
+        try {
+          console.log(`[Batch ${batchId}] Processing group ${processed + 1}/${total}`)
+          await processShipmentGroup(group, batch)
+          return { success: true, count: group.length }
+        } catch (error: any) {
+          console.error(`[Batch ${batchId}] Failed to process group:`, error.message)
+          await markGroupAsFailed(group, error.message)
+          return { success: false, count: group.length }
+        }
+      })
+    )
+
+    // Update counters
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        if (result.value.success) {
+          successCount += result.value.count
+        } else {
+          failedCount += result.value.count
+        }
+      }
+      processed++
     }
 
-    processed++
     onProgress((processed / total) * 100)
   }
 
@@ -273,6 +307,11 @@ async function processShipmentGroup(rows: any[], batch: any) {
   console.log(`[Group] Created ${packagesData.length} labels via ShipStation`)
 
   // 4. Create JobShipment in PACE
+  // Generate a name using ship-to company, but truncate to PACE's 60-character limit
+  const shipToCompany = firstRow.shipToCompany || firstRow.shipToName || 'Unknown'
+  const jobName = `${firstRow.jobNumber} / ${shipToCompany}`
+  const truncatedName = jobName.length > 60 ? jobName.substring(0, 57) + '...' : jobName
+
   const jobShipmentResponse = await fetch(
     `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/pace/shipments`,
     {
@@ -281,6 +320,7 @@ async function processShipmentGroup(rows: any[], batch: any) {
       body: JSON.stringify({
         job: firstRow.jobNumber,
         date: firstRow.shipDate,
+        name: truncatedName, // Truncated to 60 chars for PACE, full name used on label
         // Add other JobShipment fields as needed based on your PACE API
       }),
     }
