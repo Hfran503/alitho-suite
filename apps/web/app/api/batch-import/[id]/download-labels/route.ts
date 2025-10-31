@@ -5,7 +5,7 @@ import { db } from '@repo/database'
 import { PDFDocument } from 'pdf-lib'
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -15,6 +15,10 @@ export async function GET(
     }
 
     const { id } = await params
+
+    // Check query parameter for page mode (firstPageOnly=true to only include first page of each label)
+    const { searchParams } = new URL(req.url)
+    const firstPageOnly = searchParams.get('firstPageOnly') === 'true'
 
     // Get user's tenant
     const membership = await db.membership.findFirst({
@@ -51,33 +55,116 @@ export async function GET(
       return NextResponse.json({ error: 'No labels available to download' }, { status: 404 })
     }
 
+    // Deduplicate rows by rowNumber (in case of retries creating multiple successful records)
+    // Keep the most recent successful attempt for each rowNumber
+    const uniqueRows = new Map<number, typeof batch.rows[number]>()
+
+    for (const row of batch.rows) {
+      const existing = uniqueRows.get(row.rowNumber)
+      // Keep the row with the most recent processedAt timestamp
+      if (!existing || (row.processedAt && (!existing.processedAt || row.processedAt > existing.processedAt))) {
+        uniqueRows.set(row.rowNumber, row)
+      }
+    }
+
+    const deduplicatedRows = Array.from(uniqueRows.values()).sort((a, b) => a.rowNumber - b.rowNumber)
+
+    console.log(`[Download Labels] Total successful rows: ${batch.rows.length}, Unique rows: ${deduplicatedRows.length}`)
+
+    if (deduplicatedRows.length < batch.rows.length) {
+      console.warn(`[Download Labels] ⚠️ Found ${batch.rows.length - deduplicatedRows.length} duplicate row(s)`)
+    }
+
     // Create a new PDF document to merge all labels
     const mergedPdf = await PDFDocument.create()
 
-    // Fetch and merge each label PDF in row order
-    for (const row of batch.rows) {
-      if (!row.labelUrl) continue
+    // Track statistics and detailed processing log
+    let totalLabels = 0
+    let totalPages = 0
+    let multiPageCount = 0
+    const processedRowNumbers = new Set<number>()
+    const processingLog: Array<{rowNum: number, pages: number, tracking?: string}> = []
+
+    console.log(`[Download Labels] 🚀 Starting to merge ${deduplicatedRows.length} labels...`)
+
+    // Fetch and merge each label PDF in row order (using deduplicated rows)
+    for (const row of deduplicatedRows) {
+      if (!row.labelUrl) {
+        console.log(`[Download Labels] ⚠️ Row ${row.rowNumber}: Skipping (no labelUrl)`)
+        continue
+      }
+
+      // Check for duplicates in the loop itself
+      if (processedRowNumbers.has(row.rowNumber)) {
+        console.error(`[Download Labels] ❌ DUPLICATE DETECTED: Row ${row.rowNumber} already processed!`)
+        continue
+      }
+      processedRowNumbers.add(row.rowNumber)
 
       try {
         // Fetch the label PDF
         const response = await fetch(row.labelUrl)
         if (!response.ok) {
-          console.error(`Failed to fetch label for row ${row.rowNumber}: ${response.statusText}`)
+          console.error(`[Download Labels] ❌ Row ${row.rowNumber}: Failed to fetch (${response.statusText})`)
           continue
         }
 
         const pdfBytes = await response.arrayBuffer()
         const pdf = await PDFDocument.load(pdfBytes)
 
-        // Copy all pages from this label to the merged PDF
-        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices())
-        copiedPages.forEach((page) => {
-          mergedPdf.addPage(page)
+        const pageCount = pdf.getPageCount()
+        totalLabels++
+
+        if (pageCount > 1) {
+          multiPageCount++
+          console.log(`[Download Labels] 📄 Row ${row.rowNumber}: Multi-page label (${pageCount} pages) - Tracking: ${row.trackingNumber || 'N/A'}`)
+        }
+
+        // Copy pages from this label to the merged PDF
+        if (firstPageOnly) {
+          // Only copy the first page (shipping label)
+          const [firstPage] = await mergedPdf.copyPages(pdf, [0])
+          mergedPdf.addPage(firstPage)
+          totalPages++
+        } else {
+          // Copy all pages (shipping label + packing slip/invoice)
+          const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices())
+          copiedPages.forEach((page) => {
+            mergedPdf.addPage(page)
+            totalPages++
+          })
+        }
+
+        processingLog.push({
+          rowNum: row.rowNumber,
+          pages: pageCount,
+          tracking: row.trackingNumber || undefined
         })
+
       } catch (error) {
-        console.error(`Error merging label for row ${row.rowNumber}:`, error)
+        console.error(`[Download Labels] ❌ Row ${row.rowNumber}: Error merging -`, error)
         // Continue with other labels even if one fails
       }
+    }
+
+    console.log(
+      `[Download Labels] ✅ Merged ${totalLabels} labels (${totalPages} total pages)` +
+      `${multiPageCount > 0 ? `, ${multiPageCount} multi-page labels` : ''}` +
+      `${firstPageOnly ? ' [First page only mode]' : ' [All pages mode]'}`
+    )
+
+    // Log any discrepancies
+    if (totalLabels !== deduplicatedRows.length) {
+      console.warn(`[Download Labels] ⚠️ Discrepancy: Expected ${deduplicatedRows.length} labels, actually merged ${totalLabels}`)
+    }
+
+    // If there are multi-page labels, log the first few for inspection
+    if (multiPageCount > 0) {
+      const multiPageLogs = processingLog.filter(log => log.pages > 1)
+      console.log(`[Download Labels] 📋 Multi-page labels breakdown (first 10):`)
+      multiPageLogs.slice(0, 10).forEach(log => {
+        console.log(`  - Row ${log.rowNum}: ${log.pages} pages (Tracking: ${log.tracking || 'N/A'})`)
+      })
     }
 
     // Generate the merged PDF bytes

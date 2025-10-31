@@ -324,7 +324,8 @@ export function Step1Upload({ onComplete }: Step1UploadProps) {
         <p className="text-sm text-gray-600 mb-2">
           Your file should include these columns (in any order):
         </p>
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+        <div className="grid grid-cols-2 gap-2 text-xs text-gray-700 mb-3">
+          <div>• Position (optional)</div>
           <div>• ShipDate</div>
           <div>• Job#</div>
           <div>• ShipToName</div>
@@ -340,6 +341,13 @@ export function Step1Upload({ onComplete }: Step1UploadProps) {
           <div>• ItemNumber</div>
           <div>• ItemQuantity</div>
           <div>• Reference1/2/3 (optional)</div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2">
+          <p className="text-xs text-blue-800">
+            <strong>💡 Tip:</strong> Use the <strong>Position</strong> column to control grouping.
+            Rows with the same Position + Name + Address will be grouped as one multi-package shipment.
+            Different people at the same address should have different Positions.
+          </p>
         </div>
       </div>
     </div>

@@ -383,6 +383,7 @@ model BatchImportRow {
   id                    String         @id @default(cuid())
   batchImportId         String
   rowNumber             Int
+  position              String?        // User-defined position/grouping identifier
   status                BatchRowStatus @default(PENDING)
   groupKey              String?
   shipDate              DateTime?

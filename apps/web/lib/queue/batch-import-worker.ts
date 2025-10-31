@@ -180,14 +180,22 @@ async function processBatch(
   )
 }
 
-// Group rows by Job# + Address
+// Group rows by Position + Name + Address
+// Position is user-defined to control grouping (same position = same shipment)
+// Name is included to prevent different recipients at same address from being grouped
 function groupRowsByShipment(rows: any[]) {
   const grouped = new Map<string, any[]>()
 
   for (const row of rows) {
-    // Create grouping key: Job# + normalized address
+    // Create grouping key using Position (if provided) + recipient + address
+    // This ensures:
+    // 1. User controls grouping via Position field
+    // 2. Different recipients at same address don't get mixed up
+    // 3. Multi-package shipments to same person are grouped together
     const key = [
-      row.jobNumber?.trim(),
+      row.position?.trim() || '',           // User-defined position/grouping ID
+      row.shipToName?.trim().toLowerCase() || '',
+      row.shipToCompany?.trim().toLowerCase() || '',
       row.shipToAddress1?.trim().toLowerCase(),
       row.shipToCity?.trim().toLowerCase(),
       row.shipToState?.trim().toUpperCase(),

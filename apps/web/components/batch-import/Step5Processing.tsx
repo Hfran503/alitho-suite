@@ -344,7 +344,7 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
     }
   }
 
-  const handleDownloadAllLabels = async () => {
+  const handleDownloadAllLabels = async (firstPageOnly: boolean = false) => {
     if (!batchStatus) return
 
     const successRows = batchStatus.rows.filter((r) => r.status === 'SUCCESS' && r.labelUrl)
@@ -355,21 +355,22 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
 
     try {
       // Download merged PDF from API
-      const response = await fetch(`/api/batch-import/${batchId}/download-labels`)
+      const url = `/api/batch-import/${batchId}/download-labels${firstPageOnly ? '?firstPageOnly=true' : ''}`
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error('Failed to download labels')
       }
 
       // Create a blob from the response and download it
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
+      const downloadUrl = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
-      a.download = `batch-${batchId}-labels.pdf`
+      a.href = downloadUrl
+      a.download = `batch-${batchId}-labels${firstPageOnly ? '-labels-only' : ''}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
+      window.URL.revokeObjectURL(downloadUrl)
     } catch (err: any) {
       alert(`Failed to download labels: ${err.message}`)
     }
@@ -658,11 +659,19 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
             Retry All Failed ({batchStatus.failedRows})
           </button>
           <button
-            onClick={handleDownloadAllLabels}
+            onClick={() => handleDownloadAllLabels(false)}
             disabled={batchStatus.successfulRows === 0}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
           >
             Download All Labels
+          </button>
+          <button
+            onClick={() => handleDownloadAllLabels(true)}
+            disabled={batchStatus.successfulRows === 0}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
+            title="Download only the first page of each label (excludes packing slips/invoices)"
+          >
+            Download Labels Only
           </button>
           <button
             onClick={handleVoidAllLabels}

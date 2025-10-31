@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
             }
             return {
             rowNumber: row.rowNumber,
+            position: row.position || null,
             status: 'PENDING',
             shipDate: row.shipDate ? new Date(row.shipDate) : null,
             jobNumber: row.jobNumber,

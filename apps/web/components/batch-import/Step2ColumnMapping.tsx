@@ -10,6 +10,7 @@ interface Step2ColumnMappingProps {
 
 // System fields that we need to map to
 const SYSTEM_FIELDS = [
+  { key: 'position', label: 'Position (Grouping ID)', required: false },
   { key: 'shipDate', label: 'Ship Date', required: true },
   { key: 'jobNumber', label: 'Job Number', required: true },
   { key: 'shipToName', label: 'Ship To Name', required: false },
@@ -56,6 +57,7 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
     const mapping: Record<string, string> = {}
 
     const fieldPatterns: Record<string, string[]> = {
+      position: ['position', 'pos', 'group', 'groupid', 'group id'],
       shipDate: ['shipdate', 'ship date', 'date'],
       jobNumber: ['job#', 'job number', 'job', 'jobnumber'],
       shipToName: ['shiptoname', 'ship to name', 'name', 'recipient name'],
