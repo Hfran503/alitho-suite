@@ -29,17 +29,23 @@ export function Step4Review({
     data.map((row) => row[columnMapping.jobNumber]).filter(Boolean)
   ).size
 
+  // Calculate unique shipments using the same grouping logic as the worker
+  // Groups by: Position + Name + Company + Address
   const uniqueAddresses = new Set(
     data.map((row) => {
-      const addr = [
-        row[columnMapping.shipToAddress1],
+      const key = [
+        row[columnMapping.position] || '',           // Position (if provided)
+        row[columnMapping.shipToName] || '',          // Ship To Name
+        row[columnMapping.shipToCompany] || '',       // Ship To Company
+        row[columnMapping.shipToAddress1],            // Address
         row[columnMapping.shipToCity],
         row[columnMapping.shipToState],
         row[columnMapping.shipToZip],
       ]
         .filter(Boolean)
         .join('|')
-      return addr
+        .toLowerCase()
+      return key
     })
   ).size
 
