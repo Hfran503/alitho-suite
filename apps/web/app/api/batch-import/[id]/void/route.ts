@@ -209,54 +209,105 @@ export async function POST(
         }
       }
 
-      // Step 2: Update shipments to "planned" status, then delete them
+      // Step 2: Update shipments to "planned" status with retry, then delete them
       for (const shipmentId of paceShipmentIds) {
-        try {
-          // First, update the shipment to mark it as "planned" (not "actual")
-          console.log(`[VOID] 🔄 Updating JobShipment ${shipmentId} to planned status`)
-          const updatePayload = {
-            id: shipmentId,
-            planned: true, // Mark as planned shipment
-            trackingNumber: null, // Clear tracking number
+        const MAX_RETRIES = 3
+        let updateSuccess = false
+
+        // Retry update operation up to 3 times
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            // First, update the shipment to mark it as "planned" (not "actual")
+            console.log(`[VOID] 🔄 Updating JobShipment ${shipmentId} to planned status (attempt ${attempt}/${MAX_RETRIES})`)
+            const updatePayload = {
+              id: shipmentId,
+              planned: true, // Mark as planned shipment
+              trackingNumber: null, // Clear tracking number
+            }
+
+            const updateResponse = await fetch(`${paceCredentials.url}/UpdateObject/updateJobShipment`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader,
+              },
+              body: JSON.stringify(updatePayload),
+            })
+
+            if (!updateResponse.ok) {
+              const updateError = await updateResponse.text()
+
+              if (attempt < MAX_RETRIES) {
+                console.warn(`[VOID] ⚠️  Failed to update JobShipment ${shipmentId} to planned (attempt ${attempt}/${MAX_RETRIES}), retrying...`)
+                // Wait before retry (exponential backoff: 1s, 2s, 4s)
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+                continue
+              } else {
+                console.error(`[VOID] ❌ Failed to update JobShipment ${shipmentId} to planned after ${MAX_RETRIES} attempts:`, updateError)
+                break // Exit retry loop and skip deletion
+              }
+            }
+
+            console.log(`[VOID] ✅ JobShipment ${shipmentId} updated to planned${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
+            updateSuccess = true
+            break // Success, exit retry loop
+          } catch (error: any) {
+            if (attempt < MAX_RETRIES) {
+              console.warn(`[VOID] ⚠️  Exception updating JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}):`, error.message)
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+              continue
+            } else {
+              console.error(`[VOID] ❌ Exception updating JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, error.message)
+              break
+            }
           }
+        }
 
-          const updateResponse = await fetch(`${paceCredentials.url}/UpdateObject/updateJobShipment`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': authHeader,
-            },
-            body: JSON.stringify(updatePayload),
-          })
+        if (!updateSuccess) {
+          continue // Skip deletion if update didn't succeed
+        }
 
-          if (!updateResponse.ok) {
-            const updateError = await updateResponse.text()
-            console.error(`[VOID] ❌ Failed to update JobShipment ${shipmentId} to planned:`, updateError)
-            continue // Skip deletion if update fails
+        // Wait 2 seconds for PACE to process the update
+        console.log(`[VOID] ⏳ Waiting 2 seconds for PACE to process update...`)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+
+        // Retry delete operation up to 3 times
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const deleteUrl = `${paceCredentials.url}/DeleteObject/DeleteObject?type=JobShipment&key=${shipmentId}`
+            console.log(`[VOID] 🗑️  Deleting JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES})`)
+
+            const deleteResponse = await fetch(deleteUrl, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader,
+              },
+            })
+
+            if (deleteResponse.ok) {
+              console.log(`[VOID] ✅ JobShipment ${shipmentId} deleted successfully${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
+              break // Success, exit retry loop
+            } else {
+              const deleteError = await deleteResponse.text()
+
+              if (attempt < MAX_RETRIES) {
+                console.warn(`[VOID] ⚠️  Failed to delete JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}), retrying...`)
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+                continue
+              } else {
+                console.error(`[VOID] ❌ Failed to delete JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, deleteError)
+              }
+            }
+          } catch (error: any) {
+            if (attempt < MAX_RETRIES) {
+              console.warn(`[VOID] ⚠️  Exception deleting JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}):`, error.message)
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+              continue
+            } else {
+              console.error(`[VOID] ❌ Exception deleting JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, error.message)
+            }
           }
-
-          console.log(`[VOID] ✅ JobShipment ${shipmentId} updated to planned`)
-
-          // Now delete the shipment
-          const deleteUrl = `${paceCredentials.url}/DeleteObject/DeleteObject?type=JobShipment&key=${shipmentId}`
-          console.log(`[VOID] 🗑️  Deleting JobShipment ${shipmentId}`)
-
-          const deleteResponse = await fetch(deleteUrl, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': authHeader,
-            },
-          })
-
-          if (deleteResponse.ok) {
-            console.log(`[VOID] ✅ JobShipment ${shipmentId} deleted successfully`)
-          } else {
-            const deleteError = await deleteResponse.text()
-            console.error(`[VOID] ❌ Failed to delete JobShipment ${shipmentId}:`, deleteError)
-          }
-        } catch (error: any) {
-          console.error(`[VOID] ❌ Exception processing JobShipment ${shipmentId}:`, error.message)
         }
       }
 

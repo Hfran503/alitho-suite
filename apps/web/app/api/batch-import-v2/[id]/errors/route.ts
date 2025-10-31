@@ -5,7 +5,7 @@ import { db } from '@repo/database'
 import { getShipStationApiKey } from '@repo/shared'
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

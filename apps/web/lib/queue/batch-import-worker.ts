@@ -28,18 +28,17 @@ async function initWorker() {
       } catch (error) {
         console.error(`[Worker] Failed batch import: ${batchId}`, error)
 
-        // Update batch status to FAILED so it doesn't stay stuck in PROCESSING
+        // Update batch status to CANCELLED so it doesn't stay stuck in PROCESSING
         try {
           await db.batchImport.update({
             where: { id: batchId },
             data: {
-              status: 'FAILED',
+              status: 'CANCELLED',
               completedAt: new Date(),
-              errorMessage: error instanceof Error ? error.message : 'Unknown error',
             },
           })
         } catch (updateError) {
-          console.error(`[Worker] Failed to update batch status to FAILED:`, updateError)
+          console.error(`[Worker] Failed to update batch status to CANCELLED:`, updateError)
         }
 
         throw error

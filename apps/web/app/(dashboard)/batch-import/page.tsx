@@ -157,7 +157,12 @@ export default function BatchImportPage() {
           />
         )}
         {currentStep === 5 && batchId && (
-          <Step5Processing batchId={batchId} onReset={handleReset} />
+          <Step5Processing
+            batchId={batchId}
+            onReset={handleReset}
+            originalData={parsedData}
+            columnMapping={columnMapping}
+          />
         )}
       </div>
     </div>

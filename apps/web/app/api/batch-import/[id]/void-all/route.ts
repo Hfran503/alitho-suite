@@ -283,6 +283,10 @@ export async function POST(
           return // Skip deletion if update didn't succeed
         }
 
+        // Wait 2 seconds for PACE to process the update
+        console.log(`[VOID-ALL] ⏳ Waiting 2 seconds for PACE to process update for shipment ${shipmentId}...`)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+
         // Retry delete operation up to 3 times
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {

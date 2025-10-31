@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 interface Step5ProcessingProps {
   batchId: string
   onReset?: () => void
+  originalData?: any[]
+  columnMapping?: Record<string, string>
 }
 
 interface RowStatus {
@@ -50,7 +52,7 @@ interface BatchStatus {
   rows: RowStatus[]
 }
 
-export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
+export function Step5Processing({ batchId, onReset, originalData, columnMapping }: Step5ProcessingProps) {
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -61,6 +63,7 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
   const [carriers, setCarriers] = useState<any[]>([])
   const [selectedCarrier, setSelectedCarrier] = useState('')
   const [selectedService, setSelectedService] = useState('')
+  const [activeTab, setActiveTab] = useState<'results' | 'original'>('results')
 
   // Poll for status updates
   useEffect(() => {
@@ -551,7 +554,36 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
         </p>
       </div>
 
-      {/* Progress Bar */}
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('results')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'results'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Results
+          </button>
+          <button
+            onClick={() => setActiveTab('original')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'original'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Original Data
+          </button>
+        </nav>
+      </div>
+
+      {/* Results Tab */}
+      {activeTab === 'results' && (
+        <>
+          {/* Progress Bar */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-700">
@@ -901,6 +933,74 @@ export function Step5Processing({ batchId, onReset }: Step5ProcessingProps) {
           >
             Start New Batch Import
           </button>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* Original Data Tab */}
+      {activeTab === 'original' && originalData && originalData.length > 0 && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-800">
+              This tab shows the exact data that was imported from your CSV/Excel file ({originalData.length} rows).
+            </p>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                      Row #
+                    </th>
+                    {originalData[0] && Object.keys(originalData[0]).map((header) => (
+                      <th
+                        key={header}
+                        className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase"
+                      >
+                        {header}
+                        {columnMapping && columnMapping[header] && (
+                          <div className="text-[10px] text-blue-600 font-normal normal-case mt-0.5">
+                            → {columnMapping[header]}
+                          </div>
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {originalData.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                        {idx + 1}
+                      </td>
+                      {Object.values(row).map((value: any, colIdx) => (
+                        <td key={colIdx} className="px-3 py-3 text-sm text-gray-600">
+                          <div className="max-w-xs truncate" title={String(value || '')}>
+                            {value != null ? String(value) : '-'}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Reset Button for Original Data Tab */}
+          {!isProcessing && onReset && (
+            <div className="flex justify-center pt-6 border-t border-gray-200">
+              <button
+                onClick={onReset}
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
+              >
+                Start New Batch Import
+              </button>
+            </div>
+          )}
         </div>
       )}
 

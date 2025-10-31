@@ -102,7 +102,6 @@ export async function POST(
       where: { id: batchId },
       data: {
         status: 'PROCESSING',
-        errorMessage: null,
         // Keep completedAt to track when initial batch finished
       },
     })
