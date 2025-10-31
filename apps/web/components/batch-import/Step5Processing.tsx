@@ -433,7 +433,10 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
   }
 
   const handleExportFailedRows = () => {
-    if (!batchStatus) return
+    if (!batchStatus || !originalData || !columnMapping) {
+      alert('Original data not available for export')
+      return
+    }
 
     // Filter only failed rows
     const failedRows = batchStatus.rows.filter((row) => row.status === 'FAILED')
@@ -443,43 +446,60 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
       return
     }
 
-    // Create CSV with failed rows only
-    const headers = [
-      'Row',
-      'Job#',
-      'Ship To Name',
-      'Company',
-      'Address 1',
-      'Address 2',
-      'City',
-      'State',
-      'Zip',
-      'Phone',
-      'Pkg',
-      'Status',
-      'Error',
-      'Retry Count',
-      'Is Transient Error',
-    ]
-    const rows = failedRows.map((row) => [
-      row.rowNumber,
-      row.jobNumber,
-      row.shipToName || '',
-      row.shipToCompany || '',
-      row.shipToAddress1 || '',
-      row.shipToAddress2 || '',
-      row.shipToCity || '',
-      row.shipToState || '',
-      row.shipToZip || '',
-      row.shipToPhone || '',
-      `${row.packageNumber}/${row.totalPackages}`,
-      row.status,
-      row.errorMessage || '',
-      row.retryCount || 0,
-      row.isTransientError ? 'Yes' : 'No',
-    ])
+    // Get original column headers from the first row of original data
+    const originalHeaders = originalData.length > 0 ? Object.keys(originalData[0]) : []
 
-    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n')
+    if (originalHeaders.length === 0) {
+      alert('Unable to determine original column headers')
+      return
+    }
+
+    // Add error message column at the end
+    const headers = [...originalHeaders, 'Error Message']
+
+    // Map failed rows back to original format
+    const rows = failedRows.map((failedRow) => {
+      // Find the corresponding original row (row numbers are 1-based, array is 0-based)
+      const originalRowIndex = failedRow.rowNumber - 2 // -2 because row 1 is header, row 2 is index 0
+      const originalRow = originalData[originalRowIndex] || {}
+
+      // Create array with original column values
+      const rowData = originalHeaders.map((header) => {
+        const value = originalRow[header]
+        // Escape CSV values that contain commas, quotes, or newlines
+        if (value == null) return ''
+        const stringValue = String(value)
+        if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+          return `"${stringValue.replace(/"/g, '""')}"`
+        }
+        return stringValue
+      })
+
+      // Add error message at the end
+      const errorMessage = failedRow.errorMessage || ''
+      const escapedError = errorMessage.includes(',') || errorMessage.includes('"') || errorMessage.includes('\n')
+        ? `"${errorMessage.replace(/"/g, '""')}"`
+        : errorMessage
+      rowData.push(escapedError)
+
+      return rowData
+    })
+
+    // Create CSV
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => {
+        // Only escape cells that haven't been escaped yet
+        const stringCell = String(cell)
+        if (stringCell.startsWith('"') && stringCell.endsWith('"')) {
+          return stringCell // Already escaped
+        }
+        if (stringCell.includes(',') || stringCell.includes('"') || stringCell.includes('\n')) {
+          return `"${stringCell.replace(/"/g, '""')}"`
+        }
+        return stringCell
+      }).join(','))
+      .join('\n')
+
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

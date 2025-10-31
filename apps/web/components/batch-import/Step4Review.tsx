@@ -91,6 +91,22 @@ export function Step4Review({
           else if (['weight', 'length', 'width', 'height'].includes(systemField) && value) {
             mappedRow[systemField] = parseFloat(value)
           }
+          // ZIP code - pad with leading zeros for US addresses
+          else if (systemField === 'shipToZip' && value) {
+            const zipString = String(value).trim()
+            // If it's a US address and ZIP is 4 digits, pad with leading zero
+            // US ZIP codes are either 5 digits or 9 digits (ZIP+4 format: 12345-6789)
+            const countryValue = row[columnMapping.shipToCountry]
+            const country = countryValue ? String(countryValue).trim().toUpperCase() : 'US'
+
+            if ((country === 'US' || country === 'USA' || !countryValue) && /^\d{4}$/.test(zipString)) {
+              // Pad 4-digit ZIP to 5 digits
+              mappedRow[systemField] = zipString.padStart(5, '0')
+              console.log(`[Batch Import] ⚠️ Padded ZIP code: ${zipString} → ${mappedRow[systemField]}`)
+            } else {
+              mappedRow[systemField] = zipString
+            }
+          }
           // String fields - ensure they're actually strings
           else {
             mappedRow[systemField] = value != null ? String(value) : null
