@@ -75,6 +75,7 @@ interface BatchImportJobData {
 interface BatchRow {
   id: string
   rowNumber: number
+  position: string | null
   groupKey: string | null
   shipDate: Date | null
   jobNumber: string
@@ -1228,18 +1229,23 @@ async function processShipmentGroup(
 }
 
 /**
- * Group rows by jobNumber + shipDate + destination (multi-package shipments)
- * Only group packages going to the SAME address
+ * Group rows by position + jobNumber + shipDate + destination (multi-package shipments)
+ * If position is provided, it controls grouping (different positions = different shipments)
+ * Otherwise, group by jobNumber + shipDate + destination address
  */
 function groupRowsByShipment(rows: BatchRow[]): GroupedShipment[] {
   const groups = new Map<string, GroupedShipment>()
 
   for (const row of rows) {
-    // Create group key from jobNumber + shipDate + destination address
-    // This ensures only packages going to the SAME address are grouped together
+    // Create group key:
+    // - If position is provided, use it as primary grouping key (user controls grouping)
+    // - Otherwise, group by jobNumber + shipDate + destination
     const dateKey = row.shipDate ? row.shipDate.toISOString().split('T')[0] : 'no-date'
     const addressKey = `${row.shipToAddress1}-${row.shipToCity}-${row.shipToState}-${row.shipToZip}`.toLowerCase()
-    const groupKey = `${row.jobNumber}-${dateKey}-${addressKey}`
+
+    const groupKey = row.position
+      ? `pos-${row.position}-${row.jobNumber}-${dateKey}-${addressKey}`
+      : `${row.jobNumber}-${dateKey}-${addressKey}`
 
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {
