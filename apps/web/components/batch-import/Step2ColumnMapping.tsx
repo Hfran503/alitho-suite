@@ -42,8 +42,11 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
 
   useEffect(() => {
     if (data.length > 0) {
-      // Get column names from first row
-      const columns = Object.keys(data[0])
+      // Get all unique column names from all rows (not just first row)
+      // This ensures columns with empty first row values are still included
+      const columns = Array.from(
+        new Set(data.flatMap(row => Object.keys(row)))
+      )
       setCsvColumns(columns)
 
       // Auto-map columns based on name similarity
@@ -52,7 +55,7 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
     }
   }, [data])
 
-  // Auto-mapping logic based on column name similarity
+  // Auto-mapping logic based on column name similarity and data analysis
   const autoMapColumns = (columns: string[]): Record<string, string> => {
     const mapping: Record<string, string> = {}
 
@@ -82,6 +85,101 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
       itemNumber: ['itemnumber', 'item number', 'itemno', 'item#', 'itemnbr', 'product', 'sku', 'productid', 'jobproduct'],
     }
 
+    // Helper function to check if a column name is empty or generic
+    const isEmptyOrGenericColumn = (column: string): boolean => {
+      const normalized = column.toLowerCase().trim()
+      return (
+        normalized === '' ||
+        normalized.startsWith('__empty') ||
+        /^column[0-9]+$/i.test(normalized) ||
+        /^field[0-9]+$/i.test(normalized)
+      )
+    }
+
+    // Helper function to analyze column data and infer field type
+    const inferFieldFromData = (column: string): string | null => {
+      // Get first few non-empty values from this column
+      const sampleValues = data
+        .slice(0, 10)
+        .map(row => row[column])
+        .filter(val => val !== null && val !== undefined && val !== '')
+        .map(val => String(val).toLowerCase().trim())
+
+      if (sampleValues.length === 0) return null
+
+      // Date patterns
+      const datePattern = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/
+      if (sampleValues.some(val => datePattern.test(val))) {
+        return 'shipDate'
+      }
+
+      // ZIP code patterns (5 digits or 5+4)
+      const zipPattern = /^\d{5}(-\d{4})?$/
+      if (sampleValues.filter(val => zipPattern.test(val)).length / sampleValues.length > 0.5) {
+        return 'shipToZip'
+      }
+
+      // State patterns (2 uppercase letters)
+      const statePattern = /^[A-Z]{2}$/
+      if (sampleValues.filter(val => val.toUpperCase() === val && statePattern.test(val)).length / sampleValues.length > 0.5) {
+        return 'shipToState'
+      }
+
+      // Phone number patterns
+      const phonePattern = /^[\d\s\(\)\-\+\.]+$/
+      if (sampleValues.some(val => phonePattern.test(val) && val.replace(/\D/g, '').length >= 10)) {
+        return 'shipToPhone'
+      }
+
+      // Numeric patterns
+      const numericPattern = /^[\d\.]+$/
+      const numericCount = sampleValues.filter(val => numericPattern.test(val)).length
+      if (numericCount / sampleValues.length > 0.8) {
+        const avgValue = sampleValues
+          .filter(val => numericPattern.test(val))
+          .map(val => parseFloat(val))
+          .reduce((sum, val) => sum + val, 0) / numericCount
+
+        // Small integers likely package/quantity
+        if (avgValue < 20 && sampleValues.every(val => !val.includes('.'))) {
+          // Check if values are mostly 1s (likely package number)
+          const onesCount = sampleValues.filter(val => val === '1').length
+          if (onesCount / sampleValues.length > 0.5) {
+            return 'packageNumber'
+          }
+          // Check if values are consistent (likely total packages)
+          const uniqueValues = new Set(sampleValues).size
+          if (uniqueValues <= 3) {
+            return 'totalPackages'
+          }
+          return 'itemQuantity'
+        }
+
+        // Medium numbers likely weight or dimensions
+        if (avgValue < 100) {
+          return 'weight'
+        }
+      }
+
+      // Street address patterns (contains numbers)
+      if (sampleValues.some(val => /\d+/.test(val) && val.length > 5)) {
+        return 'shipToAddress1'
+      }
+
+      // City patterns (letters only, multiple words common)
+      if (sampleValues.some(val => /^[a-z\s]+$/i.test(val) && val.split(/\s+/).length >= 2)) {
+        return 'shipToCity'
+      }
+
+      // Name patterns (contains common name prefixes/suffixes)
+      const nameIndicators = /\b(mr|mrs|ms|dr|jr|sr|inc|llc|corp|ltd)\b/i
+      if (sampleValues.some(val => nameIndicators.test(val))) {
+        return 'shipToName'
+      }
+
+      return null
+    }
+
     columns.forEach((column) => {
       const normalized = column.toLowerCase().trim().replace(/[_\s-]/g, '')
 
@@ -104,7 +202,7 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
       }
 
       // If no exact match found, look for partial matches
-      if (!foundExactMatch) {
+      if (!foundExactMatch && !isEmptyOrGenericColumn(column)) {
         for (const [systemField, patterns] of Object.entries(fieldPatterns)) {
           for (const pattern of patterns) {
             const patternNormalized = pattern.replace(/[_\s-]/g, '')
@@ -121,6 +219,14 @@ export function Step2ColumnMapping({ data, onComplete, onBack }: Step2ColumnMapp
 
         if (bestMatch) {
           mapping[bestMatch.field] = column
+        }
+      }
+
+      // If still no match and column is empty/generic, try data inference
+      if (!foundExactMatch && !bestMatch && isEmptyOrGenericColumn(column)) {
+        const inferredField = inferFieldFromData(column)
+        if (inferredField && !mapping[inferredField]) {
+          mapping[inferredField] = column
         }
       }
     })
