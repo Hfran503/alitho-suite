@@ -416,8 +416,8 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
   const toggleSubmenu = (menuKey: string) => {
     setExpandedMenus(prev => {
       const newExpandedMenus = prev.includes(menuKey)
-        ? prev.filter(h => h !== menuKey)
-        : [...prev, menuKey]
+        ? prev.filter(h => h !== menuKey) // Close this submenu
+        : [menuKey] // Close all others and open only this one
 
       // Persist to localStorage
       localStorage.setItem('sidebarExpandedMenus', JSON.stringify(newExpandedMenus))

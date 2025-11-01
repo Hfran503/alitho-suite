@@ -189,14 +189,19 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
 
   // Auto-expand parent menu if a submenu item is active
   useEffect(() => {
+    console.log('[Sidebar] Auto-expand effect running. pathname:', pathname)
     navItems.forEach((item) => {
       if (item.submenu && item.submenu.some(sub => pathname === sub.href)) {
-        if (!expandedMenus.includes(item.href)) {
-          setExpandedMenus(prev => [...prev, item.href])
-        }
+        console.log('[Sidebar] Auto-expanding submenu for:', item.href)
+        setExpandedMenus([item.href]) // Only expand the active submenu, close others
       }
     })
   }, [pathname, navItems])
+
+  // Debug: Log expandedMenus state changes
+  useEffect(() => {
+    console.log('[Sidebar] expandedMenus state changed to:', expandedMenus)
+  }, [expandedMenus])
 
   const isExpanded = isPinned || isHovered
 
@@ -224,11 +229,15 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
   }
 
   const toggleSubmenu = (href: string) => {
-    setExpandedMenus(prev =>
-      prev.includes(href)
-        ? prev.filter(h => h !== href)
-        : [...prev, href]
-    )
+    console.log('[Sidebar] toggleSubmenu called for:', href)
+    console.log('[Sidebar] Current expandedMenus:', expandedMenus)
+    setExpandedMenus(prev => {
+      const newState = prev.includes(href)
+        ? prev.filter(h => h !== href) // Close this submenu
+        : [href] // Close all others and open only this one
+      console.log('[Sidebar] New expandedMenus:', newState)
+      return newState
+    })
   }
 
   const handleLogout = async () => {
@@ -276,6 +285,10 @@ export function Sidebar({ onPinChange }: SidebarProps = {}) {
             const isSubmenuActive = hasSubmenu && item.submenu?.some(sub => pathname === sub.href)
             const isActive = !hasSubmenu && (pathname === item.href || pathname?.startsWith(item.href + '/'))
             const isSubmenuExpanded = expandedMenus.includes(item.href)
+
+            if (hasSubmenu) {
+              console.log(`[Sidebar] Rendering ${item.name}: isSubmenuExpanded=${isSubmenuExpanded}`)
+            }
 
             return (
               <li key={item.href}>

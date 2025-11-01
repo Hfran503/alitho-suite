@@ -66,6 +66,7 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
   const [selectedCarrier, setSelectedCarrier] = useState('')
   const [selectedService, setSelectedService] = useState('')
   const [activeTab, setActiveTab] = useState<'results' | 'original'>('results')
+  const [isDownloadingLabels, setIsDownloadingLabels] = useState(false)
 
   // Poll for status updates
   useEffect(() => {
@@ -356,6 +357,7 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
     }
 
     try {
+      setIsDownloadingLabels(true)
       // Download merged PDF from API
       const url = `/api/batch-import/${batchId}/download-labels${firstPageOnly ? '?firstPageOnly=true' : ''}`
       const response = await fetch(url)
@@ -375,6 +377,8 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
       window.URL.revokeObjectURL(downloadUrl)
     } catch (err: any) {
       alert(`Failed to download labels: ${err.message}`)
+    } finally {
+      setIsDownloadingLabels(false)
     }
   }
 
@@ -675,14 +679,6 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
           >
             Download All Labels
-          </button>
-          <button
-            onClick={() => handleDownloadAllLabels(true)}
-            disabled={batchStatus.successfulRows === 0}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
-            title="Download only the first page of each label (excludes packing slips/invoices)"
-          >
-            Download Labels Only
           </button>
           <button
             onClick={handleVoidAllLabels}
@@ -1130,6 +1126,19 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
                 Change Service
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Download Labels Loading Modal */}
+      {isDownloadingLabels && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold mb-2">Downloading Labels...</h3>
+            <p className="text-gray-600 text-sm">
+              Please wait while we prepare your labels. This may take a few moments.
+            </p>
           </div>
         </div>
       )}

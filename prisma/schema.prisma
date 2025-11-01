@@ -27,6 +27,7 @@ model Tenant {
   equipment              Equipment[]
   integrations           Integration[]
   invoiceIntegrations    InvoiceIntegration[]
+  poLineIntegrations     PoLineIntegration[]
   JobSchedule            JobSchedule[]
   memberships            Membership[]
   menuConfigurations     MenuConfiguration[]
@@ -35,6 +36,7 @@ model Tenant {
   orders                 Order[]
   shipmentTypeMappings   ShipmentTypeMapping[]
   shippingLabels         ShippingLabel[]
+  switchPdfUploads       SwitchPdfUpload[]
   warehouses             Warehouse[]
 
   @@index([slug])
@@ -518,6 +520,35 @@ model InvoiceIntegration {
   @@index([status, retryCount])
 }
 
+model PoLineIntegration {
+  id                 String    @id @default(cuid())
+  uniqueId           String    @unique // Combination of PO Number and Line ID (e.g., "PO-12345-1")
+  poNumber           String
+  poLineId           Int
+  status             String    @default("pending") // pending, processing, sent, completed, failed
+  payload            Json
+  netsuiteResponse   Json?
+  netsuiteRecordId   String?   // NetSuite Item Receipt or Bill ID
+  errorMessage       String?
+  retryCount         Int       @default(0)
+  maxRetries         Int       @default(3)
+  lastAttemptAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  sentToNetsuiteAt   DateTime?
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([poNumber])
+  @@index([poLineId])
+  @@index([uniqueId])
+  @@index([createdAt])
+  @@index([status, retryCount])
+  @@map("POLineIntegration")
+}
+
 model MenuConfiguration {
   id             String   @id @default(cuid())
   menuKey        String
@@ -657,6 +688,33 @@ model JobSchedule {
   @@index([tenantId, departmentId, scheduledDate])
   @@index([tenantId, departmentId, equipmentId, scheduledDate])
   @@index([tenantId])
+}
+
+model SwitchPdfUpload {
+  id               String    @id @default(cuid())
+  filename         String
+  originalFilename String
+  fileSize         Int
+  mimeType         String    @default("application/pdf")
+  s3Bucket         String?
+  s3Key            String?
+  s3Url            String?
+  status           String    @default("pending") // pending, uploading, sent, failed
+  switchSubmitUrl  String?   // The Switch endpoint URL it was sent to
+  switchResponse   Json?     // Response from Switch (if any)
+  errorMessage     String?
+  metadata         Json?     // Job number, customer info, etc.
+  tenantId         String
+  uploadedBy       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sentToSwitchAt   DateTime?
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([uploadedBy])
 }
 
 enum BatchImportStatus {
