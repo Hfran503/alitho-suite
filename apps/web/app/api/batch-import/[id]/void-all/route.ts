@@ -90,7 +90,8 @@ export async function POST(
     })
 
     // Void all labels in parallel batches
-    const CONCURRENCY_LIMIT = 10 // Process 10 labels at a time
+    const CONCURRENCY_LIMIT = 5 // Process 5 labels at a time (ShipStation limit: 200 req/min = ~3.3 req/sec)
+    const MAX_VOID_RETRIES = 3 // Retry voiding up to 3 times for transient ShipStation errors
     const voidResults = []
     let voidedCount = 0
     let failedCount = 0
@@ -115,55 +116,75 @@ export async function POST(
             }
           }
 
-          try {
-            await shipStationClient.voidLabel(row.shipstationLabelId)
+          // Retry void operation up to MAX_VOID_RETRIES times
+          let lastError: any = null
+          for (let attempt = 1; attempt <= MAX_VOID_RETRIES; attempt++) {
+            try {
+              await shipStationClient.voidLabel(row.shipstationLabelId)
 
-            // Update row to mark as voided
-            await db.batchImportRow.update({
-              where: { id: row.id },
-              data: {
-                status: 'CANCELLED',
-                errorMessage: 'Label voided by user (batch void all)',
-                trackingNumber: null,
-                labelUrl: null,
-              },
-            })
+              // Update row to mark as voided
+              await db.batchImportRow.update({
+                where: { id: row.id },
+                data: {
+                  status: 'CANCELLED',
+                  errorMessage: 'Label voided by user (batch void all)',
+                  trackingNumber: null,
+                  labelUrl: null,
+                },
+              })
 
-            // Also update ShippingLabel record to voided status
-            if (row.trackingNumber) {
-              try {
-                const updateResult = await db.shippingLabel.updateMany({
-                  where: {
-                    trackingNumber: row.trackingNumber,
-                    tenantId: membership.tenantId,
-                  },
-                  data: {
-                    status: 'voided',
-                  },
-                })
-                console.log(`[VOID-ALL] ✅ Updated ${updateResult.count} ShippingLabel(s) to voided for tracking ${row.trackingNumber}`)
+              // Also update ShippingLabel record to voided status
+              if (row.trackingNumber) {
+                try {
+                  const updateResult = await db.shippingLabel.updateMany({
+                    where: {
+                      trackingNumber: row.trackingNumber,
+                      tenantId: membership.tenantId,
+                    },
+                    data: {
+                      status: 'voided',
+                    },
+                  })
+                  console.log(`[VOID-ALL] ✅ Updated ${updateResult.count} ShippingLabel(s) to voided for tracking ${row.trackingNumber}${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
 
-                if (updateResult.count === 0) {
-                  console.warn(`[VOID-ALL] ⚠️  No ShippingLabel found for tracking ${row.trackingNumber}`)
+                  if (updateResult.count === 0) {
+                    console.warn(`[VOID-ALL] ⚠️  No ShippingLabel found for tracking ${row.trackingNumber}`)
+                  }
+                } catch (labelError) {
+                  console.error(`[VOID-ALL] ❌ Failed to update ShippingLabel:`, labelError)
                 }
-              } catch (labelError) {
-                console.error(`[VOID-ALL] ❌ Failed to update ShippingLabel:`, labelError)
+              }
+
+              // Success! Log if it took multiple attempts
+              if (attempt > 1) {
+                console.log(`[VOID-ALL] ✅ Label ${row.shipstationLabelId} voided successfully on attempt ${attempt}`)
+              }
+
+              return {
+                rowId: row.id,
+                rowNumber: row.rowNumber,
+                success: true,
+              }
+            } catch (error: any) {
+              lastError = error
+
+              if (attempt < MAX_VOID_RETRIES) {
+                console.warn(`[VOID-ALL] ⚠️  Failed to void label ${row.shipstationLabelId} for row ${row.id} (attempt ${attempt}/${MAX_VOID_RETRIES}), retrying...`)
+                // Wait before retry (exponential backoff: 1s, 2s, 4s)
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+                continue
+              } else {
+                console.error(`[VOID-ALL] ❌ Failed to void label ${row.shipstationLabelId} for row ${row.id} after ${MAX_VOID_RETRIES} attempts:`, error)
               }
             }
+          }
 
-            return {
-              rowId: row.id,
-              rowNumber: row.rowNumber,
-              success: true,
-            }
-          } catch (error: any) {
-            console.error(`[VOID-ALL] Failed to void label for row ${row.id}:`, error)
-            return {
-              rowId: row.id,
-              rowNumber: row.rowNumber,
-              success: false,
-              error: error.message,
-            }
+          // All retries exhausted
+          return {
+            rowId: row.id,
+            rowNumber: row.rowNumber,
+            success: false,
+            error: lastError?.message || 'Unknown error',
           }
         })
       )
@@ -193,142 +214,136 @@ export async function POST(
 
     console.log(`[VOID-ALL] ✅ All batches complete - Voided ${voidedCount}/${successRows.length} labels`)
 
-    // Delete PACE cartons and shipments
+    // Delete PACE shipments (which should cascade delete cartons)
     if (paceCredentials) {
       const authHeader = 'Basic ' + Buffer.from(`${paceCredentials.username}:${paceCredentials.password}`).toString('base64')
+      const PACE_CONCURRENCY_LIMIT = 5 // Limit PACE API calls to prevent overwhelming the server
 
-      console.log(`[VOID-ALL] 🗑️  PACE Cleanup - Cartons: ${paceCartonIds.size}, Shipments: ${paceShipmentIds.size}`)
+      console.log(`[VOID-ALL] 🗑️  PACE Cleanup - Shipments: ${paceShipmentIds.size} (Cartons will be cascade deleted)`)
 
-      // Step 1: Delete cartons in parallel (should cascade delete CartonContent)
-      const cartonDeletions = Array.from(paceCartonIds).map(async (cartonId) => {
-        try {
-          const url = `${paceCredentials.url}/DeleteObject/DeleteObject?type=Carton&key=${cartonId}`
-          const response = await fetch(url, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': authHeader,
-            },
-          })
+      // Update and delete shipments in batches with retry logic (cartons should be cascade deleted)
+      const shipmentIdsArray = Array.from(paceShipmentIds)
+      let deletedShipments = 0
+      let failedShipments = 0
 
-          if (response.ok) {
-            console.log(`[VOID-ALL] ✅ Carton ${cartonId} deleted`)
-          } else {
-            const responseText = await response.text()
-            console.error(`[VOID-ALL] ❌ Carton ${cartonId} DELETE FAILED - Status: ${response.status}`, responseText)
-          }
-        } catch (error: any) {
-          console.error(`[VOID-ALL] ❌ Exception deleting Carton ${cartonId}:`, error.message)
-        }
-      })
+      for (let i = 0; i < shipmentIdsArray.length; i += PACE_CONCURRENCY_LIMIT) {
+        const batch = shipmentIdsArray.slice(i, i + PACE_CONCURRENCY_LIMIT)
+        console.log(`[VOID-ALL] Processing shipment batch ${Math.floor(i / PACE_CONCURRENCY_LIMIT) + 1}/${Math.ceil(shipmentIdsArray.length / PACE_CONCURRENCY_LIMIT)} (${batch.length} shipments)`)
 
-      // Wait for all carton deletions to complete
-      await Promise.allSettled(cartonDeletions)
-      console.log(`[VOID-ALL] ✅ Carton deletions complete`)
+        const shipmentDeletions = batch.map(async (shipmentId) => {
+          const MAX_RETRIES = 3
+          let updateSuccess = false
 
-      // Step 2: Update and delete shipments in parallel with retry logic
-      const shipmentDeletions = Array.from(paceShipmentIds).map(async (shipmentId) => {
-        const MAX_RETRIES = 3
-        let updateSuccess = false
-
-        // Retry update operation up to 3 times
-        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-          try {
-            // First, update the shipment to mark it as "planned" (not "actual")
-            const updatePayload = {
-              id: shipmentId,
-              planned: true, // Mark as planned shipment
-              trackingNumber: null, // Clear tracking number
-            }
-
-            const updateResponse = await fetch(`${paceCredentials.url}/UpdateObject/updateJobShipment`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader,
-              },
-              body: JSON.stringify(updatePayload),
-            })
-
-            if (!updateResponse.ok) {
-              const updateError = await updateResponse.text()
-
-              if (attempt < MAX_RETRIES) {
-                console.warn(`[VOID-ALL] ⚠️  Failed to update JobShipment ${shipmentId} to planned (attempt ${attempt}/${MAX_RETRIES}), retrying...`)
-                // Wait before retry (exponential backoff: 1s, 2s, 4s)
-                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
-                continue
-              } else {
-                console.error(`[VOID-ALL] ❌ Failed to update JobShipment ${shipmentId} to planned after ${MAX_RETRIES} attempts:`, updateError)
-                return // Skip deletion if all update attempts fail
+          // Retry update operation up to 3 times
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              // First, update the shipment to mark it as "planned" (not "actual")
+              const updatePayload = {
+                id: shipmentId,
+                planned: true, // Mark as planned shipment
+                trackingNumber: null, // Clear tracking number
               }
-            }
 
-            console.log(`[VOID-ALL] ✅ JobShipment ${shipmentId} updated to planned${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
-            updateSuccess = true
-            break // Success, exit retry loop
-          } catch (error: any) {
-            if (attempt < MAX_RETRIES) {
-              console.warn(`[VOID-ALL] ⚠️  Exception updating JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}):`, error.message)
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
-              continue
-            } else {
-              console.error(`[VOID-ALL] ❌ Exception updating JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, error.message)
-              return
-            }
-          }
-        }
+              const updateResponse = await fetch(`${paceCredentials.url}/UpdateObject/updateJobShipment`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': authHeader,
+                },
+                body: JSON.stringify(updatePayload),
+              })
 
-        if (!updateSuccess) {
-          return // Skip deletion if update didn't succeed
-        }
+              if (!updateResponse.ok) {
+                const updateError = await updateResponse.text()
 
-        // Wait 2 seconds for PACE to process the update
-        console.log(`[VOID-ALL] ⏳ Waiting 2 seconds for PACE to process update for shipment ${shipmentId}...`)
-        await new Promise(resolve => setTimeout(resolve, 2000))
+                if (attempt < MAX_RETRIES) {
+                  console.warn(`[VOID-ALL] ⚠️  Failed to update JobShipment ${shipmentId} to planned (attempt ${attempt}/${MAX_RETRIES}), retrying...`)
+                  // Wait before retry (exponential backoff: 1s, 2s, 4s)
+                  await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+                  continue
+                } else {
+                  console.error(`[VOID-ALL] ❌ Failed to update JobShipment ${shipmentId} to planned after ${MAX_RETRIES} attempts:`, updateError)
+                  return { success: false } // Skip deletion if all update attempts fail
+                }
+              }
 
-        // Retry delete operation up to 3 times
-        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-          try {
-            const deleteUrl = `${paceCredentials.url}/DeleteObject/DeleteObject?type=JobShipment&key=${shipmentId}`
-
-            const deleteResponse = await fetch(deleteUrl, {
-              method: 'DELETE',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader,
-              },
-            })
-
-            if (deleteResponse.ok) {
-              console.log(`[VOID-ALL] ✅ JobShipment ${shipmentId} deleted successfully${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
+              console.log(`[VOID-ALL] ✅ JobShipment ${shipmentId} updated to planned${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
+              updateSuccess = true
               break // Success, exit retry loop
-            } else {
-              const deleteError = await deleteResponse.text()
-
+            } catch (error: any) {
               if (attempt < MAX_RETRIES) {
-                console.warn(`[VOID-ALL] ⚠️  Failed to delete JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}), retrying...`)
+                console.warn(`[VOID-ALL] ⚠️  Exception updating JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}):`, error.message)
                 await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
                 continue
               } else {
-                console.error(`[VOID-ALL] ❌ Failed to delete JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, deleteError)
+                console.error(`[VOID-ALL] ❌ Exception updating JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, error.message)
+                return { success: false }
               }
             }
-          } catch (error: any) {
-            if (attempt < MAX_RETRIES) {
-              console.warn(`[VOID-ALL] ⚠️  Exception deleting JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}):`, error.message)
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
-              continue
-            } else {
-              console.error(`[VOID-ALL] ❌ Exception deleting JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, error.message)
+          }
+
+          if (!updateSuccess) {
+            return { success: false } // Skip deletion if update didn't succeed
+          }
+
+          // Wait 2 seconds for PACE to process the update
+          console.log(`[VOID-ALL] ⏳ Waiting 2 seconds for PACE to process update for shipment ${shipmentId}...`)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+
+          // Retry delete operation up to 3 times
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              const deleteUrl = `${paceCredentials.url}/DeleteObject/DeleteObject?type=JobShipment&key=${shipmentId}`
+
+              const deleteResponse = await fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': authHeader,
+                },
+              })
+
+              if (deleteResponse.ok) {
+                console.log(`[VOID-ALL] ✅ JobShipment ${shipmentId} deleted successfully${attempt > 1 ? ` (succeeded on attempt ${attempt})` : ''}`)
+                return { success: true } // Success, exit retry loop
+              } else {
+                const deleteError = await deleteResponse.text()
+
+                if (attempt < MAX_RETRIES) {
+                  console.warn(`[VOID-ALL] ⚠️  Failed to delete JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}), retrying...`)
+                  await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+                  continue
+                } else {
+                  console.error(`[VOID-ALL] ❌ Failed to delete JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, deleteError)
+                  return { success: false }
+                }
+              }
+            } catch (error: any) {
+              if (attempt < MAX_RETRIES) {
+                console.warn(`[VOID-ALL] ⚠️  Exception deleting JobShipment ${shipmentId} (attempt ${attempt}/${MAX_RETRIES}):`, error.message)
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+                continue
+              } else {
+                console.error(`[VOID-ALL] ❌ Exception deleting JobShipment ${shipmentId} after ${MAX_RETRIES} attempts:`, error.message)
+                return { success: false }
+              }
             }
           }
-        }
-      })
 
-      // Wait for all shipment deletions to complete
-      await Promise.allSettled(shipmentDeletions)
-      console.log(`[VOID-ALL] 🏁 PACE cleanup completed`)
+          return { success: false }
+        })
+
+        const results = await Promise.allSettled(shipmentDeletions)
+        results.forEach(r => {
+          if (r.status === 'fulfilled' && r.value?.success) {
+            deletedShipments++
+          } else {
+            failedShipments++
+          }
+        })
+      }
+
+      console.log(`[VOID-ALL] 🏁 PACE cleanup completed - Shipments deleted: ${deletedShipments}/${shipmentIdsArray.length} (Cartons cascade deleted)`)
     } else {
       console.log('[VOID-ALL] ⚠️  PACE credentials not available, skipping PACE cleanup')
     }
@@ -352,7 +367,7 @@ export async function POST(
     }
 
     if (paceCredentials) {
-      message += `. Deleted ${paceCartonIds.size} PACE carton(s) and ${paceShipmentIds.size} shipment(s).`
+      message += `. Deleted ${paceShipmentIds.size} PACE shipment(s) (${paceCartonIds.size} carton(s) cascade deleted).`
     }
 
     return NextResponse.json({
@@ -361,8 +376,8 @@ export async function POST(
       voidedCount,
       failedCount,
       totalRows: successRows.length,
-      paceCartonsDeleted: paceCartonIds.size,
       paceShipmentsDeleted: paceShipmentIds.size,
+      paceCartonsCascadeDeleted: paceCartonIds.size,
       details: voidResults.filter(r => !r.success), // Only return failures for debugging
       // Signal to frontend to clear shipments cache
       clearCache: true,
