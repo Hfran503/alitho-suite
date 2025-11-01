@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest) {
 
     // Filter menu items by user role
     const visibleMenuConfigs = menuConfigs.filter(
-      (config) => config.isActive && config.visibleToRoles.includes(userRole)
+      (config: typeof menuConfigs[number]) => config.isActive && config.visibleToRoles.includes(userRole)
     )
 
     // Return with no-cache headers to ensure fresh data
