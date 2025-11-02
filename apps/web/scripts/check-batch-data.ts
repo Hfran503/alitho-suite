@@ -19,7 +19,7 @@ async function checkBatchData() {
     })
 
     console.log('\n📦 Recent Batches:\n')
-    batches.forEach((batch, index) => {
+    batches.forEach((batch: typeof batches[number], index: number) => {
       console.log(`${index + 1}. Batch ID: ${batch.id}`)
       console.log(`   File: ${batch.fileName}`)
       console.log(`   Status: ${batch.status}`)
