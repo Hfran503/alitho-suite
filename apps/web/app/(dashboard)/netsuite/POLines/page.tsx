@@ -26,6 +26,8 @@ export default function POLineIntegrationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedPOLine, setSelectedPOLine] = useState<POLineIntegration | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [sendingToNetsuite, setSendingToNetsuite] = useState(false)
+  const [sendingAllToNetsuite, setSendingAllToNetsuite] = useState(false)
 
   const fetchPOLines = async () => {
     setLoading(true)
@@ -89,6 +91,63 @@ export default function POLineIntegrationsPage() {
     })
   }
 
+  const handleSendToNetsuite = async (poLineId: string) => {
+    if (!confirm('Send this PO Line to NetSuite?')) return
+
+    setSendingToNetsuite(true)
+    try {
+      const response = await fetch(`/api/po-lines/integrations/${poLineId}/send-to-netsuite`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Successfully sent PO Line to NetSuite! PO ID: ${data.poId || 'N/A'}`)
+        fetchPOLines()
+      } else {
+        alert(`Failed to send PO Line to NetSuite: ${data.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error sending to NetSuite:', error)
+      alert('An error occurred while sending to NetSuite')
+    } finally {
+      setSendingToNetsuite(false)
+    }
+  }
+
+  const handleSendAllPendingToNetsuite = async () => {
+    const pendingCount = poLines.filter(po => po.status === 'pending').length
+
+    if (pendingCount === 0) {
+      alert('No pending PO Lines to send')
+      return
+    }
+
+    if (!confirm(`Send all ${pendingCount} pending PO Lines to NetSuite? This may take a few minutes.`)) return
+
+    setSendingAllToNetsuite(true)
+    try {
+      const response = await fetch('/api/po-lines/integrations/send-all-to-netsuite', {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Batch send complete!\nTotal: ${data.totalProcessed}\nSuccessful: ${data.successful}\nFailed: ${data.failed}`)
+        fetchPOLines()
+      } else {
+        alert(`Failed to send PO Lines to NetSuite: ${data.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error sending batch to NetSuite:', error)
+      alert('An error occurred while sending PO Lines to NetSuite')
+    } finally {
+      setSendingAllToNetsuite(false)
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -104,6 +163,28 @@ export default function POLineIntegrationsPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleSendAllPendingToNetsuite}
+              disabled={sendingAllToNetsuite || poLines.filter(po => po.status === 'pending').length === 0}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+            >
+              {sendingAllToNetsuite ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Send All Pending to NetSuite ({poLines.filter(po => po.status === 'pending').length})
+                </>
+              )}
+            </button>
             <button
               onClick={fetchPOLines}
               disabled={loading}
@@ -257,6 +338,34 @@ export default function POLineIntegrationsPage() {
             </div>
 
             <div className="p-6 space-y-6">
+              {/* Action Button */}
+              {selectedPOLine.status === 'pending' && (
+                <div>
+                  <button
+                    onClick={() => handleSendToNetsuite(selectedPOLine.id)}
+                    disabled={sendingToNetsuite}
+                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    {sendingToNetsuite ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending to NetSuite...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Send to NetSuite
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Status and Info */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Status Information</h3>

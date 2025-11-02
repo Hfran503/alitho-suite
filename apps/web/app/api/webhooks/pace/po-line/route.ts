@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@repo/database'
+import { queueNetsuitePOLine } from '@/lib/queue/netsuite-po-line-queue'
 
 /**
  * PACE Purchase Order Line Webhook Handler
@@ -144,9 +145,13 @@ export async function POST(request: NextRequest) {
         status: updated.status,
       })
 
+      // Queue for sending to NetSuite
+      await queueNetsuitePOLine(updated.id, uniqueId, 0)
+      console.log(`📤 Queued updated PO Line ${uniqueId} for NetSuite`)
+
       return NextResponse.json({
         status: 'success',
-        message: `PO Line ${uniqueId} updated`,
+        message: `PO Line ${uniqueId} updated and queued for NetSuite`,
         uniqueId: updated.uniqueId,
         updated: true,
       })
@@ -175,10 +180,14 @@ export async function POST(request: NextRequest) {
       status: poLineIntegration.status,
     })
 
+    // Queue for sending to NetSuite
+    await queueNetsuitePOLine(poLineIntegration.id, uniqueId, 0)
+    console.log(`📤 Queued new PO Line ${uniqueId} for NetSuite`)
+
     // Return success response
     return NextResponse.json({
       status: 'success',
-      message: `PO Line ${uniqueId} received`,
+      message: `PO Line ${uniqueId} received and queued for NetSuite`,
       received_at: new Date().toISOString(),
       uniqueId: uniqueId,
       poNumber: poNumber,
