@@ -522,7 +522,7 @@ model InvoiceIntegration {
 
 model PoLineIntegration {
   id                 String    @id @default(cuid())
-  uniqueId           String    @unique // Combination of PO Number and Line ID (e.g., "PO-12345-1")
+  uniqueId           String    // Combination of PO Number, Line ID, and timestamp (e.g., "86014-156626-1736938200000")
   poNumber           String
   poLineId           Int
   status             String    @default("pending") // pending, processing, sent, completed, failed

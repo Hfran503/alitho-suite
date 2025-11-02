@@ -112,52 +112,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create unique identifier using PO Number and Line ID
-    const uniqueId = `${poNumber}-${poLineId}`
+    // Create unique identifier using PO Number, Line ID, and timestamp
+    // Format: poNumber-poLineId-timestamp (e.g., "86014-156626-1736938200000")
+    const timestamp = Date.now()
+    const uniqueId = `${poNumber}-${poLineId}-${timestamp}`
 
-    // Check if PO Line already exists
-    const existingPOLine = await db.poLineIntegration.findUnique({
-      where: {
-        uniqueId: uniqueId,
-      },
-    })
-
-    if (existingPOLine) {
-      console.log(`📋 PO Line ${uniqueId} already exists, updating...`)
-
-      // Update existing PO Line with latest data
-      const updated = await db.poLineIntegration.update({
-        where: {
-          uniqueId: uniqueId,
-        },
-        data: {
-          payload: payload as any,
-          status: 'pending', // Reset status to pending
-          updatedAt: new Date(),
-        },
-      })
-
-      console.log('✅ Updated PO Line integration record:', {
-        id: updated.id,
-        uniqueId: updated.uniqueId,
-        poNumber,
-        poLineId,
-        status: updated.status,
-      })
-
-      // Queue for sending to NetSuite
-      await queueNetsuitePOLine(updated.id, uniqueId, 0)
-      console.log(`📤 Queued updated PO Line ${uniqueId} for NetSuite`)
-
-      return NextResponse.json({
-        status: 'success',
-        message: `PO Line ${uniqueId} updated and queued for NetSuite`,
-        uniqueId: updated.uniqueId,
-        updated: true,
-      })
-    }
-
-    // Create new PO Line integration record
+    // Always create a new PO Line integration record (full history tracking)
     const poLineIntegration = await db.poLineIntegration.create({
       data: {
         tenantId: tenant.id,
@@ -187,11 +147,12 @@ export async function POST(request: NextRequest) {
     // Return success response
     return NextResponse.json({
       status: 'success',
-      message: `PO Line ${uniqueId} received and queued for NetSuite`,
+      message: `PO Line ${poNumber}-${poLineId} received and queued for NetSuite`,
       received_at: new Date().toISOString(),
       uniqueId: uniqueId,
       poNumber: poNumber,
       poLineId: poLineId,
+      timestamp: timestamp,
     })
 
   } catch (error) {
