@@ -10,7 +10,7 @@ import crypto from 'crypto'
  * Get information about the PO Line NetSuite integration endpoint
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
