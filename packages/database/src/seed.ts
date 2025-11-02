@@ -338,12 +338,30 @@ async function main() {
         visibleToRoles: ['full_admin', 'admin', 'accounting']
       },
       {
+        menuKey: 'po-line-integrations',
+        label: 'PO Line Integrations',
+        href: '/netsuite/POLines',
+        icon: 'document',
+        parentKey: null,
+        order: 5,
+        visibleToRoles: ['full_admin', 'admin', 'accounting']
+      },
+      {
+        menuKey: 'po-receipt-integrations',
+        label: 'PO Receipt Integrations',
+        href: '/netsuite/POReceipts',
+        icon: 'document',
+        parentKey: null,
+        order: 6,
+        visibleToRoles: ['full_admin', 'admin', 'accounting']
+      },
+      {
         menuKey: 'settings',
         label: 'Settings',
         href: '/settings',
         icon: 'settings',
         parentKey: null,
-        order: 5,
+        order: 7,
         visibleToRoles: ['full_admin', 'admin']
       }
     ]

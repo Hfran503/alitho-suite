@@ -28,6 +28,7 @@ model Tenant {
   integrations           Integration[]
   invoiceIntegrations    InvoiceIntegration[]
   poLineIntegrations     PoLineIntegration[]
+  poReceiptIntegrations  PoReceiptIntegration[]
   JobSchedule            JobSchedule[]
   memberships            Membership[]
   menuConfigurations     MenuConfiguration[]
@@ -547,6 +548,36 @@ model PoLineIntegration {
   @@index([createdAt])
   @@index([status, retryCount])
   @@map("POLineIntegration")
+}
+
+model PoReceiptIntegration {
+  id                 String    @id @default(cuid())
+  uniqueId           String    // Combination of PO Number, Line ID, and timestamp (e.g., "86014-156626-1736938200000")
+  poNumber           String
+  poLineId           Int
+  qtyReceived        Float
+  status             String    @default("pending") // pending, processing, sent, completed, failed
+  payload            Json
+  netsuiteResponse   Json?
+  netsuiteRecordId   String?   // NetSuite Item Receipt ID
+  errorMessage       String?
+  retryCount         Int       @default(0)
+  maxRetries         Int       @default(3)
+  lastAttemptAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  sentToNetsuiteAt   DateTime?
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([poNumber])
+  @@index([poLineId])
+  @@index([uniqueId])
+  @@index([createdAt])
+  @@index([status, retryCount])
+  @@map("POReceiptIntegration")
 }
 
 model MenuConfiguration {
