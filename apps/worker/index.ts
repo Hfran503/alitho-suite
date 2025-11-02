@@ -11,6 +11,7 @@ import { emailWorker } from './jobs/email'
 import { webhookWorker } from './jobs/webhook'
 import { batchImportWorker } from './jobs/batch-import'
 import { netsuiteInvoiceWorker } from './jobs/netsuite-invoice'
+import { netsuitePOLineWorker } from './jobs/netsuite-po-line'
 
 // Debug: Log REDIS_URL to verify it's set
 console.log('🔍 Environment check:')
@@ -31,6 +32,7 @@ const workers = [
   webhookWorker(connection),
   batchImportWorker(connection),
   netsuiteInvoiceWorker(connection),
+  netsuitePOLineWorker(connection),
 ]
 
 console.log('🚀 Worker started successfully')

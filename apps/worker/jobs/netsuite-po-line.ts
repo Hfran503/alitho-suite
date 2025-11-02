@@ -1,151 +1,161 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { Worker, Job } from 'bullmq'
+import type { Redis } from 'ioredis'
 import { db } from '@repo/database'
 import { getNetSuiteCredentials } from '@repo/shared'
 import crypto from 'crypto'
 
 /**
- * GET /api/po-lines/integrations/[id]/send-to-netsuite
- * Get information about the PO Line NetSuite integration endpoint
+ * NetSuite PO Line Worker
+ *
+ * This worker processes jobs from the netsuite-po-line queue.
+ * It sends PO Lines to NetSuite one at a time, with automatic retries on failure.
  */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
 
-  return NextResponse.json({
-    success: true,
-    message: 'PO Line to NetSuite Integration Endpoint',
-    version: '1.0',
-    timestamp: new Date().toISOString(),
-    endpoint: `/api/po-lines/integrations/${id}/send-to-netsuite`,
-    description: 'Send a single PO Line integration to NetSuite',
-    methods: ['GET', 'POST'],
-    restletUrl: process.env.NETSUITE_PO_LINE_RESTLET_URL || 'Not configured',
-    configured: !!process.env.NETSUITE_PO_LINE_RESTLET_URL,
-  })
+export interface NetsuitePOLineJobData {
+  poLineIntegrationId: string
+  uniqueId: string
+  attempt: number
 }
 
-/**
- * POST /api/po-lines/integrations/[id]/send-to-netsuite
- * Send a single PO Line integration to NetSuite
- */
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export function netsuitePOLineWorker(connection: Redis) {
+  const worker = new Worker<NetsuitePOLineJobData>(
+    'netsuite-po-line',
+    async (job: Job<NetsuitePOLineJobData>) => {
+      const { poLineIntegrationId, uniqueId, attempt } = job.data
 
-    const { id } = await params
+      console.log(`🔄 [Job ${job.id}] Processing PO Line ${uniqueId} (attempt ${attempt})`)
 
-    // Get user's tenant
-    const membership = await db.membership.findFirst({
-      where: { userId: session.user.id },
-      select: { tenantId: true },
-    })
+      try {
+        // Get the PO Line integration record
+        const poLineIntegration = await db.poLineIntegration.findUnique({
+          where: { id: poLineIntegrationId },
+        })
 
-    if (!membership?.tenantId) {
-      return NextResponse.json({ error: 'User has no tenant' }, { status: 400 })
-    }
+        if (!poLineIntegration) {
+          throw new Error(`PO Line integration record not found: ${poLineIntegrationId}`)
+        }
 
-    // Get the PO Line integration
-    const poLineIntegration = await db.poLineIntegration.findUnique({
-      where: { id },
-    })
+        // Check if already completed
+        if (poLineIntegration.status === 'completed') {
+          console.log(`✅ [Job ${job.id}] PO Line ${uniqueId} already completed, skipping`)
+          return {
+            success: true,
+            message: 'PO Line already completed',
+            uniqueId,
+          }
+        }
 
-    if (!poLineIntegration) {
-      return NextResponse.json({ error: 'PO Line not found' }, { status: 404 })
-    }
+        // Update status to processing
+        await db.poLineIntegration.update({
+          where: { id: poLineIntegrationId },
+          data: {
+            status: 'processing',
+            lastAttemptAt: new Date(),
+          },
+        })
 
-    // Verify it belongs to the user's tenant
-    if (poLineIntegration.tenantId !== membership.tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
+        console.log(`📤 [Job ${job.id}] Sending PO Line ${uniqueId} to NetSuite...`)
 
-    // Check if already completed
-    if (poLineIntegration.status === 'completed') {
-      return NextResponse.json({
-        success: true,
-        message: 'PO Line already sent to NetSuite',
-        alreadyCompleted: true,
-      })
-    }
+        // Send to NetSuite
+        const result = await sendPOLineToNetSuite(poLineIntegration)
 
-    // Update status to processing
-    await db.poLineIntegration.update({
-      where: { id },
-      data: {
-        status: 'processing',
-        lastAttemptAt: new Date(),
+        if (result.success) {
+          // Update as completed
+          await db.poLineIntegration.update({
+            where: { id: poLineIntegrationId },
+            data: {
+              status: 'completed',
+              netsuiteResponse: result.response as any,
+              netsuiteRecordId: result.poId ? String(result.poId) : null,
+              errorMessage: null,
+              sentToNetsuiteAt: new Date(),
+            },
+          })
+
+          console.log(`✅ [Job ${job.id}] PO Line ${uniqueId} sent successfully! NetSuite PO ID: ${result.poId}, Receipt ID: ${result.receiptId}`)
+
+          return {
+            success: true,
+            message: 'PO Line sent to NetSuite successfully',
+            uniqueId,
+            poId: result.poId,
+            receiptId: result.receiptId,
+          }
+        } else {
+          // Update as failed
+          // Ensure errorMessage is a string
+          const errorMessage = typeof result.error === 'string'
+            ? result.error
+            : JSON.stringify(result.error)
+
+          await db.poLineIntegration.update({
+            where: { id: poLineIntegrationId },
+            data: {
+              status: 'failed',
+              errorMessage,
+              netsuiteResponse: result.response as any,
+              retryCount: poLineIntegration.retryCount + 1,
+            },
+          })
+
+          throw new Error(errorMessage || 'Failed to send PO Line to NetSuite')
+        }
+      } catch (error) {
+        console.error(`❌ [Job ${job.id}] Error processing PO Line ${uniqueId}:`, error)
+
+        // Update retry count
+        await db.poLineIntegration.update({
+          where: { id: poLineIntegrationId },
+          data: {
+            status: 'failed',
+            errorMessage: error instanceof Error ? error.message : String(error),
+            retryCount: { increment: 1 },
+          },
+        })
+
+        throw error // Re-throw to trigger BullMQ retry
+      }
+    },
+    {
+      connection,
+      concurrency: 1, // Process one PO Line at a time to avoid rate limits
+      limiter: {
+        max: 10, // Max 10 jobs
+        duration: 60000, // Per 60 seconds (rate limiting)
       },
-    })
-
-    console.log(`📤 Sending PO Line ${poLineIntegration.uniqueId} to NetSuite...`)
-
-    // Send to NetSuite
-    const result = await sendPOLineToNetSuite(poLineIntegration, membership.tenantId)
-
-    if (result.success) {
-      // Update as completed
-      await db.poLineIntegration.update({
-        where: { id },
-        data: {
-          status: 'completed',
-          netsuiteResponse: result.response,
-          netsuiteRecordId: result.poId ? String(result.poId) : null,
-          errorMessage: null,
-          sentToNetsuiteAt: new Date(),
-        },
-      })
-
-      console.log(`✅ PO Line ${poLineIntegration.uniqueId} sent successfully! NetSuite PO ID: ${result.poId}`)
-
-      return NextResponse.json({
-        success: true,
-        message: 'PO Line sent to NetSuite successfully',
-        uniqueId: poLineIntegration.uniqueId,
-        poId: result.poId,
-        receiptId: result.receiptId,
-      })
-    } else {
-      // Update as failed
-      const newRetryCount = poLineIntegration.retryCount + 1
-      await db.poLineIntegration.update({
-        where: { id },
-        data: {
-          status: 'failed',
-          errorMessage: result.error,
-          netsuiteResponse: result.response,
-          retryCount: newRetryCount,
-        },
-      })
-
-      return NextResponse.json({
-        success: false,
-        error: result.error || 'Failed to send PO Line to NetSuite',
-        response: result.response,
-      }, { status: 500 })
     }
-  } catch (error: any) {
-    console.error('Error sending PO Line to NetSuite:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to send PO Line to NetSuite' },
-      { status: 500 }
-    )
-  }
+  )
+
+  // Event handlers
+  worker.on('completed', (job) => {
+    console.log(`✅ NetSuite PO Line Job ${job.id} completed successfully`)
+  })
+
+  worker.on('failed', (job, err) => {
+    console.error(`❌ NetSuite PO Line Job ${job?.id} failed:`, err.message)
+  })
+
+  worker.on('error', (err) => {
+    console.error('❌ NetSuite PO Line Worker error:', err)
+  })
+
+  console.log('🚀 NetSuite PO Line Worker started')
+  console.log('⏳ Waiting for NetSuite PO Line jobs...')
+
+  return worker
 }
 
 /**
  * Send PO Line to NetSuite RESTlet
  */
-async function sendPOLineToNetSuite(poLineIntegration: any, tenantId: string) {
+async function sendPOLineToNetSuite(poLineIntegration: any) {
   try {
+    // Get tenant ID from the PO Line integration record
+    const tenantId = poLineIntegration.tenantId
+    if (!tenantId) {
+      throw new Error('PO Line integration has no tenantId')
+    }
+
     // Get NetSuite integration config
     const netsuiteIntegration = await db.netSuiteIntegration.findUnique({
       where: { tenantId },
@@ -229,6 +239,8 @@ async function sendPOLineToNetSuite(poLineIntegration: any, tenantId: string) {
       uniqueId: poLineIntegration.uniqueId,
       poNumber: poLineIntegration.poNumber,
       poLineId: poLineIntegration.poLineId,
+      accountId: accountId?.slice(0, 4) + '***' + accountId?.slice(-4), // Masked for security
+      credentialsSource: netsuiteIntegration.currentMode === 'sandbox' ? 'Sandbox Credentials' : 'Production Credentials',
     })
 
     // Send to NetSuite RESTlet
@@ -241,7 +253,7 @@ async function sendPOLineToNetSuite(poLineIntegration: any, tenantId: string) {
       body: JSON.stringify(payload),
     })
 
-    let responseData
+    let responseData: any
     try {
       responseData = await netsuiteResponse.json()
     } catch (parseError) {
@@ -265,9 +277,24 @@ async function sendPOLineToNetSuite(poLineIntegration: any, tenantId: string) {
         receiptId: responseData.receiptId || null,
       }
     } else {
+      // Format error message for better readability
+      let errorMessage: string
+      if (typeof responseData.error === 'string') {
+        errorMessage = responseData.error
+      } else if (responseData.error && typeof responseData.error === 'object') {
+        // If error is an object with code and message, format it nicely
+        if (responseData.error.code && responseData.error.message) {
+          errorMessage = `[${responseData.error.code}] ${responseData.error.message}`
+        } else {
+          errorMessage = JSON.stringify(responseData.error)
+        }
+      } else {
+        errorMessage = 'Unknown error from NetSuite'
+      }
+
       return {
         success: false,
-        error: responseData.error?.message || responseData.error || 'Unknown error from NetSuite',
+        error: errorMessage,
         response: responseData,
       }
     }
