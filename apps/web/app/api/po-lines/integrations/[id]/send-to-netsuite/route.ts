@@ -33,7 +33,7 @@ export async function GET(
  * Send a single PO Line integration to NetSuite
  */
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
