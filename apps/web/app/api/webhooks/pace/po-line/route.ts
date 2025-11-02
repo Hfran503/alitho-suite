@@ -78,7 +78,37 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the webhook payload
-    const payload: PACEPOLineWebhookPayload = await request.json()
+    // Read as text first to handle JSON parsing errors gracefully
+    let rawBody = await request.text()
+
+    // PACE sometimes sends unescaped control characters (newlines, tabs, etc.) in JSON strings
+    // We need to escape them before parsing
+    // This regex finds string values and escapes control characters within them
+    rawBody = rawBody.replace(
+      /"([^"\\]*(\\.[^"\\]*)*)"/g,
+      (match) => {
+        return match
+          .replace(/\n/g, '\\n')   // Replace literal newlines with \n
+          .replace(/\r/g, '\\r')   // Replace carriage returns with \r
+          .replace(/\t/g, '\\t')   // Replace tabs with \t
+      }
+    )
+
+    let payload: PACEPOLineWebhookPayload
+    try {
+      payload = JSON.parse(rawBody)
+    } catch (parseError) {
+      console.error('Failed to parse JSON payload:', parseError)
+      console.error('Raw body (first 500 chars):', rawBody.substring(0, 500))
+      return NextResponse.json(
+        {
+          status: 'error',
+          error: 'Invalid JSON payload - contains invalid control characters or malformed JSON',
+          details: parseError instanceof Error ? parseError.message : String(parseError)
+        },
+        { status: 400 }
+      )
+    }
 
     // Extract PO Line ID and PO Number
     const poLineId = payload.purchaseOrderLine?.id
