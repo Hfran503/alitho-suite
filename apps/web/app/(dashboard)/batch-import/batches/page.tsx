@@ -34,6 +34,9 @@ export default function BatchesPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedBatches, setSelectedBatches] = useState<Set<string>>(new Set())
+  const [isExporting, setIsExporting] = useState(false)
+  const [activeTab, setActiveTab] = useState<'active' | 'voided'>('active')
 
   useEffect(() => {
     fetchBatches(pagination.page)
@@ -89,6 +92,87 @@ export default function BatchesPage() {
     })
   }
 
+  // Filter batches based on active tab
+  const filteredBatches = batches.filter((batch) => {
+    // A batch is completely voided when:
+    // 1. It has voided rows AND
+    // 2. There are no successful rows left (all were voided)
+    const isCompletelyVoided = batch.voidedRows > 0 && batch.successfulRows === 0
+    return activeTab === 'voided' ? isCompletelyVoided : !isCompletelyVoided
+  })
+
+  // Clear selection when changing tabs
+  useEffect(() => {
+    setSelectedBatches(new Set())
+  }, [activeTab])
+
+  const toggleBatchSelection = (batchId: string) => {
+    setSelectedBatches((prev) => {
+      const next = new Set(prev)
+      if (next.has(batchId)) {
+        next.delete(batchId)
+      } else {
+        next.add(batchId)
+      }
+      return next
+    })
+  }
+
+  const toggleAllBatches = () => {
+    const currentPageBatchIds = filteredBatches.map((b) => b.id)
+    const allCurrentSelected = currentPageBatchIds.every((id) => selectedBatches.has(id))
+
+    if (allCurrentSelected) {
+      // Deselect all on current page
+      setSelectedBatches((prev) => {
+        const next = new Set(prev)
+        currentPageBatchIds.forEach((id) => next.delete(id))
+        return next
+      })
+    } else {
+      // Select all on current page
+      setSelectedBatches((prev) => {
+        const next = new Set(prev)
+        currentPageBatchIds.forEach((id) => next.add(id))
+        return next
+      })
+    }
+  }
+
+  const handleExportSelected = async () => {
+    if (selectedBatches.size === 0) {
+      alert('Please select at least one batch to export')
+      return
+    }
+
+    try {
+      setIsExporting(true)
+      const response = await fetch('/api/batch-import/export-multiple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchIds: Array.from(selectedBatches) }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to export batches')
+      }
+
+      // Download the CSV
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `batch-export-${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`Failed to export: ${err.message}`)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   if (loading && batches.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -104,12 +188,23 @@ export default function BatchesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Batch Imports</h1>
           <p className="text-gray-600 mt-1">Track and manage all shipment import batches</p>
         </div>
-        <button
-          onClick={() => router.push('/batch-import')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          New Batch Import
-        </button>
+        <div className="flex gap-3">
+          {selectedBatches.size > 0 && (
+            <button
+              onClick={handleExportSelected}
+              disabled={isExporting}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {isExporting ? 'Exporting...' : `Export Selected (${selectedBatches.size})`}
+            </button>
+          )}
+          <button
+            onClick={() => router.push('/batch-import')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            New Batch Import
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -118,10 +213,50 @@ export default function BatchesPage() {
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="mb-6 border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'active'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Active Batches
+            <span className="ml-2 px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+              {batches.filter((b) => !(b.voidedRows > 0 && b.successfulRows === 0)).length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('voided')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'voided'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Voided Batches
+            <span className="ml-2 px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+              {batches.filter((b) => b.voidedRows > 0 && b.successfulRows === 0).length}
+            </span>
+          </button>
+        </nav>
+      </div>
+
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={filteredBatches.length > 0 && filteredBatches.every((b) => selectedBatches.has(b.id))}
+                  onChange={toggleAllBatches}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                />
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 File Name
               </th>
@@ -143,14 +278,16 @@ export default function BatchesPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {batches.length === 0 ? (
+            {filteredBatches.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                  No batch imports found. Create your first batch import to get started.
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  {activeTab === 'voided'
+                    ? 'No voided batches found.'
+                    : 'No active batches found. Create your first batch import to get started.'}
                 </td>
               </tr>
             ) : (
-              batches.map((batch) => {
+              filteredBatches.map((batch) => {
                 const processedRows = batch.successfulRows + batch.failedRows
                 const progress = batch.totalRows > 0
                   ? Math.round((processedRows / batch.totalRows) * 100)
@@ -158,6 +295,14 @@ export default function BatchesPage() {
 
                 return (
                   <tr key={batch.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedBatches.has(batch.id)}
+                        onChange={() => toggleBatchSelection(batch.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col">
                         <div className="text-sm font-medium text-gray-900">

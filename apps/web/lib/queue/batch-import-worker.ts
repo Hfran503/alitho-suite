@@ -229,6 +229,15 @@ function groupRowsByShipment(rows: any[]) {
   })
 }
 
+// Helper function to generate tracking URL from template
+function generateTrackingUrl(trackingNumber: string, template: string | null): string {
+  if (!template || !trackingNumber) {
+    // Fallback to generic tracking URL if no template
+    return `https://www.shipengine.com/tracking/${trackingNumber}`
+  }
+  return template.replace(/{tracking}/g, trackingNumber)
+}
+
 // Process a single shipment group (multiple cartons to same address/job)
 async function processShipmentGroup(rows: any[], batch: any) {
   const firstRow = rows[0]
@@ -236,6 +245,26 @@ async function processShipmentGroup(rows: any[], batch: any) {
   console.log(
     `[Group] Processing ${rows.length} cartons for Job# ${firstRow.jobNumber}`
   )
+
+  // Fetch tracking URL template from ShipStation integration config
+  let trackingUrlTemplate: string | null = null
+  if (batch.carrierId) {
+    const integration = await db.integration.findFirst({
+      where: {
+        tenantId: batch.tenantId,
+        provider: 'shipstation',
+      },
+      select: {
+        config: true,
+      },
+    })
+
+    if (integration?.config) {
+      const config = integration.config as any
+      const carrier = config.carriers?.find((c: any) => c.id === batch.carrierId)
+      trackingUrlTemplate = carrier?.trackingUrlTemplate || null
+    }
+  }
 
   // Mark all rows as PROCESSING
   await Promise.all(
@@ -355,6 +384,9 @@ async function processShipmentGroup(rows: any[], batch: any) {
     const cartonCost =
       packageData.cost || labelData.data.totalCost / packagesData.length
 
+    // Generate tracking URL using template or fallback
+    const trackingUrl = generateTrackingUrl(trackingNumber, trackingUrlTemplate)
+
     // Create carton with contents
     const cartonResponse = await fetch(
       `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/pace/shipments/${jobShipmentId}/create-parcel-carton`,
@@ -368,7 +400,7 @@ async function processShipmentGroup(rows: any[], batch: any) {
           width: row.width,
           height: row.height,
           trackingNumber,
-          trackingLink: `https://www.shipengine.com/tracking/${trackingNumber}`,
+          trackingLink: trackingUrl,
           carrier: batch.carrier,
           service: batch.service,
           shippingCost: cartonCost,
@@ -401,7 +433,7 @@ async function processShipmentGroup(rows: any[], batch: any) {
       data: {
         status: 'SUCCESS',
         trackingNumber,
-        trackingUrl: `https://www.shipengine.com/tracking/${trackingNumber}`,
+        trackingUrl,
         labelUrl,
         shippingCost: cartonCost,
         paceJobShipmentId: jobShipmentId,

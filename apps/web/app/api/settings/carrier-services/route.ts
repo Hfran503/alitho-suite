@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
       serviceName,
       paceShipViaId,
       paceShipViaName,
+      trackingUrlTemplate,
     } = body
 
     // Validate required fields
@@ -119,6 +120,7 @@ export async function POST(req: NextRequest) {
         serviceName,
         paceShipViaId: parseInt(paceShipViaId),
         paceShipViaName,
+        trackingUrlTemplate: trackingUrlTemplate || null,
       },
     })
 

@@ -19,6 +19,7 @@ interface CarrierServiceMapping {
   serviceName: string
   paceShipViaId: number
   paceShipViaName: string
+  trackingUrlTemplate: string | null
 }
 
 export function ShipmentTypesSettings() {
@@ -43,6 +44,7 @@ export function ShipmentTypesSettings() {
     serviceName: '',
     paceShipViaId: '',
     paceShipViaName: '',
+    trackingUrlTemplate: '',
   })
   const [availableCarriers, setAvailableCarriers] = useState<Array<{ id: string; name: string }>>([])
 
@@ -200,6 +202,7 @@ export function ShipmentTypesSettings() {
         serviceName: '',
         paceShipViaId: '',
         paceShipViaName: '',
+        trackingUrlTemplate: '',
       })
       setShowAddCarrierForm(false)
       await loadData()
@@ -449,6 +452,11 @@ export function ShipmentTypesSettings() {
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">{mapping.carrierName}</div>
                       <div className="text-xs text-gray-500">{mapping.serviceName}</div>
+                      {mapping.trackingUrlTemplate && (
+                        <div className="text-xs text-gray-400 font-mono mt-1 truncate max-w-xs" title={mapping.trackingUrlTemplate}>
+                          🔗 {mapping.trackingUrlTemplate}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-xs font-mono text-gray-600">
@@ -542,7 +550,7 @@ export function ShipmentTypesSettings() {
               </div>
 
               {/* PACE Ship Via ID */}
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   PACE Ship Via ID
                   <span className="ml-2 text-xs text-gray-500 font-normal">(from PACE ShipVia table)</span>
@@ -557,6 +565,27 @@ export function ShipmentTypesSettings() {
                   placeholder="e.g., 5007"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
+              </div>
+
+              {/* Tracking URL Template */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tracking URL Template
+                  <span className="ml-2 text-xs text-gray-500 font-normal">(optional, use {'{tracking}'} as placeholder)</span>
+                </label>
+                <input
+                  type="text"
+                  value={newCarrierMapping.trackingUrlTemplate}
+                  onChange={(e) => setNewCarrierMapping({
+                    ...newCarrierMapping,
+                    trackingUrlTemplate: e.target.value,
+                  })}
+                  placeholder="e.g., https://www.fedex.com/fedextrack/?trknbr={tracking}"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Example templates: FedEx: https://www.fedex.com/fedextrack/?trknbr={'{tracking}'} | UPS: https://www.ups.com/track?tracknum={'{tracking}'}
+                </p>
               </div>
             </div>
 
@@ -579,6 +608,7 @@ export function ShipmentTypesSettings() {
                     serviceName: '',
                     paceShipViaId: '',
                     paceShipViaName: '',
+                    trackingUrlTemplate: '',
                   })
                 }}
                 disabled={saving}

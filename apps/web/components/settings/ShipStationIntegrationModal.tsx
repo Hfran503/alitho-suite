@@ -23,8 +23,8 @@ export default function ShipStationIntegrationModal({
   const [productionApiKey, setProductionApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [mode, setMode] = useState<'test' | 'production'>('test')
-  const [carriers, setCarriers] = useState<Array<{ id: string; name: string; estimateRateMarkup?: number; estimateRateMarkupDollar?: number }>>([
-    { id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 },
+  const [carriers, setCarriers] = useState<Array<{ id: string; name: string; estimateRateMarkup?: number; estimateRateMarkupDollar?: number; trackingUrlTemplate?: string }>>([
+    { id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' },
   ])
   const [isConfigured, setIsConfigured] = useState(false)
   const [enabled, setEnabled] = useState(false)
@@ -67,13 +67,14 @@ export default function ShipStationIntegrationModal({
                     id: c.id,
                     name: c.name,
                     estimateRateMarkup: c.estimateRateMarkup ?? 0,
-                    estimateRateMarkupDollar: c.estimateRateMarkupDollar ?? 0
+                    estimateRateMarkupDollar: c.estimateRateMarkupDollar ?? 0,
+                    trackingUrlTemplate: c.trackingUrlTemplate ?? ''
                   }))
-                : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 }]
+                : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' }]
             )
           } else if (data.data.config.carrierIds) {
             // Legacy support: convert old carrierIds array to new format
-            setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 })))
+            setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' })))
           }
 
           // Load default ship-from address
@@ -206,15 +207,15 @@ export default function ShipStationIntegrationModal({
   }
 
   const addCarrier = () => {
-    setCarriers([...carriers, { id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 }])
+    setCarriers([...carriers, { id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' }])
   }
 
   const removeCarrier = (index: number) => {
     const newCarriers = carriers.filter((_, i) => i !== index)
-    setCarriers(newCarriers.length > 0 ? newCarriers : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0 }])
+    setCarriers(newCarriers.length > 0 ? newCarriers : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' }])
   }
 
-  const updateCarrier = (index: number, field: 'id' | 'name' | 'estimateRateMarkup' | 'estimateRateMarkupDollar', value: string | number) => {
+  const updateCarrier = (index: number, field: 'id' | 'name' | 'estimateRateMarkup' | 'estimateRateMarkupDollar' | 'trackingUrlTemplate', value: string | number) => {
     const newCarriers = [...carriers]
     if (field === 'estimateRateMarkup' || field === 'estimateRateMarkupDollar') {
       newCarriers[index][field] = typeof value === 'number' ? value : parseFloat(value) || 0
@@ -448,27 +449,28 @@ export default function ShipStationIntegrationModal({
           <div>
             <h4 className="text-sm font-medium text-gray-900">Carriers</h4>
             <p className="text-xs text-gray-500 mt-1">
-              Add carriers for rate shopping. Find carrier IDs in your ShipStation account.
+              Add carriers for rate shopping. Find carrier IDs in your ShipStation account. Tracking URL template uses {'{tracking}'} as placeholder.
             </p>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 overflow-x-auto">
             {/* Table Headers */}
-            <div className="grid grid-cols-[1fr_1fr_120px_120px_auto] gap-2 items-center px-2 pb-2 border-b border-gray-200">
+            <div className="grid grid-cols-[1fr_1fr_100px_100px_2fr_auto] gap-2 items-center px-2 pb-2 border-b border-gray-200 min-w-[900px]">
               <div className="text-xs font-medium text-gray-700">Name</div>
               <div className="text-xs font-medium text-gray-700">Carrier ID</div>
               <div className="text-xs font-medium text-gray-700">Markup %</div>
               <div className="text-xs font-medium text-gray-700">Markup $</div>
+              <div className="text-xs font-medium text-gray-700">Tracking URL Template</div>
               <div className="w-10"></div>
             </div>
 
             {/* Carrier Rows */}
             {carriers.map((carrier, index) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr_120px_120px_auto] gap-2 items-center">
+              <div key={index} className="grid grid-cols-[1fr_1fr_100px_100px_2fr_auto] gap-2 items-center min-w-[900px]">
                 <input
                   type="text"
                   value={carrier.name}
                   onChange={(e) => updateCarrier(index, 'name', e.target.value)}
-                  placeholder="Carrier name (e.g., USPS)"
+                  placeholder="Carrier name (e.g., UPS)"
                   className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
                 <input
@@ -503,6 +505,13 @@ export default function ShipStationIntegrationModal({
                     className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                 </div>
+                <input
+                  type="text"
+                  value={carrier.trackingUrlTemplate ?? ''}
+                  onChange={(e) => updateCarrier(index, 'trackingUrlTemplate', e.target.value)}
+                  placeholder="https://www.ups.com/track?tracknum={tracking}"
+                  className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono"
+                />
                 {carriers.length > 1 && (
                   <button
                     type="button"

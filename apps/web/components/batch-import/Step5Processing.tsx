@@ -382,61 +382,36 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
     }
   }
 
-  const handleExportResults = () => {
-    if (!batchStatus) return
+  const handleExportSuccessful = async () => {
+    if (!batchStatus) {
+      alert('Batch status not available')
+      return
+    }
 
-    // Create CSV with results
-    const headers = [
-      'Row',
-      'Job#',
-      'Ship To Name',
-      'Company',
-      'Address 1',
-      'Address 2',
-      'City',
-      'State',
-      'Zip',
-      'Phone',
-      'Pkg',
-      'Status',
-      'Tracking',
-      'Tracking URL',
-      'Cost',
-      'PACE Shipment ID',
-      'PACE Carton ID',
-      'Notes',
-      'Error',
-    ]
-    const rows = batchStatus.rows.map((row) => [
-      row.rowNumber,
-      row.jobNumber,
-      row.shipToName || '',
-      row.shipToCompany || '',
-      row.shipToAddress1 || '',
-      row.shipToAddress2 || '',
-      row.shipToCity || '',
-      row.shipToState || '',
-      row.shipToZip || '',
-      row.shipToPhone || '',
-      `${row.packageNumber}/${row.totalPackages}`,
-      row.status,
-      row.trackingNumber || '',
-      row.trackingUrl || '',
-      row.shippingCost ? `$${row.shippingCost.toFixed(2)}` : '',
-      row.jobShipmentId || '',
-      row.cartonId || '',
-      row.notes || '',
-      row.errorMessage || '',
-    ])
+    try {
+      // Call backend API to generate CSV with proper tracking URLs
+      const response = await fetch('/api/batch-import/export-multiple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchIds: [batchId] }),
+      })
 
-    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `batch-import-${batchId}-results.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to export batch')
+      }
+
+      // Download the CSV
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `batch-import-${batchId}-successful.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`Failed to export: ${err.message}`)
+    }
   }
 
   const handleExportFailedRows = () => {
@@ -689,10 +664,12 @@ export function Step5Processing({ batchId, onReset, originalData, columnMapping 
             {voidingAll ? 'Voiding All...' : `Void All Labels (${batchStatus.successfulRows})`}
           </button>
           <button
-            onClick={handleExportResults}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-sm"
+            onClick={handleExportSuccessful}
+            disabled={batchStatus.successfulRows === 0}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
+            title="Export successful rows with original data and shipping results"
           >
-            Export Results CSV
+            Export Successfully ({batchStatus.successfulRows})
           </button>
           <button
             onClick={handleExportFailedRows}

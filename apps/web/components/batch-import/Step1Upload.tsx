@@ -8,6 +8,48 @@ interface Step1UploadProps {
   onComplete: (fileName: string, sheetName: string | null, data: any[]) => void
 }
 
+// Helper function to convert Excel serial date to JavaScript Date
+function excelSerialToDate(serial: number): Date {
+  // Excel dates are days since 1900-01-01 (with a leap year bug for 1900)
+  // JavaScript dates are milliseconds since 1970-01-01
+  const excelEpoch = new Date(1899, 11, 30) // December 30, 1899
+  const daysOffset = serial
+  const date = new Date(excelEpoch.getTime() + daysOffset * 24 * 60 * 60 * 1000)
+  return date
+}
+
+// Helper function to detect if a value looks like an Excel date serial number
+function isExcelDateSerial(value: any): boolean {
+  // Excel date serials are typically numbers between 1 (1900-01-01) and ~50000 (2036+)
+  return typeof value === 'number' && value > 1 && value < 100000 && Number.isInteger(value)
+}
+
+// Helper function to format date as MM/DD/YY
+function formatDate(date: Date): string {
+  const year = String(date.getFullYear()).slice(-2) // Get last 2 digits of year
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${month}/${day}/${year}`
+}
+
+// Convert Excel date serials in parsed data
+function convertExcelDates(data: any[]): any[] {
+  return data.map(row => {
+    const newRow: any = {}
+    for (const [key, value] of Object.entries(row)) {
+      // Check if this looks like a date field and has a serial number
+      const isDateField = key.toLowerCase().includes('date') || key.toLowerCase().includes('ship')
+      if (isDateField && isExcelDateSerial(value)) {
+        const date = excelSerialToDate(value as number)
+        newRow[key] = formatDate(date)
+      } else {
+        newRow[key] = value
+      }
+    }
+    return newRow
+  })
+}
+
 export function Step1Upload({ onComplete }: Step1UploadProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -125,7 +167,10 @@ export function Step1Upload({ onComplete }: Step1UploadProps) {
               return
             }
 
-            onComplete(file.name, sheetName, jsonData)
+            // Convert Excel date serial numbers to proper dates
+            const convertedData = convertExcelDates(jsonData)
+
+            onComplete(file.name, sheetName, convertedData)
             setIsProcessing(false)
           } catch (err: any) {
             setError(`Failed to parse Excel: ${err.message}`)
@@ -174,7 +219,10 @@ export function Step1Upload({ onComplete }: Step1UploadProps) {
           return
         }
 
-        onComplete(excelFile.name, selectedSheet, jsonData)
+        // Convert Excel date serial numbers to proper dates
+        const convertedData = convertExcelDates(jsonData)
+
+        onComplete(excelFile.name, selectedSheet, convertedData)
         setIsProcessing(false)
       } catch (err: any) {
         setError(`Failed to parse sheet: ${err.message}`)
