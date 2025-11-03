@@ -79,43 +79,90 @@ export async function POST(request: NextRequest) {
 
     // Parse the webhook payload
     // Read as text first to handle JSON parsing errors gracefully
-    let rawBody = await request.text()
+    const originalBody = await request.text()
 
     // PACE sometimes sends malformed JSON with:
     // 1. Unescaped control characters (newlines, tabs, etc.) in string values
     // 2. Unescaped quotes in string values (e.g., 48"x96")
-    // We need to clean this before parsing
 
-    // Step 1: Replace literal control characters globally
-    rawBody = rawBody
-      .replace(/\r\n/g, '\\n')  // Replace CRLF with \n
-      .replace(/\n/g, '\\n')    // Replace LF with \n
-      .replace(/\r/g, '\\r')    // Replace CR with \r
-      .replace(/\t/g, '\\t')    // Replace tabs with \t
+    // Smart state machine that looks ahead to determine if a quote closes a string
+    let rawBody = ''
+    let inString = false
+    let wasEscaped = false
 
-    // Step 2: Fix unescaped quotes within string values
-    // This regex matches JSON string values and escapes quotes that aren't already escaped
-    // It looks for: "key": "value with unescaped " quote"
-    rawBody = rawBody.replace(
-      /(:\s*")([^"]*(?:\\.[^"]*)*)(")(?=\s*[,}\]])/g,
-      (_match, openQuote, content, closeQuote, after) => {
-        // Within the content, escape any unescaped quotes
-        const escapedContent = content.replace(/(?<!\\)"/g, '\\"')
-        return openQuote + escapedContent + closeQuote + after
+    for (let i = 0; i < originalBody.length; i++) {
+      const char = originalBody[i]
+
+      if (wasEscaped) {
+        // Previous char was backslash, just add this char as-is
+        rawBody += char
+        wasEscaped = false
+        continue
       }
-    )
+
+      if (char === '\\') {
+        // Escape character - remember it and add it
+        rawBody += char
+        wasEscaped = true
+        continue
+      }
+
+      if (char === '"') {
+        if (inString) {
+          // We're inside a string - is this quote closing it or is it unescaped?
+          // Look ahead: if next non-whitespace char is ,}]\n then it's closing
+          let j = i + 1
+          while (j < originalBody.length && /[ \t\r]/.test(originalBody[j])) {
+            j++
+          }
+          const nextChar = j < originalBody.length ? originalBody[j] : ''
+
+          if (nextChar === ',' || nextChar === '}' || nextChar === ']' || nextChar === '\n' || j >= originalBody.length) {
+            // This quote closes the string
+            rawBody += char
+            inString = false
+          } else {
+            // This is an unescaped quote inside the string - escape it!
+            rawBody += '\\"'
+          }
+        } else {
+          // Not in string, so this quote opens a new string
+          rawBody += char
+          inString = true
+        }
+        continue
+      }
+
+      // If we're inside a string value, escape control characters
+      if (inString) {
+        if (char === '\n') {
+          rawBody += '\\n'
+        } else if (char === '\r') {
+          rawBody += '\\r'
+        } else if (char === '\t') {
+          rawBody += '\\t'
+        } else {
+          rawBody += char
+        }
+      } else {
+        // Outside string, preserve as-is
+        rawBody += char
+      }
+    }
 
     let payload: PACEPOLineWebhookPayload
     try {
       payload = JSON.parse(rawBody)
     } catch (parseError) {
       console.error('Failed to parse JSON payload:', parseError)
-      console.error('Raw body (first 500 chars):', rawBody.substring(0, 500))
+      console.error('Sanitized body (first 1000 chars):', rawBody.substring(0, 1000))
+      console.error('Original body was received and sanitized')
       return NextResponse.json(
         {
           status: 'error',
           error: 'Invalid JSON payload - contains invalid control characters or malformed JSON',
-          details: parseError instanceof Error ? parseError.message : String(parseError)
+          details: parseError instanceof Error ? parseError.message : String(parseError),
+          hint: 'Check server logs for sanitized JSON body'
         },
         { status: 400 }
       )
