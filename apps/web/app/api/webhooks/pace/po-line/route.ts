@@ -110,14 +110,15 @@ export async function POST(request: NextRequest) {
       if (char === '"') {
         if (inString) {
           // We're inside a string - is this quote closing it or is it unescaped?
-          // Look ahead: if next non-whitespace char is ,}]\n then it's closing
+          // Look ahead: if next non-whitespace/non-newline char is ,}] then it's closing
+          // We check for newlines too because string values can span multiple lines in malformed JSON
           let j = i + 1
-          while (j < originalBody.length && /[ \t\r]/.test(originalBody[j])) {
+          while (j < originalBody.length && /[ \t\r\n]/.test(originalBody[j])) {
             j++
           }
           const nextChar = j < originalBody.length ? originalBody[j] : ''
 
-          if (nextChar === ',' || nextChar === '}' || nextChar === ']' || nextChar === '\n' || j >= originalBody.length) {
+          if (nextChar === ',' || nextChar === '}' || nextChar === ']' || j >= originalBody.length) {
             // This quote closes the string
             rawBody += char
             inString = false
