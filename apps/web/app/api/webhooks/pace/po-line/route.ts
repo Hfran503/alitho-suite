@@ -81,16 +81,27 @@ export async function POST(request: NextRequest) {
     // Read as text first to handle JSON parsing errors gracefully
     let rawBody = await request.text()
 
-    // PACE sometimes sends unescaped control characters (newlines, tabs, etc.) in JSON strings
-    // We need to escape them before parsing
-    // This regex finds string values and escapes control characters within them
+    // PACE sometimes sends malformed JSON with:
+    // 1. Unescaped control characters (newlines, tabs, etc.) in string values
+    // 2. Unescaped quotes in string values (e.g., 48"x96")
+    // We need to clean this before parsing
+
+    // Step 1: Replace literal control characters globally
+    rawBody = rawBody
+      .replace(/\r\n/g, '\\n')  // Replace CRLF with \n
+      .replace(/\n/g, '\\n')    // Replace LF with \n
+      .replace(/\r/g, '\\r')    // Replace CR with \r
+      .replace(/\t/g, '\\t')    // Replace tabs with \t
+
+    // Step 2: Fix unescaped quotes within string values
+    // This regex matches JSON string values and escapes quotes that aren't already escaped
+    // It looks for: "key": "value with unescaped " quote"
     rawBody = rawBody.replace(
-      /"([^"\\]*(\\.[^"\\]*)*)"/g,
-      (match) => {
-        return match
-          .replace(/\n/g, '\\n')   // Replace literal newlines with \n
-          .replace(/\r/g, '\\r')   // Replace carriage returns with \r
-          .replace(/\t/g, '\\t')   // Replace tabs with \t
+      /(:\s*")([^"]*(?:\\.[^"]*)*)(")(?=\s*[,}\]])/g,
+      (_match, openQuote, content, closeQuote, after) => {
+        // Within the content, escape any unescaped quotes
+        const escapedContent = content.replace(/(?<!\\)"/g, '\\"')
+        return openQuote + escapedContent + closeQuote + after
       }
     )
 
