@@ -110,16 +110,16 @@ export async function POST(request: NextRequest) {
       if (char === '"') {
         if (inString) {
           // We're inside a string - is this quote closing it or is it unescaped?
-          // Look ahead: if next non-whitespace/non-newline char is ,}] then it's closing
-          // We check for newlines too because string values can span multiple lines in malformed JSON
+          // Look ahead: if next non-whitespace/non-newline char is :,}] then it's closing
+          // : indicates a property name, ,}] indicate end of value
           let j = i + 1
           while (j < originalBody.length && /[ \t\r\n]/.test(originalBody[j])) {
             j++
           }
           const nextChar = j < originalBody.length ? originalBody[j] : ''
 
-          if (nextChar === ',' || nextChar === '}' || nextChar === ']' || j >= originalBody.length) {
-            // This quote closes the string
+          if (nextChar === ':' || nextChar === ',' || nextChar === '}' || nextChar === ']' || j >= originalBody.length) {
+            // This quote closes the string (either property name or value)
             rawBody += char
             inString = false
           } else {
@@ -151,13 +151,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Debug: Log the sanitized body
+    console.log('=== PACE JSON Sanitization Debug ===')
+    console.log('Original body length:', originalBody.length)
+    console.log('Sanitized body length:', rawBody.length)
+    console.log('Sanitized body:', rawBody)
+    console.log('====================================')
+
     let payload: PACEPOLineWebhookPayload
     try {
       payload = JSON.parse(rawBody)
     } catch (parseError) {
       console.error('Failed to parse JSON payload:', parseError)
-      console.error('Sanitized body (first 1000 chars):', rawBody.substring(0, 1000))
-      console.error('Original body was received and sanitized')
+      console.error('Sanitized body:', rawBody)
+      console.error('Original body:', originalBody)
       return NextResponse.json(
         {
           status: 'error',
