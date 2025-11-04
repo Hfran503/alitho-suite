@@ -469,6 +469,7 @@ export interface NetSuiteCredentials {
   productionConsumerSecret?: string
   productionTokenId?: string
   productionTokenSecret?: string
+  webhookToken?: string // Token for authenticating incoming webhooks from NetSuite
 }
 
 /**
@@ -518,6 +519,7 @@ export async function saveNetSuiteCredentials(
     productionConsumerSecret: credentials.productionConsumerSecret ?? existingSecret.productionConsumerSecret,
     productionTokenId: credentials.productionTokenId ?? existingSecret.productionTokenId,
     productionTokenSecret: credentials.productionTokenSecret ?? existingSecret.productionTokenSecret,
+    webhookToken: credentials.webhookToken ?? existingSecret.webhookToken,
   }
 
   const secretString = JSON.stringify(secretValue)

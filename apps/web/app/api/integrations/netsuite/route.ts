@@ -70,6 +70,7 @@ export async function GET() {
     let productionConsumerSecret = ''
     let productionTokenId = ''
     let productionTokenSecret = ''
+    let webhookToken = ''
     let hasSandboxCredentials = false
     let hasProductionCredentials = false
 
@@ -89,6 +90,7 @@ export async function GET() {
       productionConsumerSecret = maskCredential(credentials.productionConsumerSecret)
       productionTokenId = maskCredential(credentials.productionTokenId)
       productionTokenSecret = maskCredential(credentials.productionTokenSecret)
+      webhookToken = maskCredential(credentials.webhookToken)
 
       // Check if sandbox credentials exist (all fields required)
       hasSandboxCredentials = !!(
@@ -128,6 +130,7 @@ export async function GET() {
         productionConsumerSecret,
         productionTokenId,
         productionTokenSecret,
+        webhookToken,
         hasSandboxCredentials,
         hasProductionCredentials,
         createdAt: integration.createdAt,
@@ -172,6 +175,7 @@ export async function POST(req: NextRequest) {
       productionTokenId,
       productionTokenSecret,
       productionEnabled,
+      webhookToken,
     } = body
 
     // Save credentials to AWS Secrets Manager (only if provided)
@@ -186,6 +190,7 @@ export async function POST(req: NextRequest) {
     if (productionConsumerSecret !== undefined) credentialsToSave.productionConsumerSecret = productionConsumerSecret
     if (productionTokenId !== undefined) credentialsToSave.productionTokenId = productionTokenId
     if (productionTokenSecret !== undefined) credentialsToSave.productionTokenSecret = productionTokenSecret
+    if (webhookToken !== undefined) credentialsToSave.webhookToken = webhookToken
 
     // Save to AWS Secrets Manager if there are credentials to save
     if (Object.keys(credentialsToSave).length > 0) {

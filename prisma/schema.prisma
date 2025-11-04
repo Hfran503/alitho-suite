@@ -26,10 +26,11 @@ model Tenant {
   departments            Department[]
   equipment              Equipment[]
   integrations           Integration[]
-  invoiceIntegrations    InvoiceIntegration[]
-  poLineIntegrations     PoLineIntegration[]
-  poReceiptIntegrations  PoReceiptIntegration[]
-  JobSchedule            JobSchedule[]
+  invoiceIntegrations      InvoiceIntegration[]
+  poLineIntegrations       PoLineIntegration[]
+  poReceiptIntegrations    PoReceiptIntegration[]
+  vendorBillIntegrations   VendorBillIntegration[]
+  JobSchedule              JobSchedule[]
   memberships            Membership[]
   menuConfigurations     MenuConfiguration[]
   estimateSettings       EstimateSettings?
@@ -579,6 +580,35 @@ model PoReceiptIntegration {
   @@index([createdAt])
   @@index([status, retryCount])
   @@map("POReceiptIntegration")
+}
+
+model VendorBillIntegration {
+  id                String    @id @default(cuid())
+  processDate       String    // Date the vendor bills were processed (MM/DD/YYYY)
+  filename          String    // Original filename from NetSuite
+  status            String    @default("pending") // pending, processing, completed, failed
+  recordCount       Int       @default(0)
+  vendorBillCount   Int       @default(0)
+  itemReceiptCount  Int       @default(0)
+  csvData           String    @db.Text // Full CSV content
+  payload           Json      // Full webhook payload
+  processedData     Json?     // Parsed and processed CSV data
+  paceResponse      Json?     // Response from PACE API
+  errorMessage      String?
+  retryCount        Int       @default(0)
+  maxRetries        Int       @default(3)
+  lastAttemptAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sentToPaceAt      DateTime?
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([processDate])
+  @@index([createdAt])
+  @@index([status, retryCount])
 }
 
 model MenuConfiguration {

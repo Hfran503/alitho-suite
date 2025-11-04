@@ -32,6 +32,9 @@ export function NetSuiteIntegrationModal({
   const [productionTokenSecret, setProductionTokenSecret] = useState('')
   const [productionEnabled, setProductionEnabled] = useState(false)
 
+  // Webhook token for incoming NetSuite requests
+  const [webhookToken, setWebhookToken] = useState('')
+
   const [showSecrets, setShowSecrets] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isConfigured, setIsConfigured] = useState(false)
@@ -85,6 +88,10 @@ export function NetSuiteIntegrationModal({
         }
         if (data.data?.productionTokenSecret) {
           setProductionTokenSecret(data.data.productionTokenSecret)
+        }
+
+        if (data.data?.webhookToken) {
+          setWebhookToken(data.data.webhookToken)
         }
       }
     } catch (error) {
@@ -141,6 +148,9 @@ export function NetSuiteIntegrationModal({
       if (productionConsumerSecret && !isMaskedValue(productionConsumerSecret)) requestBody.productionConsumerSecret = productionConsumerSecret
       if (productionTokenId && !isMaskedValue(productionTokenId)) requestBody.productionTokenId = productionTokenId
       if (productionTokenSecret && !isMaskedValue(productionTokenSecret)) requestBody.productionTokenSecret = productionTokenSecret
+
+      // Include webhook token if provided (not empty and not masked)
+      if (webhookToken && !isMaskedValue(webhookToken)) requestBody.webhookToken = webhookToken
 
       const response = await fetch('/api/integrations/netsuite', {
         method: 'POST',
@@ -475,6 +485,32 @@ export function NetSuiteIntegrationModal({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Webhook Token Section */}
+        <div className="border-2 rounded-lg p-5 border-gray-200 bg-gray-50">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Webhook Authentication</h3>
+            <p className="text-sm text-gray-600">
+              Configure a Bearer token for authenticating incoming webhooks from NetSuite scheduled scripts (e.g., vendor bill exports).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Webhook Token
+            </label>
+            <input
+              type={showSecrets ? 'text' : 'password'}
+              value={webhookToken}
+              onChange={(e) => setWebhookToken(e.target.value)}
+              className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              placeholder="Enter webhook authentication token"
+            />
+            <p className="mt-1.5 text-xs text-gray-500">
+              This token will be used to authenticate incoming webhook requests from NetSuite. Configure the same token in your NetSuite scheduled script parameters.
+            </p>
           </div>
         </div>
 
