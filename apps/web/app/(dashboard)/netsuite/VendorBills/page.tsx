@@ -32,6 +32,7 @@ export default function VendorBillIntegrationsPage() {
   const [sendingToPace, setSendingToPace] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendSuccess, setSendSuccess] = useState<string | null>(null)
+  const [needsReset, setNeedsReset] = useState(false)
 
   const fetchVendorBills = async () => {
     setLoading(true)
@@ -93,31 +94,37 @@ export default function VendorBillIntegrationsPage() {
     })
   }
 
-  const handleSendToPace = async () => {
+  const handleSendToPace = async (reset: boolean = false) => {
     if (!selectedVendorBill) return
 
     setSendingToPace(true)
     setSendError(null)
     setSendSuccess(null)
+    setNeedsReset(false)
 
     try {
-      const response = await fetch(
-        `/api/vendor-bills/integrations/${selectedVendorBill.id}/send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        }
-      )
+      const url = reset
+        ? `/api/vendor-bills/integrations/${selectedVendorBill.id}/send?reset=true`
+        : `/api/vendor-bills/integrations/${selectedVendorBill.id}/send`
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
 
       const data = await response.json()
 
       console.log('PACE send response:', { status: response.status, data })
 
       if (response.ok && data.success) {
-        setSendSuccess('Vendor bill queued for PACE successfully!')
+        setSendSuccess(
+          reset
+            ? 'Retry count reset! Vendor bill queued for PACE successfully!'
+            : 'Vendor bill queued for PACE successfully!'
+        )
         // Refresh the vendor bill list to get updated status
         await fetchVendorBills()
         // Update the selected vendor bill if it's still the same one
@@ -135,6 +142,10 @@ export default function VendorBillIntegrationsPage() {
         const errorMsg = data.error || 'Failed to send vendor bill to PACE'
         console.error('PACE send error:', errorMsg, data)
         setSendError(errorMsg)
+        // Check if reset is needed
+        if (data.needsReset) {
+          setNeedsReset(true)
+        }
       }
     } catch (err) {
       setSendError(
@@ -294,66 +305,123 @@ export default function VendorBillIntegrationsPage() {
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
               <h2 className="text-lg font-semibold text-gray-900">Vendor Bill Details</h2>
               <div className="flex items-center gap-3">
-                {/* Send to PACE Button */}
-                <button
-                  onClick={handleSendToPace}
-                  disabled={sendingToPace || selectedVendorBill.status === 'completed'}
-                  className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
-                    selectedVendorBill.status === 'completed'
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : sendingToPace
-                      ? 'bg-blue-400 text-white cursor-wait'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                  title={
-                    selectedVendorBill.status === 'completed'
-                      ? 'Vendor bill already sent to PACE'
-                      : 'Send vendor bill to PACE'
-                  }
-                >
-                  {sendingToPace ? (
-                    <>
-                      <svg
-                        className="animate-spin h-4 w-4"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
+                {/* Show Reset & Retry button if max retries exceeded */}
+                {(needsReset || selectedVendorBill.retryCount >= selectedVendorBill.maxRetries) &&
+                selectedVendorBill.status !== 'completed' ? (
+                  <button
+                    onClick={() => handleSendToPace(true)}
+                    disabled={sendingToPace}
+                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                      sendingToPace
+                        ? 'bg-orange-400 text-white cursor-wait'
+                        : 'bg-orange-600 text-white hover:bg-orange-700'
+                    }`}
+                    title="Reset retry count and send vendor bill to PACE"
+                  >
+                    {sendingToPace ? (
+                      <>
+                        <svg
+                          className="animate-spin h-4 w-4"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Resetting...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
                           stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                        />
-                      </svg>
-                      Send to PACE
-                    </>
-                  )}
-                </button>
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                        Reset & Retry
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSendToPace(false)}
+                    disabled={sendingToPace || selectedVendorBill.status === 'completed'}
+                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                      selectedVendorBill.status === 'completed'
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : sendingToPace
+                        ? 'bg-blue-400 text-white cursor-wait'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                    title={
+                      selectedVendorBill.status === 'completed'
+                        ? 'Vendor bill already sent to PACE'
+                        : 'Send vendor bill to PACE'
+                    }
+                  >
+                    {sendingToPace ? (
+                      <>
+                        <svg
+                          className="animate-spin h-4 w-4"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
+                        </svg>
+                        Send to PACE
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   onClick={() => setSelectedVendorBill(null)}
                   className="text-gray-400 hover:text-gray-600"

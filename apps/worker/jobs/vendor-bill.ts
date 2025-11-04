@@ -266,6 +266,62 @@ function groupByInvoice(rows: VendorBillRow[]): Map<string, VendorBillRow[]> {
 }
 
 /**
+ * Create a BillBatch object in PACE
+ */
+async function createPaceBillBatch(
+  credentials: { url: string; username: string; password: string },
+  batchName: string
+): Promise<{ success: boolean; billBatchId?: string; error?: string }> {
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+
+    const payload: any = {
+      name: batchName,
+    }
+
+    console.log(`[PACE] 📦 Creating BillBatch: ${batchName}`)
+    console.log(`[PACE] 📦 BillBatch payload:`, JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${credentials.url}/CreateObject/createBillBatch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log(`[PACE] 📨 BillBatch response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[PACE] ❌ BillBatch creation error (${response.status}):`, errorText)
+      return {
+        success: false,
+        error: `PACE BillBatch error: ${response.status} - ${errorText}`,
+      }
+    }
+
+    const result = await response.json() as any
+    console.log(`[PACE] 📨 BillBatch response:`, JSON.stringify(result, null, 2))
+
+    const billBatchId = result.id || result.ID
+    console.log(`[PACE] ✅ Successfully created BillBatch - ID: ${billBatchId}`)
+
+    return {
+      success: true,
+      billBatchId: billBatchId?.toString(),
+    }
+  } catch (error) {
+    console.error('[PACE] ❌ Exception creating BillBatch:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating BillBatch',
+    }
+  }
+}
+
+/**
  * Create a Bill object in PACE
  */
 async function createPaceBill(
@@ -284,7 +340,7 @@ async function createPaceBill(
     const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
 
     const payload: any = {
-      billBatch: billData.billBatch,
+      billBatch: billData.billBatch, // BillBatch ID is required
       billType: billData.billType,
       vendor: billData.vendor,
       invoiceNumber: billData.invoiceNumber,
@@ -467,14 +523,33 @@ function convertToISODate(dateStr: string): string {
  *
  * Creates Bill and BillLine objects in PACE based on the CSV data
  */
-async function sendToPace(_vendorBillIntegration: any, rows: VendorBillRow[]) {
+async function sendToPace(vendorBillIntegration: any, rows: VendorBillRow[]) {
   try {
     // Get PACE credentials
     const credentials = await getPaceApiCredentials()
 
     console.log(`[PACE] 🚀 Sending ${rows.length} vendor bill rows to PACE...`)
 
-    // Group rows by invoice (each invoice = 1 Bill with multiple BillLines)
+    // Step 1: Create BillBatch for this import batch
+    const batchName = `NetSuite Vendor Bills - ${vendorBillIntegration.processDate} - ${vendorBillIntegration.filename}`
+    console.log(`[PACE] 📦 Creating BillBatch: ${batchName}`)
+
+    const billBatchResult = await createPaceBillBatch(credentials, batchName)
+
+    if (!billBatchResult.success || !billBatchResult.billBatchId) {
+      const error = `Failed to create BillBatch: ${billBatchResult.error}`
+      console.error(`[PACE] ❌ ${error}`)
+      return {
+        success: false,
+        error,
+        response: null,
+      }
+    }
+
+    const billBatchId = billBatchResult.billBatchId
+    console.log(`[PACE] ✅ BillBatch created with ID: ${billBatchId}`)
+
+    // Step 2: Group rows by invoice (each invoice = 1 Bill with multiple BillLines)
     const invoiceGroups = groupByInvoice(rows)
     console.log(`[PACE] 📊 Grouped into ${invoiceGroups.size} bills`)
 
@@ -486,7 +561,7 @@ async function sendToPace(_vendorBillIntegration: any, rows: VendorBillRow[]) {
       error?: string
     }> = []
 
-    // Process each bill
+    // Step 3: Process each bill
     for (const [_groupKey, billRows] of invoiceGroups) {
       const firstRow = billRows[0]
       const invoiceNumber = firstRow.invoiceNumber
@@ -496,9 +571,9 @@ async function sendToPace(_vendorBillIntegration: any, rows: VendorBillRow[]) {
       console.log(`[PACE] 📋 Vendor: ${firstRow.vendor}`)
       console.log(`[PACE] 📋 Bill Lines: ${billRows.length}`)
 
-      // Step 1: Create Bill object
+      // Create Bill object with the BillBatch ID
       const billResult = await createPaceBill(credentials, {
-        billBatch: firstRow.billBatch,
+        billBatch: billBatchId, // Use the BillBatch ID we created
         billType: firstRow.billType,
         dateDue: firstRow.dateDue,
         vendor: firstRow.vendor,
@@ -521,7 +596,7 @@ async function sendToPace(_vendorBillIntegration: any, rows: VendorBillRow[]) {
       const billId = billResult.billId
       console.log(`[PACE] ✅ Bill created with ID: ${billId}`)
 
-      // Step 2: Create BillLine objects for each row
+      // Create BillLine objects for each row
       const billLineIds: string[] = []
       let lineNumber = 0
       let lineErrors: string[] = []
@@ -576,6 +651,7 @@ async function sendToPace(_vendorBillIntegration: any, rows: VendorBillRow[]) {
         message: allSuccess
           ? 'All vendor bills sent to PACE successfully'
           : 'Some vendor bills failed to process',
+        billBatchId,
         totalBills: results.length,
         successfulBills: results.filter(r => r.success).length,
         failedBills: results.filter(r => !r.success).length,

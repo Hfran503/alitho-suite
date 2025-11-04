@@ -7,14 +7,19 @@ import { queueVendorBill } from '@/lib/queue/vendor-bill-queue'
 /**
  * POST /api/vendor-bills/integrations/[id]/send
  * Manually queue a vendor bill to be sent to PACE
+ * Query param: ?reset=true to reset retry count
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Await params in Next.js 15
     const { id } = await params
+
+    // Check for reset parameter
+    const searchParams = req.nextUrl.searchParams
+    const shouldReset = searchParams.get('reset') === 'true'
 
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -47,20 +52,22 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Check if we've exceeded max retries
-    if (vendorBillIntegration.retryCount >= vendorBillIntegration.maxRetries) {
+    // Check if we've exceeded max retries (unless resetting)
+    if (!shouldReset && vendorBillIntegration.retryCount >= vendorBillIntegration.maxRetries) {
       return NextResponse.json({
         success: false,
         error: `Maximum retry count (${vendorBillIntegration.maxRetries}) exceeded. Please check the error message and fix the issue before retrying.`,
+        needsReset: true,
       }, { status: 400 })
     }
 
-    // Update status to pending
+    // Update status to pending and optionally reset retry count
     await db.vendorBillIntegration.update({
       where: { id },
       data: {
         status: 'pending',
         errorMessage: null,
+        ...(shouldReset && { retryCount: 0 }),
       },
     })
 
