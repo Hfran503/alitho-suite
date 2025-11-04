@@ -248,52 +248,343 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
+ * Group vendor bill rows by invoice number
+ * Each invoice becomes one Bill with multiple BillLines
+ */
+function groupByInvoice(rows: VendorBillRow[]): Map<string, VendorBillRow[]> {
+  const groups = new Map<string, VendorBillRow[]>()
+
+  for (const row of rows) {
+    const key = `${row.vendor}-${row.invoiceNumber}`
+    if (!groups.has(key)) {
+      groups.set(key, [])
+    }
+    groups.get(key)!.push(row)
+  }
+
+  return groups
+}
+
+/**
+ * Create a Bill object in PACE
+ */
+async function createPaceBill(
+  credentials: { url: string; username: string; password: string },
+  billData: {
+    billBatch: string
+    billType: string
+    dateDue: string
+    vendor: string
+    invoiceDate: string
+    invoiceNumber: string
+    voucherDate: string
+  }
+): Promise<{ success: boolean; billId?: string; error?: string }> {
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+
+    const payload: any = {
+      billBatch: billData.billBatch,
+      billType: billData.billType,
+      vendor: billData.vendor,
+      invoiceNumber: billData.invoiceNumber,
+    }
+
+    // Add dates if provided (PACE expects ISO date format: YYYY-MM-DD)
+    if (billData.dateDue) {
+      payload.dateDue = convertToISODate(billData.dateDue)
+    }
+    if (billData.invoiceDate) {
+      payload.invoiceDate = convertToISODate(billData.invoiceDate)
+    }
+    if (billData.voucherDate) {
+      payload.voucherDate = convertToISODate(billData.voucherDate)
+    }
+
+    console.log(`[PACE] 📄 Creating Bill: Invoice ${billData.invoiceNumber}, Vendor ${billData.vendor}`)
+    console.log(`[PACE] 📦 Bill payload:`, JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${credentials.url}/CreateObject/createBill`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log(`[PACE] 📨 Bill response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[PACE] ❌ Bill creation error (${response.status}):`, errorText)
+      return {
+        success: false,
+        error: `PACE Bill error: ${response.status} - ${errorText}`,
+      }
+    }
+
+    const result = await response.json() as any
+    console.log(`[PACE] 📨 Bill response:`, JSON.stringify(result, null, 2))
+
+    const billId = result.id || result.ID
+    console.log(`[PACE] ✅ Successfully created Bill - ID: ${billId}`)
+
+    return {
+      success: true,
+      billId: billId?.toString(),
+    }
+  } catch (error) {
+    console.error('[PACE] ❌ Exception creating Bill:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating Bill',
+    }
+  }
+}
+
+/**
+ * Create a BillLine object in PACE
+ */
+async function createPaceBillLine(
+  credentials: { url: string; username: string; password: string },
+  billId: string,
+  lineData: {
+    discountApplicable: string
+    glAccount: string
+    poQuantity: string
+    poUnitPrice: string
+    poUom: string
+    purchaseOrderReceipt: string
+    invoiceAmount: string
+  }
+): Promise<{ success: boolean; billLineId?: string; error?: string }> {
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+
+    const payload: any = {
+      bill: billId,
+      glAccount: lineData.glAccount,
+    }
+
+    // Add numeric fields if provided
+    if (lineData.poQuantity) {
+      payload.poQuantity = parseFloat(lineData.poQuantity)
+    }
+    if (lineData.poUnitPrice) {
+      payload.poUnitPrice = parseFloat(lineData.poUnitPrice)
+    }
+    if (lineData.invoiceAmount) {
+      payload.invoiceAmount = parseFloat(lineData.invoiceAmount)
+    }
+
+    // Add text fields
+    if (lineData.poUom) {
+      payload.poUom = lineData.poUom
+    }
+    if (lineData.purchaseOrderReceipt) {
+      payload.purchaseOrderReceipt = lineData.purchaseOrderReceipt
+    }
+    if (lineData.discountApplicable) {
+      payload.discountApplicable = lineData.discountApplicable === 'true' || lineData.discountApplicable === '1'
+    }
+
+    console.log(`[PACE] 📋 Creating BillLine for Bill ${billId}`)
+    console.log(`[PACE] 📦 BillLine payload:`, JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${credentials.url}/CreateObject/createBillLine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log(`[PACE] 📨 BillLine response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[PACE] ❌ BillLine creation error (${response.status}):`, errorText)
+      return {
+        success: false,
+        error: `PACE BillLine error: ${response.status} - ${errorText}`,
+      }
+    }
+
+    const result = await response.json() as any
+    const billLineId = result.id || result.ID
+    console.log(`[PACE] ✅ Successfully created BillLine - ID: ${billLineId}`)
+
+    return {
+      success: true,
+      billLineId: billLineId?.toString(),
+    }
+  } catch (error) {
+    console.error('[PACE] ❌ Exception creating BillLine:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating BillLine',
+    }
+  }
+}
+
+/**
+ * Convert date string to ISO format (YYYY-MM-DD)
+ * Handles formats like MM/DD/YYYY or YYYY-MM-DD
+ */
+function convertToISODate(dateStr: string): string {
+  if (!dateStr) return ''
+
+  // If already in ISO format (YYYY-MM-DD), return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr
+  }
+
+  // Try to parse MM/DD/YYYY format
+  const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (mmddyyyyMatch) {
+    const [, month, day, year] = mmddyyyyMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  // Try to parse as Date and convert
+  const date = new Date(dateStr)
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  // Return as-is if we can't parse
+  console.warn(`[PACE] ⚠️  Could not parse date: ${dateStr}`)
+  return dateStr
+}
+
+/**
  * Send vendor bill data to PACE API
  *
- * TODO: Update this function with the actual PACE API endpoint for vendor bills
+ * Creates Bill and BillLine objects in PACE based on the CSV data
  */
 async function sendToPace(vendorBillIntegration: any, rows: VendorBillRow[]) {
   try {
     // Get PACE credentials
     const credentials = await getPaceApiCredentials()
 
-    // TODO: Replace this placeholder with actual PACE API call
-    // For now, we'll log what would be sent and return success
-    console.log('📤 Would send to PACE:', {
-      url: credentials.url,
-      recordCount: rows.length,
-      processDate: vendorBillIntegration.processDate,
-      sample: rows[0], // First row as sample
-    })
+    console.log(`[PACE] 🚀 Sending ${rows.length} vendor bill rows to PACE...`)
 
-    // Placeholder response
-    // In production, this should make an actual API call to PACE
-    // Example:
-    // const response = await fetch(`${credentials.url}/VendorBills/import`, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({ rows }),
-    // })
-    //
-    // if (!response.ok) {
-    //   throw new Error(`PACE API error: ${response.status} ${response.statusText}`)
-    // }
-    //
-    // const result = await response.json()
+    // Group rows by invoice (each invoice = 1 Bill with multiple BillLines)
+    const invoiceGroups = groupByInvoice(rows)
+    console.log(`[PACE] 📊 Grouped into ${invoiceGroups.size} bills`)
+
+    const results: Array<{
+      invoiceNumber: string
+      billId?: string
+      billLineIds: string[]
+      success: boolean
+      error?: string
+    }> = []
+
+    // Process each bill
+    for (const [groupKey, billRows] of invoiceGroups) {
+      const firstRow = billRows[0]
+      const invoiceNumber = firstRow.invoiceNumber
+
+      console.log(`\n[PACE] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+      console.log(`[PACE] 📄 Processing Invoice: ${invoiceNumber}`)
+      console.log(`[PACE] 📋 Vendor: ${firstRow.vendor}`)
+      console.log(`[PACE] 📋 Bill Lines: ${billRows.length}`)
+
+      // Step 1: Create Bill object
+      const billResult = await createPaceBill(credentials, {
+        billBatch: firstRow.billBatch,
+        billType: firstRow.billType,
+        dateDue: firstRow.dateDue,
+        vendor: firstRow.vendor,
+        invoiceDate: firstRow.invoiceDate,
+        invoiceNumber: firstRow.invoiceNumber,
+        voucherDate: firstRow.voucherDate,
+      })
+
+      if (!billResult.success || !billResult.billId) {
+        console.error(`[PACE] ❌ Failed to create Bill for invoice ${invoiceNumber}: ${billResult.error}`)
+        results.push({
+          invoiceNumber,
+          billLineIds: [],
+          success: false,
+          error: billResult.error,
+        })
+        continue
+      }
+
+      const billId = billResult.billId
+      console.log(`[PACE] ✅ Bill created with ID: ${billId}`)
+
+      // Step 2: Create BillLine objects for each row
+      const billLineIds: string[] = []
+      let lineNumber = 0
+      let lineErrors: string[] = []
+
+      for (const row of billRows) {
+        lineNumber++
+        console.log(`[PACE] 📋 Creating BillLine ${lineNumber}/${billRows.length}...`)
+
+        const lineResult = await createPaceBillLine(credentials, billId, {
+          discountApplicable: row.discountApplicable,
+          glAccount: row.glAccount,
+          poQuantity: row.poQuantity,
+          poUnitPrice: row.poUnitPrice,
+          poUom: row.poUom,
+          purchaseOrderReceipt: row.purchaseOrderReceipt,
+          invoiceAmount: row.invoiceAmount,
+        })
+
+        if (lineResult.success && lineResult.billLineId) {
+          billLineIds.push(lineResult.billLineId)
+          console.log(`[PACE]    ✅ BillLine ${lineNumber} created: ${lineResult.billLineId}`)
+        } else {
+          console.error(`[PACE]    ❌ BillLine ${lineNumber} failed: ${lineResult.error}`)
+          lineErrors.push(`Line ${lineNumber}: ${lineResult.error}`)
+        }
+      }
+
+      console.log(`[PACE] ✅ Created ${billLineIds.length}/${billRows.length} BillLines for invoice ${invoiceNumber}`)
+
+      results.push({
+        invoiceNumber,
+        billId,
+        billLineIds,
+        success: lineErrors.length === 0,
+        error: lineErrors.length > 0 ? lineErrors.join('; ') : undefined,
+      })
+    }
+
+    console.log(`\n[PACE] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+    console.log(`[PACE] ✅ Processing complete!`)
+    console.log(`[PACE] 📊 Summary:`)
+    console.log(`[PACE]    - Total Bills: ${results.length}`)
+    console.log(`[PACE]    - Successful: ${results.filter(r => r.success).length}`)
+    console.log(`[PACE]    - Failed: ${results.filter(r => !r.success).length}`)
+
+    // Check if all bills were processed successfully
+    const allSuccess = results.every(r => r.success)
 
     return {
-      success: true,
+      success: allSuccess,
       response: {
-        message: 'Vendor bills processed (placeholder)',
-        recordCount: rows.length,
-        processDate: vendorBillIntegration.processDate,
+        message: allSuccess
+          ? 'All vendor bills sent to PACE successfully'
+          : 'Some vendor bills failed to process',
+        totalBills: results.length,
+        successfulBills: results.filter(r => r.success).length,
+        failedBills: results.filter(r => !r.success).length,
+        details: results,
       },
+      error: allSuccess ? undefined : results.filter(r => !r.success).map(r => r.error).join('; '),
     }
   } catch (error) {
-    console.error('Error sending to PACE:', error)
+    console.error('[PACE] ❌ Error sending to PACE:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
