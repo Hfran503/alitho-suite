@@ -467,7 +467,7 @@ function convertToISODate(dateStr: string): string {
  *
  * Creates Bill and BillLine objects in PACE based on the CSV data
  */
-async function sendToPace(vendorBillIntegration: any, rows: VendorBillRow[]) {
+async function sendToPace(_vendorBillIntegration: any, rows: VendorBillRow[]) {
   try {
     // Get PACE credentials
     const credentials = await getPaceApiCredentials()
@@ -487,7 +487,7 @@ async function sendToPace(vendorBillIntegration: any, rows: VendorBillRow[]) {
     }> = []
 
     // Process each bill
-    for (const [groupKey, billRows] of invoiceGroups) {
+    for (const [_groupKey, billRows] of invoiceGroups) {
       const firstRow = billRows[0]
       const invoiceNumber = firstRow.invoiceNumber
 
