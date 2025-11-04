@@ -38,7 +38,9 @@ function convertExcelDates(data: any[]): any[] {
     const newRow: any = {}
     for (const [key, value] of Object.entries(row)) {
       // Check if this looks like a date field and has a serial number
-      const isDateField = key.toLowerCase().includes('date') || key.toLowerCase().includes('ship')
+      // Only convert fields that actually contain 'date' in the name (like ShipDate)
+      // Do NOT convert fields like ShipToZipCode which contain 'ship' but aren't dates
+      const isDateField = key.toLowerCase().includes('date')
       if (isDateField && isExcelDateSerial(value)) {
         const date = excelSerialToDate(value as number)
         newRow[key] = formatDate(date)
