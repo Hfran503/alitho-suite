@@ -261,38 +261,6 @@ function groupByPayment(rows: CustomerPaymentRow[]): Map<string, CustomerPayment
   return groups
 }
 
-/**
- * Convert date string to ISO format (YYYY-MM-DD)
- * Handles formats like MM/DD/YYYY or YYYY-MM-DD
- */
-function convertToISODate(dateStr: string): string {
-  if (!dateStr) return ''
-
-  // If already in ISO format (YYYY-MM-DD), return as-is
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr
-  }
-
-  // Try to parse MM/DD/YYYY format
-  const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (mmddyyyyMatch) {
-    const [, month, day, year] = mmddyyyyMatch
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-  }
-
-  // Try to parse as Date and convert
-  const date = new Date(dateStr)
-  if (!isNaN(date.getTime())) {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  // Return as-is if we can't parse
-  console.warn(`[PACE] ⚠️  Could not parse date: ${dateStr}`)
-  return dateStr
-}
 
 /**
  * Send customer payment data to PACE API
@@ -301,10 +269,10 @@ function convertToISODate(dateStr: string): string {
  * For now, this function stores the parsed data and marks as completed.
  * TODO: Implement PACE API integration once endpoints are available.
  */
-async function sendToPace(customerPaymentIntegration: any, rows: CustomerPaymentRow[]) {
+async function sendToPace(_customerPaymentIntegration: any, rows: CustomerPaymentRow[]) {
   try {
     // Get PACE credentials (for future use)
-    const credentials = await getPaceApiCredentials()
+    const _credentials = await getPaceApiCredentials()
 
     console.log(`[PACE] 🚀 Processing ${rows.length} customer payment rows...`)
 
