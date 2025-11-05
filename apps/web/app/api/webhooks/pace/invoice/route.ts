@@ -159,15 +159,20 @@ export async function POST(request: NextRequest) {
         // Calculate combined totals
         const combinedInvoiceAmount = combinedSalesDistributions.reduce((sum, dist) => sum + dist.amount, 0)
         const combinedExtrasAmount = combinedInvoiceExtras.reduce((sum, extra) => sum + extra.price, 0)
-        const totalAmount = combinedInvoiceAmount + combinedExtrasAmount
+
+        // Accumulate tax amounts (don't overwrite!)
+        const existingTaxAmount = existingPayload.invoice.taxAmount || 0
+        const newTaxAmount = payload.invoice.taxAmount || 0
+        const combinedTaxAmount = existingTaxAmount + newTaxAmount
+
+        const totalAmount = combinedInvoiceAmount + combinedExtrasAmount + combinedTaxAmount
 
         // Create combined payload
         const combinedPayload: PACEInvoiceWebhookPayload = {
           invoice: {
             ...payload.invoice,
             invoiceAmount: totalAmount,
-            // Keep the latest tax amount (or accumulate if needed)
-            taxAmount: payload.invoice.taxAmount,
+            taxAmount: combinedTaxAmount,
           },
           salesDistributions: combinedSalesDistributions,
           invoiceExtras: combinedInvoiceExtras,
@@ -205,6 +210,9 @@ export async function POST(request: NextRequest) {
           previousExtras: existingInvoiceExtras.length,
           newExtras: newInvoiceExtras.length,
           combinedExtras: combinedInvoiceExtras.length,
+          previousTax: existingTaxAmount.toFixed(2),
+          newTax: newTaxAmount.toFixed(2),
+          combinedTax: combinedTaxAmount.toFixed(2),
           totalAmount: totalAmount.toFixed(2),
           status: updated.status,
         })
@@ -307,14 +315,20 @@ export async function POST(request: NextRequest) {
           newExtras.forEach(extra => extrasMap.set(extra.id, extra))
           const combinedExtras = Array.from(extrasMap.values())
 
+          // Accumulate tax amounts
+          const existingTax = existingPayload.invoice.taxAmount || 0
+          const newTax = payload.invoice.taxAmount || 0
+          const combinedTax = existingTax + newTax
+
           const combinedAmount = combinedSalesDist.reduce((sum, dist) => sum + dist.amount, 0) +
-                                 combinedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                                 combinedExtras.reduce((sum, extra) => sum + extra.price, 0) +
+                                 combinedTax
 
           const combinedPayload: PACEInvoiceWebhookPayload = {
             invoice: {
               ...payload.invoice,
               invoiceAmount: combinedAmount,
-              taxAmount: payload.invoice.taxAmount,
+              taxAmount: combinedTax,
             },
             salesDistributions: combinedSalesDist,
             invoiceExtras: combinedExtras,

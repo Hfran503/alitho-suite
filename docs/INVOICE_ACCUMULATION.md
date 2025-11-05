@@ -37,6 +37,28 @@ await db.$transaction(async (tx) => {
 
 This ensures **all 5 parts are accumulated correctly** even when arriving simultaneously.
 
+## Tax Amount Accumulation (CRITICAL)
+
+**Issue**: Tax amounts were being overwritten instead of accumulated, causing incorrect totals.
+
+**Example**: Invoice 56954 with 2 parts:
+- Part 1 (Job 112724): Sales $50.00, Tax $0.00
+- Part 2 (Job 1002485): Sales $735.00, Tax $63.39
+- **Expected total**: $50 + $735 + $63.39 = **$848.39**
+- **Previous behavior**: $785.00 (tax was overwritten, not added!)
+
+**Solution**: Accumulate tax amounts across all parts
+```typescript
+// Accumulate tax amounts (don't overwrite!)
+const existingTaxAmount = existingPayload.invoice.taxAmount || 0
+const newTaxAmount = payload.invoice.taxAmount || 0
+const combinedTaxAmount = existingTaxAmount + newTaxAmount
+
+const totalAmount = combinedInvoiceAmount + combinedExtrasAmount + combinedTaxAmount
+```
+
+Now correctly sends **$848.39** to NetSuite.
+
 ## Processing Delay
 
 To ensure all parts are accumulated before sending to NetSuite, the system uses a **10-second delay**:
