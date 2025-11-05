@@ -41,6 +41,8 @@ interface PACEInvoice {
   customerName: string
   invoiceDate: string
   poNumber: string
+  invoiceId?: string // Job-specific ID from PACE - used to distinguish different jobs with same invoice number
+  jobNum?: string // Job number for reference
 }
 
 interface PACEInvoiceWebhookPayload {
@@ -137,23 +139,42 @@ export async function POST(request: NextRequest) {
         // Parse existing payload
         const existingPayload = locked.payload as unknown as PACEInvoiceWebhookPayload
 
-        // Accumulate sales distributions (combine arrays, remove duplicates by ID)
+        // Accumulate sales distributions (combine arrays, remove duplicates)
+        // Use composite key (invoiceId-lineItemId) to handle cases where PACE reuses line item IDs across jobs
         const existingSalesDistributions = existingPayload.salesDistributions || []
         const newSalesDistributions = payload.salesDistributions || []
 
-        // Create a map to track unique sales distributions by ID
         const salesDistMap = new Map()
-        existingSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
-        newSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
+        existingSalesDistributions.forEach(dist => {
+          // Use composite key: (invoiceId OR jobNum) + line item ID to distinguish items from different jobs
+          // invoiceId = unique per job, jobNum = also unique per job
+          const jobKey = existingPayload.invoice.invoiceId || existingPayload.invoice.jobNum || existingPayload.invoice.id
+          const key = `${jobKey}-${dist.id}`
+          salesDistMap.set(key, dist)
+        })
+        newSalesDistributions.forEach(dist => {
+          const jobKey = payload.invoice.invoiceId || payload.invoice.jobNum || payload.invoice.id
+          const key = `${jobKey}-${dist.id}`
+          salesDistMap.set(key, dist)
+        })
         const combinedSalesDistributions = Array.from(salesDistMap.values())
 
-        // Accumulate invoice extras (combine arrays, remove duplicates by ID)
+        // Accumulate invoice extras (combine arrays, remove duplicates)
+        // Use composite key (invoiceId-extraId) to handle cases where PACE reuses extra IDs across jobs
         const existingInvoiceExtras = existingPayload.invoiceExtras || []
         const newInvoiceExtras = payload.invoiceExtras || []
 
         const extrasMap = new Map()
-        existingInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
-        newInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
+        existingInvoiceExtras.forEach(extra => {
+          const jobKey = existingPayload.invoice.invoiceId || existingPayload.invoice.jobNum || existingPayload.invoice.id
+          const key = `${jobKey}-${extra.id}`
+          extrasMap.set(key, extra)
+        })
+        newInvoiceExtras.forEach(extra => {
+          const jobKey = payload.invoice.invoiceId || payload.invoice.jobNum || payload.invoice.id
+          const key = `${jobKey}-${extra.id}`
+          extrasMap.set(key, extra)
+        })
         const combinedInvoiceExtras = Array.from(extrasMap.values())
 
         // Calculate combined totals
@@ -301,19 +322,31 @@ export async function POST(request: NextRequest) {
           const locked = existingInvoice[0]
           const existingPayload = locked.payload as unknown as PACEInvoiceWebhookPayload
 
-          // Perform accumulation
+          // Perform accumulation using composite keys
           const existingSalesDist = existingPayload.salesDistributions || []
           const newSalesDist = payload.salesDistributions || []
           const salesDistMap = new Map()
-          existingSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
-          newSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
+          existingSalesDist.forEach(dist => {
+            const key = `${existingPayload.invoice.invoiceId || existingPayload.invoice.id}-${dist.id}`
+            salesDistMap.set(key, dist)
+          })
+          newSalesDist.forEach(dist => {
+            const key = `${payload.invoice.invoiceId || payload.invoice.id}-${dist.id}`
+            salesDistMap.set(key, dist)
+          })
           const combinedSalesDist = Array.from(salesDistMap.values())
 
           const existingExtras = existingPayload.invoiceExtras || []
           const newExtras = payload.invoiceExtras || []
           const extrasMap = new Map()
-          existingExtras.forEach(extra => extrasMap.set(extra.id, extra))
-          newExtras.forEach(extra => extrasMap.set(extra.id, extra))
+          existingExtras.forEach(extra => {
+            const key = `${existingPayload.invoice.invoiceId || existingPayload.invoice.id}-${extra.id}`
+            extrasMap.set(key, extra)
+          })
+          newExtras.forEach(extra => {
+            const key = `${payload.invoice.invoiceId || payload.invoice.id}-${extra.id}`
+            extrasMap.set(key, extra)
+          })
           const combinedExtras = Array.from(extrasMap.values())
 
           // Accumulate tax amounts

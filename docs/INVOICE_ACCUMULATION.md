@@ -184,20 +184,39 @@ The worker processes the **combined** invoice with all line items.
 
 ## Deduplication Logic
 
-Line items are deduplicated using a **Map** keyed by their `id`:
+Line items are deduplicated using a **Map** keyed by a **composite key**: `invoiceId-lineItemId`
 
 ```typescript
 // Accumulate sales distributions
 const salesDistMap = new Map()
-existingSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
-newSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
+existingSalesDistributions.forEach(dist => {
+  // Use composite key: invoiceId + line item ID
+  // This handles cases where PACE reuses line item IDs across different jobs
+  const key = `${invoice.invoiceId}-${dist.id}`
+  salesDistMap.set(key, dist)
+})
+newSalesDistributions.forEach(dist => {
+  const key = `${invoice.invoiceId}-${dist.id}`
+  salesDistMap.set(key, dist)
+})
 const combined = Array.from(salesDistMap.values())
 ```
 
+**Why composite keys?**
+
+PACE can reuse line item IDs across different jobs that share the same invoice number:
+
+- Job 1002560 (invoiceId: "job1"): `salesDistributions[0].id = 50001`, amount = $100
+- Job 113020 (invoiceId: "job2"): `salesDistributions[0].id = 50001`, amount = $200
+
+Without composite keys, only ONE would be kept (the last one).
+With composite keys (`job1-50001`, `job2-50001`), BOTH are kept correctly.
+
 This ensures:
-- ✅ Each line item appears only once (even if sent multiple times)
+- ✅ Each line item appears only once per job (even if sent multiple times)
+- ✅ Line items from different jobs are NOT deduplicated
 - ✅ Order is preserved
-- ✅ Latest version wins (if same ID sent twice)
+- ✅ Latest version wins for the same invoiceId+lineItemId combination
 
 ## Total Amount Calculation
 
