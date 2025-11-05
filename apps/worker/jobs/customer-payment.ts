@@ -1,8 +1,7 @@
 import { Worker, Job } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { db } from '@repo/database'
-// TODO: Uncomment when implementing PACE API integration
-// import { getPaceApiCredentials } from '@repo/shared'
+import { getPaceApiCredentials } from '@repo/shared'
 
 /**
  * Customer Payment Worker
@@ -262,57 +261,356 @@ function groupByPayment(rows: CustomerPaymentRow[]): Map<string, CustomerPayment
   return groups
 }
 
+/**
+ * Convert date string to ISO format (YYYY-MM-DD)
+ * Handles formats like MM/DD/YYYY or YYYY-MM-DD
+ */
+function convertToISODate(dateStr: string): string {
+  if (!dateStr) return ''
+
+  // If already in ISO format (YYYY-MM-DD), return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr
+  }
+
+  // Try to parse MM/DD/YYYY format
+  const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (mmddyyyyMatch) {
+    const [, month, day, year] = mmddyyyyMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  // Try to parse as Date and convert
+  const date = new Date(dateStr)
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  // Return as-is if we can't parse
+  console.warn(`[PACE] ⚠️  Could not parse date: ${dateStr}`)
+  return dateStr
+}
+
+/**
+ * Create a PaymentBatch object in PACE
+ */
+async function createPacePaymentBatch(
+  credentials: { url: string; username: string; password: string },
+  batchName: string
+): Promise<{ success: boolean; paymentBatchId?: string; error?: string }> {
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+
+    const payload: any = {
+      name: batchName,
+    }
+
+    console.log(`[PACE] 📦 Creating PaymentBatch: ${batchName}`)
+    console.log(`[PACE] 📦 PaymentBatch payload:`, JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${credentials.url}/CreateObject/createPaymentBatch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log(`[PACE] 📨 PaymentBatch response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[PACE] ❌ PaymentBatch creation error (${response.status}):`, errorText)
+      return {
+        success: false,
+        error: `PACE PaymentBatch error: ${response.status} - ${errorText}`,
+      }
+    }
+
+    const result = await response.json() as any
+    console.log(`[PACE] 📨 PaymentBatch response:`, JSON.stringify(result, null, 2))
+
+    const paymentBatchId = result.id || result.ID
+    console.log(`[PACE] ✅ Successfully created PaymentBatch - ID: ${paymentBatchId}`)
+
+    return {
+      success: true,
+      paymentBatchId: paymentBatchId?.toString(),
+    }
+  } catch (error) {
+    console.error('[PACE] ❌ Exception creating PaymentBatch:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating PaymentBatch',
+    }
+  }
+}
+
+/**
+ * Create a Payment object in PACE
+ */
+async function createPacePayment(
+  credentials: { url: string; username: string; password: string },
+  paymentData: {
+    paymentBatch: string
+    paymentDate: string
+    customer: string
+    amount: number
+    autoApply: string
+    depositType: string
+    payment: string // Company tree (static "[Entire Tree]")
+  }
+): Promise<{ success: boolean; paymentId?: string; error?: string }> {
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+
+    const payload: any = {
+      paymentBatch: paymentData.paymentBatch,
+      customer: paymentData.customer,
+      amount: paymentData.amount,
+      payment: paymentData.payment,
+    }
+
+    // Add date if provided (PACE expects ISO date format: YYYY-MM-DD)
+    if (paymentData.paymentDate) {
+      payload.paymentDate = convertToISODate(paymentData.paymentDate)
+    }
+
+    // Add autoApply (convert to boolean)
+    if (paymentData.autoApply) {
+      payload.autoApply = paymentData.autoApply === 'true' || paymentData.autoApply === '1'
+    }
+
+    // Add depositType
+    if (paymentData.depositType) {
+      payload.depositType = paymentData.depositType
+    }
+
+    console.log(`[PACE] 💳 Creating Payment: Customer ${paymentData.customer}, Amount $${paymentData.amount}`)
+    console.log(`[PACE] 📦 Payment payload:`, JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${credentials.url}/CreateObject/createPayment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log(`[PACE] 📨 Payment response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[PACE] ❌ Payment creation error (${response.status}):`, errorText)
+      return {
+        success: false,
+        error: `PACE Payment error: ${response.status} - ${errorText}`,
+      }
+    }
+
+    const result = await response.json() as any
+    console.log(`[PACE] 📨 Payment response:`, JSON.stringify(result, null, 2))
+
+    const paymentId = result.id || result.ID
+    console.log(`[PACE] ✅ Successfully created Payment - ID: ${paymentId}`)
+
+    return {
+      success: true,
+      paymentId: paymentId?.toString(),
+    }
+  } catch (error) {
+    console.error('[PACE] ❌ Exception creating Payment:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating Payment',
+    }
+  }
+}
+
+/**
+ * Create a PaymentLine object in PACE
+ */
+async function createPacePaymentLine(
+  credentials: { url: string; username: string; password: string },
+  paymentId: string,
+  lineData: {
+    amount: string
+    receivable: string // Invoice ID
+    glAccount: string
+  }
+): Promise<{ success: boolean; paymentLineId?: string; error?: string }> {
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+
+    const payload: any = {
+      payment: paymentId,
+      receivable: lineData.receivable,
+      glAccount: lineData.glAccount,
+    }
+
+    // Add amount if provided
+    if (lineData.amount) {
+      payload.amount = parseFloat(lineData.amount)
+    }
+
+    console.log(`[PACE] 📋 Creating PaymentLine for Payment ${paymentId}`)
+    console.log(`[PACE] 📦 PaymentLine payload:`, JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${credentials.url}/CreateObject/createPaymentLine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log(`[PACE] 📨 PaymentLine response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[PACE] ❌ PaymentLine creation error (${response.status}):`, errorText)
+      return {
+        success: false,
+        error: `PACE PaymentLine error: ${response.status} - ${errorText}`,
+      }
+    }
+
+    const result = await response.json() as any
+    const paymentLineId = result.id || result.ID
+    console.log(`[PACE] ✅ Successfully created PaymentLine - ID: ${paymentLineId}`)
+
+    return {
+      success: true,
+      paymentLineId: paymentLineId?.toString(),
+    }
+  } catch (error) {
+    console.error('[PACE] ❌ Exception creating PaymentLine:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating PaymentLine',
+    }
+  }
+}
 
 /**
  * Send customer payment data to PACE API
  *
- * NOTE: PACE API endpoints for customer payments need to be configured.
- * For now, this function stores the parsed data and marks as completed.
- * TODO: Implement PACE API integration once endpoints are available.
+ * Creates PaymentBatch, Payment, and PaymentLine objects in PACE
  */
-async function sendToPace(_customerPaymentIntegration: any, rows: CustomerPaymentRow[]) {
+async function sendToPace(customerPaymentIntegration: any, rows: CustomerPaymentRow[]) {
   try {
-    // TODO: Get PACE credentials when implementing API integration
-    // const credentials = await getPaceApiCredentials()
+    // Get PACE credentials
+    const credentials = await getPaceApiCredentials()
 
-    console.log(`[PACE] 🚀 Processing ${rows.length} customer payment rows...`)
+    console.log(`[PACE] 🚀 Sending ${rows.length} customer payment rows to PACE...`)
 
-    // Group rows by payment ID
+    // Step 1: Create PaymentBatch for this import batch
+    const batchName = `NetSuite Customer Payments - ${customerPaymentIntegration.processDate} - ${customerPaymentIntegration.filename}`
+    console.log(`[PACE] 📦 Creating PaymentBatch: ${batchName}`)
+
+    const paymentBatchResult = await createPacePaymentBatch(credentials, batchName)
+
+    if (!paymentBatchResult.success || !paymentBatchResult.paymentBatchId) {
+      const error = `Failed to create PaymentBatch: ${paymentBatchResult.error}`
+      console.error(`[PACE] ❌ ${error}`)
+      return {
+        success: false,
+        error,
+        response: null,
+      }
+    }
+
+    const paymentBatchId = paymentBatchResult.paymentBatchId
+    console.log(`[PACE] ✅ PaymentBatch created with ID: ${paymentBatchId}`)
+
+    // Step 2: Group rows by payment ID (each payment = 1 Payment with multiple PaymentLines)
     const paymentGroups = groupByPayment(rows)
     console.log(`[PACE] 📊 Grouped into ${paymentGroups.size} payments`)
 
-    // TODO: Implement PACE API calls for customer payments
-    // For now, we'll just log and return success to store the parsed data
-    console.log(`[PACE] ℹ️  Customer Payment PACE integration pending - data parsed and stored`)
-
     const results: Array<{
       paymentId: string
-      appliedInvoices: number
+      pacePaymentId?: string
+      paymentLineIds: string[]
       success: boolean
       error?: string
     }> = []
 
-    // Process each payment group
-    for (const [paymentId, paymentRows] of paymentGroups) {
+    // Step 3: Process each payment
+    for (const [netsuitePaymentId, paymentRows] of paymentGroups) {
       const firstRow = paymentRows[0]
 
       console.log(`\n[PACE] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-      console.log(`[PACE] 💳 Payment ID: ${paymentId}`)
-      console.log(`[PACE] 📅 Payment Date: ${firstRow.paymentDate}`)
+      console.log(`[PACE] 💳 Processing Payment: ${netsuitePaymentId}`)
       console.log(`[PACE] 👤 Customer: ${firstRow.customerExternalId}`)
-      console.log(`[PACE] 📋 Applied to ${paymentRows.length} invoice(s)`)
+      console.log(`[PACE] 📋 Payment Lines: ${paymentRows.length}`)
 
-      // Log each applied invoice
-      paymentRows.forEach((row, idx) => {
-        console.log(`[PACE]    ${idx + 1}. Invoice ${row.invoiceNumber} (ID: ${row.invoiceId}): $${row.paymentApplied}`)
+      // Calculate total payment amount (sum of all applied amounts)
+      const totalAmount = paymentRows.reduce((sum, row) => sum + parseFloat(row.paymentApplied || '0'), 0)
+
+      // Create Payment object with the PaymentBatch ID
+      const paymentResult = await createPacePayment(credentials, {
+        paymentBatch: paymentBatchId, // Use the PaymentBatch ID we created
+        paymentDate: firstRow.paymentDate,
+        customer: firstRow.customerExternalId,
+        amount: totalAmount,
+        autoApply: firstRow.autoApply,
+        depositType: firstRow.depositType,
+        payment: '[Entire Tree]', // Company tree reference
       })
 
-      // TODO: Call PACE API to create payment records
-      // For now, mark as successful
+      if (!paymentResult.success || !paymentResult.paymentId) {
+        console.error(`[PACE] ❌ Failed to create Payment for ${netsuitePaymentId}: ${paymentResult.error}`)
+        results.push({
+          paymentId: netsuitePaymentId,
+          paymentLineIds: [],
+          success: false,
+          error: paymentResult.error,
+        })
+        continue
+      }
+
+      const pacePaymentId = paymentResult.paymentId
+      console.log(`[PACE] ✅ Payment created with ID: ${pacePaymentId}`)
+
+      // Create PaymentLine objects for each invoice application
+      const paymentLineIds: string[] = []
+      let lineNumber = 0
+      let lineErrors: string[] = []
+
+      for (const row of paymentRows) {
+        lineNumber++
+        console.log(`[PACE] 📋 Creating PaymentLine ${lineNumber}/${paymentRows.length}...`)
+        console.log(`[PACE]    Invoice: ${row.invoiceNumber}, Amount: $${row.paymentApplied}`)
+
+        const lineResult = await createPacePaymentLine(credentials, pacePaymentId, {
+          amount: row.paymentApplied,
+          receivable: row.invoiceId, // Invoice ID from custbody1
+          glAccount: row.glAccount,
+        })
+
+        if (lineResult.success && lineResult.paymentLineId) {
+          paymentLineIds.push(lineResult.paymentLineId)
+          console.log(`[PACE]    ✅ PaymentLine ${lineNumber} created: ${lineResult.paymentLineId}`)
+        } else {
+          console.error(`[PACE]    ❌ PaymentLine ${lineNumber} failed: ${lineResult.error}`)
+          lineErrors.push(`Line ${lineNumber}: ${lineResult.error}`)
+        }
+      }
+
+      console.log(`[PACE] ✅ Created ${paymentLineIds.length}/${paymentRows.length} PaymentLines for payment ${netsuitePaymentId}`)
+
       results.push({
-        paymentId,
-        appliedInvoices: paymentRows.length,
-        success: true,
+        paymentId: netsuitePaymentId,
+        pacePaymentId,
+        paymentLineIds,
+        success: lineErrors.length === 0,
+        error: lineErrors.length > 0 ? lineErrors.join('; ') : undefined,
       })
     }
 
@@ -320,21 +618,28 @@ async function sendToPace(_customerPaymentIntegration: any, rows: CustomerPaymen
     console.log(`[PACE] ✅ Processing complete!`)
     console.log(`[PACE] 📊 Summary:`)
     console.log(`[PACE]    - Total Payments: ${results.length}`)
-    console.log(`[PACE]    - Total Applied Invoices: ${rows.length}`)
-    console.log(`[PACE]    - Status: Data parsed and stored (PACE integration pending)`)
+    console.log(`[PACE]    - Successful: ${results.filter(r => r.success).length}`)
+    console.log(`[PACE]    - Failed: ${results.filter(r => !r.success).length}`)
+
+    // Check if all payments were processed successfully
+    const allSuccess = results.every(r => r.success)
 
     return {
-      success: true,
+      success: allSuccess,
       response: {
-        message: 'Customer payment data parsed and stored successfully. PACE integration pending.',
+        message: allSuccess
+          ? 'All customer payments sent to PACE successfully'
+          : 'Some customer payments failed to process',
+        paymentBatchId,
         totalPayments: results.length,
-        totalAppliedInvoices: rows.length,
+        successfulPayments: results.filter(r => r.success).length,
+        failedPayments: results.filter(r => !r.success).length,
         details: results,
-        note: 'PACE API integration for customer payments to be implemented',
       },
+      error: allSuccess ? undefined : results.filter(r => !r.success).map(r => r.error).join('; '),
     }
   } catch (error) {
-    console.error('[PACE] ❌ Error processing customer payments:', error)
+    console.error('[PACE] ❌ Error sending customer payments to PACE:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
