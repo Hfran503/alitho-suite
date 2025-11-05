@@ -32,8 +32,18 @@ await db.$transaction(async (tx) => {
 
   // Now safe to read, modify, and write
   // Other concurrent requests are blocked until we commit
-}, { isolationLevel: 'Serializable' })
+}, {
+  // Use default isolation (ReadCommitted) - FOR UPDATE provides the locking
+  // Don't use Serializable - it causes serialization failures with concurrent requests
+  maxWait: 5000,
+  timeout: 10000
+})
 ```
+
+**Note**: We use the default `ReadCommitted` isolation level (not `Serializable`) because:
+- `SELECT ... FOR UPDATE` already provides row-level locking
+- `Serializable` is too strict and causes `40001` errors (serialization failures)
+- With `FOR UPDATE`, concurrent requests queue up and process sequentially
 
 This ensures **all 5 parts are accumulated correctly** even when arriving simultaneously.
 

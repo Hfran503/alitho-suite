@@ -223,7 +223,8 @@ export async function POST(request: NextRequest) {
       // No existing invoice found, return null to signal creation needed
       return { type: 'create' as const }
     }, {
-      isolationLevel: 'Serializable', // Highest isolation level to prevent any concurrent conflicts
+      // Use default isolation level (ReadCommitted) - FOR UPDATE provides the locking we need
+      // Serializable is too strict and causes serialization failures with concurrent requests
       maxWait: 5000, // Wait up to 5 seconds for lock
       timeout: 10000, // Transaction timeout
     })
@@ -354,7 +355,7 @@ export async function POST(request: NextRequest) {
             },
           })
         }, {
-          isolationLevel: 'Serializable',
+          // Use default isolation level (ReadCommitted) - FOR UPDATE provides the locking we need
           maxWait: 5000,
           timeout: 10000,
         })
