@@ -14,6 +14,7 @@ import { netsuiteInvoiceWorker } from './jobs/netsuite-invoice'
 import { netsuitePOLineWorker } from './jobs/netsuite-po-line'
 import { netsuitePOReceiptWorker } from './jobs/netsuite-po-receipt'
 import { vendorBillWorker } from './jobs/vendor-bill'
+import { customerPaymentWorker } from './jobs/customer-payment'
 
 // Debug: Log REDIS_URL to verify it's set
 console.log('🔍 Environment check:')
@@ -37,6 +38,7 @@ const workers = [
   netsuitePOLineWorker(connection),
   netsuitePOReceiptWorker(connection),
   vendorBillWorker(connection),
+  customerPaymentWorker(connection),
 ]
 
 console.log('🚀 Worker started successfully')
