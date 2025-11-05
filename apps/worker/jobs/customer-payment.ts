@@ -1,7 +1,8 @@
 import { Worker, Job } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { db } from '@repo/database'
-import { getPaceApiCredentials } from '@repo/shared'
+// TODO: Uncomment when implementing PACE API integration
+// import { getPaceApiCredentials } from '@repo/shared'
 
 /**
  * Customer Payment Worker
