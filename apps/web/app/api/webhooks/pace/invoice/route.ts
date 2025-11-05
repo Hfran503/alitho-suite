@@ -119,100 +119,114 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if invoice already exists
-    // Note: We do this check first, but there's still a race condition
-    // If both webhooks arrive simultaneously, both might pass this check
-    // The upsert operation below handles this safely
-    const existingInvoice = await db.invoiceIntegration.findUnique({
-      where: {
-        invoiceNumber: invoiceNumber,
-      },
-    })
+    // Use a transaction with row-level locking to prevent race conditions
+    // when multiple webhooks arrive simultaneously for the same invoice
+    const result = await db.$transaction(async (tx) => {
+      // Lock the row with SELECT ... FOR UPDATE to prevent concurrent modifications
+      const existingInvoice = await tx.$queryRaw<Array<{ id: string, invoiceNumber: string, payload: any }>>`
+        SELECT id, "invoiceNumber", payload
+        FROM "InvoiceIntegration"
+        WHERE "invoiceNumber" = ${invoiceNumber}
+        FOR UPDATE
+      `
 
-    if (existingInvoice) {
-      console.log(`📋 Invoice ${invoiceNumber} already exists, accumulating line items...`)
+      if (existingInvoice.length > 0) {
+        const locked = existingInvoice[0]
+        console.log(`📋 Invoice ${invoiceNumber} already exists (locked), accumulating line items...`)
 
-      // Parse existing payload
-      const existingPayload = existingInvoice.payload as unknown as PACEInvoiceWebhookPayload
+        // Parse existing payload
+        const existingPayload = locked.payload as unknown as PACEInvoiceWebhookPayload
 
-      // Accumulate sales distributions (combine arrays, remove duplicates by ID)
-      const existingSalesDistributions = existingPayload.salesDistributions || []
-      const newSalesDistributions = payload.salesDistributions || []
+        // Accumulate sales distributions (combine arrays, remove duplicates by ID)
+        const existingSalesDistributions = existingPayload.salesDistributions || []
+        const newSalesDistributions = payload.salesDistributions || []
 
-      // Create a map to track unique sales distributions by ID
-      const salesDistMap = new Map()
-      existingSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
-      newSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
-      const combinedSalesDistributions = Array.from(salesDistMap.values())
+        // Create a map to track unique sales distributions by ID
+        const salesDistMap = new Map()
+        existingSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
+        newSalesDistributions.forEach(dist => salesDistMap.set(dist.id, dist))
+        const combinedSalesDistributions = Array.from(salesDistMap.values())
 
-      // Accumulate invoice extras (combine arrays, remove duplicates by ID)
-      const existingInvoiceExtras = existingPayload.invoiceExtras || []
-      const newInvoiceExtras = payload.invoiceExtras || []
+        // Accumulate invoice extras (combine arrays, remove duplicates by ID)
+        const existingInvoiceExtras = existingPayload.invoiceExtras || []
+        const newInvoiceExtras = payload.invoiceExtras || []
 
-      const extrasMap = new Map()
-      existingInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
-      newInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
-      const combinedInvoiceExtras = Array.from(extrasMap.values())
+        const extrasMap = new Map()
+        existingInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
+        newInvoiceExtras.forEach(extra => extrasMap.set(extra.id, extra))
+        const combinedInvoiceExtras = Array.from(extrasMap.values())
 
-      // Calculate combined totals
-      const combinedInvoiceAmount = combinedSalesDistributions.reduce((sum, dist) => sum + dist.amount, 0)
-      const combinedExtrasAmount = combinedInvoiceExtras.reduce((sum, extra) => sum + extra.price, 0)
-      const totalAmount = combinedInvoiceAmount + combinedExtrasAmount
+        // Calculate combined totals
+        const combinedInvoiceAmount = combinedSalesDistributions.reduce((sum, dist) => sum + dist.amount, 0)
+        const combinedExtrasAmount = combinedInvoiceExtras.reduce((sum, extra) => sum + extra.price, 0)
+        const totalAmount = combinedInvoiceAmount + combinedExtrasAmount
 
-      // Create combined payload
-      const combinedPayload: PACEInvoiceWebhookPayload = {
-        invoice: {
-          ...payload.invoice,
-          invoiceAmount: totalAmount,
-          // Keep the latest tax amount (or accumulate if needed)
-          taxAmount: payload.invoice.taxAmount,
-        },
-        salesDistributions: combinedSalesDistributions,
-        invoiceExtras: combinedInvoiceExtras,
-        metadata: {
-          ...payload.metadata,
-          totalSalesDistLines: combinedSalesDistributions.length,
-          totalInvoiceExtras: combinedInvoiceExtras.length,
-          exportedAt: new Date().toISOString(),
-          paceInvoiceIds: [
-            ...(existingPayload.metadata?.paceInvoiceIds || [existingPayload.invoice.id]),
-            payload.invoice.id
-          ].filter((id, index, self) => self.indexOf(id) === index), // Remove duplicates
-        },
+        // Create combined payload
+        const combinedPayload: PACEInvoiceWebhookPayload = {
+          invoice: {
+            ...payload.invoice,
+            invoiceAmount: totalAmount,
+            // Keep the latest tax amount (or accumulate if needed)
+            taxAmount: payload.invoice.taxAmount,
+          },
+          salesDistributions: combinedSalesDistributions,
+          invoiceExtras: combinedInvoiceExtras,
+          metadata: {
+            ...payload.metadata,
+            totalSalesDistLines: combinedSalesDistributions.length,
+            totalInvoiceExtras: combinedInvoiceExtras.length,
+            exportedAt: new Date().toISOString(),
+            paceInvoiceIds: [
+              ...(existingPayload.metadata?.paceInvoiceIds || [existingPayload.invoice.id]),
+              payload.invoice.id
+            ].filter((id, index, self) => self.indexOf(id) === index), // Remove duplicates
+          },
+        }
+
+        // Update existing invoice with combined data
+        const updated = await tx.invoiceIntegration.update({
+          where: {
+            id: locked.id,
+          },
+          data: {
+            payload: combinedPayload as any,
+            status: 'pending', // Reset status to pending
+            retryCount: 0, // Reset retry count
+            updatedAt: new Date(),
+          },
+        })
+
+        console.log('✅ Accumulated invoice data:', {
+          id: updated.id,
+          invoiceNumber: updated.invoiceNumber,
+          previousSalesDistLines: existingSalesDistributions.length,
+          newSalesDistLines: newSalesDistributions.length,
+          combinedSalesDistLines: combinedSalesDistributions.length,
+          previousExtras: existingInvoiceExtras.length,
+          newExtras: newInvoiceExtras.length,
+          combinedExtras: combinedInvoiceExtras.length,
+          totalAmount: totalAmount.toFixed(2),
+          status: updated.status,
+        })
+
+        return { type: 'accumulated' as const, invoice: updated, combinedSalesDistributions, combinedInvoiceExtras, totalAmount }
       }
 
-      // Update existing invoice with combined data
-      const updated = await db.invoiceIntegration.update({
-        where: {
-          invoiceNumber: invoiceNumber,
-        },
-        data: {
-          payload: combinedPayload as any,
-          status: 'pending', // Reset status to pending
-          retryCount: 0, // Reset retry count
-          updatedAt: new Date(),
-        },
-      })
+      // No existing invoice found, return null to signal creation needed
+      return { type: 'create' as const }
+    }, {
+      isolationLevel: 'Serializable', // Highest isolation level to prevent any concurrent conflicts
+      maxWait: 5000, // Wait up to 5 seconds for lock
+      timeout: 10000, // Transaction timeout
+    })
 
-      console.log('✅ Accumulated invoice data:', {
-        id: updated.id,
-        invoiceNumber: updated.invoiceNumber,
-        previousSalesDistLines: existingSalesDistributions.length,
-        newSalesDistLines: newSalesDistributions.length,
-        combinedSalesDistLines: combinedSalesDistributions.length,
-        previousExtras: existingInvoiceExtras.length,
-        newExtras: newInvoiceExtras.length,
-        combinedExtras: combinedInvoiceExtras.length,
-        totalAmount: totalAmount.toFixed(2),
-        status: updated.status,
-      })
-
+    if (result.type === 'accumulated') {
       // Queue the invoice for automatic processing with a delay
       // This allows multiple parts to accumulate before sending to NetSuite
       // If already queued, the jobId will be replaced with the new delayed job
       const ACCUMULATION_DELAY_MS = 10000 // 10 seconds delay to allow parts to accumulate
       try {
-        await queueNetsuiteInvoice(updated.id, updated.invoiceNumber, ACCUMULATION_DELAY_MS)
+        await queueNetsuiteInvoice(result.invoice.id, result.invoice.invoiceNumber, ACCUMULATION_DELAY_MS)
         console.log(`🔄 Queued accumulated invoice ${invoiceNumber} for NetSuite processing (${ACCUMULATION_DELAY_MS}ms delay)`)
       } catch (queueError) {
         console.error('Failed to queue invoice:', queueError)
@@ -222,17 +236,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         status: 'success',
         message: `Invoice ${invoiceNumber} accumulated and queued for NetSuite`,
-        invoiceNumber: updated.invoiceNumber,
-        salesDistLines: combinedSalesDistributions.length,
-        invoiceExtras: combinedInvoiceExtras.length,
-        totalAmount: totalAmount.toFixed(2),
+        invoiceNumber: result.invoice.invoiceNumber,
+        salesDistLines: result.combinedSalesDistributions.length,
+        invoiceExtras: result.combinedInvoiceExtras.length,
+        totalAmount: result.totalAmount.toFixed(2),
         accumulated: true,
         queued: true,
       })
     }
 
     // Create new invoice integration record
-    // Handle race condition: if another request created it simultaneously, accumulate instead
+    // This code is only reached if the transaction above determined no existing invoice exists
     let invoiceIntegration
     try {
       invoiceIntegration = await db.invoiceIntegration.create({
@@ -257,74 +271,86 @@ export async function POST(request: NextRequest) {
         status: invoiceIntegration.status,
       })
     } catch (createError: any) {
-      // Race condition: another request created it first
-      // Fetch it and accumulate the data
+      // Race condition: another request created it between the transaction check and now
+      // Use the same transaction-based accumulation logic
       if (createError.code === 'P2002') {
-        console.log(`⚠️  Race condition detected for invoice ${invoiceNumber}, accumulating...`)
+        console.log(`⚠️  Race condition detected for invoice ${invoiceNumber}, re-trying with transaction...`)
 
-        // Fetch the existing record
-        const existing = await db.invoiceIntegration.findUnique({
-          where: { invoiceNumber },
+        const retryResult = await db.$transaction(async (tx) => {
+          // Lock the row that was just created by another request
+          const existingInvoice = await tx.$queryRaw<Array<{ id: string, invoiceNumber: string, payload: any }>>`
+            SELECT id, "invoiceNumber", payload
+            FROM "InvoiceIntegration"
+            WHERE "invoiceNumber" = ${invoiceNumber}
+            FOR UPDATE
+          `
+
+          if (existingInvoice.length === 0) {
+            throw new Error('Invoice disappeared after race condition')
+          }
+
+          const locked = existingInvoice[0]
+          const existingPayload = locked.payload as unknown as PACEInvoiceWebhookPayload
+
+          // Perform accumulation
+          const existingSalesDist = existingPayload.salesDistributions || []
+          const newSalesDist = payload.salesDistributions || []
+          const salesDistMap = new Map()
+          existingSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
+          newSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
+          const combinedSalesDist = Array.from(salesDistMap.values())
+
+          const existingExtras = existingPayload.invoiceExtras || []
+          const newExtras = payload.invoiceExtras || []
+          const extrasMap = new Map()
+          existingExtras.forEach(extra => extrasMap.set(extra.id, extra))
+          newExtras.forEach(extra => extrasMap.set(extra.id, extra))
+          const combinedExtras = Array.from(extrasMap.values())
+
+          const combinedAmount = combinedSalesDist.reduce((sum, dist) => sum + dist.amount, 0) +
+                                 combinedExtras.reduce((sum, extra) => sum + extra.price, 0)
+
+          const combinedPayload: PACEInvoiceWebhookPayload = {
+            invoice: {
+              ...payload.invoice,
+              invoiceAmount: combinedAmount,
+              taxAmount: payload.invoice.taxAmount,
+            },
+            salesDistributions: combinedSalesDist,
+            invoiceExtras: combinedExtras,
+            metadata: {
+              ...payload.metadata,
+              totalSalesDistLines: combinedSalesDist.length,
+              totalInvoiceExtras: combinedExtras.length,
+              exportedAt: new Date().toISOString(),
+              paceInvoiceIds: [
+                ...(existingPayload.metadata?.paceInvoiceIds || [existingPayload.invoice.id]),
+                payload.invoice.id
+              ].filter((id, index, self) => self.indexOf(id) === index),
+            },
+          }
+
+          return await tx.invoiceIntegration.update({
+            where: { id: locked.id },
+            data: {
+              payload: combinedPayload as any,
+              status: 'pending',
+              retryCount: 0,
+              updatedAt: new Date(),
+            },
+          })
+        }, {
+          isolationLevel: 'Serializable',
+          maxWait: 5000,
+          timeout: 10000,
         })
 
-        if (!existing) {
-          throw new Error('Invoice disappeared after race condition')
-        }
-
-        // Perform accumulation (same logic as above)
-        const existingPayload = existing.payload as unknown as PACEInvoiceWebhookPayload
-        const existingSalesDist = existingPayload.salesDistributions || []
-        const newSalesDist = payload.salesDistributions || []
-        const salesDistMap = new Map()
-        existingSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
-        newSalesDist.forEach(dist => salesDistMap.set(dist.id, dist))
-        const combinedSalesDist = Array.from(salesDistMap.values())
-
-        const existingExtras = existingPayload.invoiceExtras || []
-        const newExtras = payload.invoiceExtras || []
-        const extrasMap = new Map()
-        existingExtras.forEach(extra => extrasMap.set(extra.id, extra))
-        newExtras.forEach(extra => extrasMap.set(extra.id, extra))
-        const combinedExtras = Array.from(extrasMap.values())
-
-        const combinedAmount = combinedSalesDist.reduce((sum, dist) => sum + dist.amount, 0) +
-                               combinedExtras.reduce((sum, extra) => sum + extra.price, 0)
-
-        const combinedPayload: PACEInvoiceWebhookPayload = {
-          invoice: {
-            ...payload.invoice,
-            invoiceAmount: combinedAmount,
-            taxAmount: payload.invoice.taxAmount,
-          },
-          salesDistributions: combinedSalesDist,
-          invoiceExtras: combinedExtras,
-          metadata: {
-            ...payload.metadata,
-            totalSalesDistLines: combinedSalesDist.length,
-            totalInvoiceExtras: combinedExtras.length,
-            exportedAt: new Date().toISOString(),
-            paceInvoiceIds: [
-              ...(existingPayload.metadata?.paceInvoiceIds || [existingPayload.invoice.id]),
-              payload.invoice.id
-            ].filter((id, index, self) => self.indexOf(id) === index),
-          },
-        }
-
-        invoiceIntegration = await db.invoiceIntegration.update({
-          where: { invoiceNumber },
-          data: {
-            payload: combinedPayload as any,
-            status: 'pending',
-            retryCount: 0,
-            updatedAt: new Date(),
-          },
-        })
+        invoiceIntegration = retryResult
 
         console.log('✅ Accumulated after race condition:', {
-          invoiceNumber,
-          totalSalesDist: combinedSalesDist.length,
-          totalExtras: combinedExtras.length,
-          totalAmount: combinedAmount.toFixed(2),
+          invoiceNumber: retryResult.invoiceNumber,
+          totalSalesDist: (retryResult.payload as any).salesDistributions?.length || 0,
+          totalExtras: (retryResult.payload as any).invoiceExtras?.length || 0,
         })
       } else {
         // Different error, re-throw

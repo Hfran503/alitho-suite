@@ -4,6 +4,39 @@
 
 PACE can send **multiple webhook calls** for the same invoice number with different internal IDs. This happens when an invoice has multiple parts or components.
 
+## Race Condition Fix (CRITICAL)
+
+**Issue**: When multiple webhook requests arrive within milliseconds (e.g., 5 requests arriving within 220ms), concurrent read-modify-write operations cause data loss.
+
+**Example**: Invoice 56946 was sent as 5 separate webhooks:
+- Expected: 5 sales distributions + 8 invoice extras = $2,340.12
+- Actual: Only 3 sales distributions + 6 invoice extras = $549.14
+- **Lost data**: 2 jobs worth $1,791 were overwritten
+
+**Root Cause**: Read-modify-write without proper locking
+```
+Request 1: Read [] → Add [A] → Write [A]
+Request 2: Read [A] → Add [B] → Write [A, B]
+Request 3: Read [A] (before #2 saves!) → Add [C] → Write [A, C]  ← OVERWRITES B!
+```
+
+**Solution**: Database-level row locking with `SELECT ... FOR UPDATE`
+```typescript
+await db.$transaction(async (tx) => {
+  // Lock the row - other requests will wait
+  const existing = await tx.$queryRaw`
+    SELECT * FROM "InvoiceIntegration"
+    WHERE "invoiceNumber" = ${invoiceNumber}
+    FOR UPDATE
+  `
+
+  // Now safe to read, modify, and write
+  // Other concurrent requests are blocked until we commit
+}, { isolationLevel: 'Serializable' })
+```
+
+This ensures **all 5 parts are accumulated correctly** even when arriving simultaneously.
+
 ## Processing Delay
 
 To ensure all parts are accumulated before sending to NetSuite, the system uses a **10-second delay**:
