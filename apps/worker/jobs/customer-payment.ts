@@ -271,8 +271,8 @@ function groupByPayment(rows: CustomerPaymentRow[]): Map<string, CustomerPayment
  */
 async function sendToPace(_customerPaymentIntegration: any, rows: CustomerPaymentRow[]) {
   try {
-    // Get PACE credentials (for future use)
-    const _credentials = await getPaceApiCredentials()
+    // TODO: Get PACE credentials when implementing API integration
+    // const credentials = await getPaceApiCredentials()
 
     console.log(`[PACE] 🚀 Processing ${rows.length} customer payment rows...`)
 
