@@ -15,6 +15,7 @@ import { queueNetsuitePOReceipt } from '@/lib/queue/netsuite-po-receipt-queue'
  */
 
 interface PACEPOReceiptWebhookPayload {
+  receiptId: number
   poNumber: string
   lineId: number
   qtyReceived: number
@@ -195,6 +196,7 @@ export async function GET() {
     instructions: 'This endpoint receives POST requests from PACE with PO Receipt data.',
     webhook_url: '/api/webhooks/pace/po-receipt',
     expected_payload: {
+      receiptId: 'number (required)',
       poNumber: 'string (required)',
       lineId: 'number (required)',
       qtyReceived: 'number (required)',
