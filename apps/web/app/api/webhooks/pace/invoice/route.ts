@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@repo/database'
+import { Prisma } from '@prisma/client'
 import { queueNetsuiteInvoice } from '@/lib/queue/netsuite-invoice-queue'
 
 /**
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     // Use a transaction with row-level locking to prevent race conditions
     // when multiple webhooks arrive simultaneously for the same invoice
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Lock the row with SELECT ... FOR UPDATE to prevent concurrent modifications
       const existingInvoice = await tx.$queryRaw<Array<{ id: string, invoiceNumber: string, payload: any }>>`
         SELECT id, "invoiceNumber", payload
