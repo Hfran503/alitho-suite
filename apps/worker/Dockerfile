@@ -70,9 +70,23 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
+# Copy templates and fonts for PDF generation
+COPY --from=builder /app/apps/web/public/templates ./apps/web/public/templates
+COPY --from=builder /app/apps/web/public/fonts ./apps/web/public/fonts
+
 # Install Playwright browsers
 RUN npx playwright install chromium --with-deps
 
+# Create user matching web container (nextjs user with UID 1001)
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Create atlassian-pdfs directory and set ownership
+RUN mkdir -p /app/apps/web/public/atlassian-pdfs && \
+    chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs
+
 WORKDIR /app/apps/worker
+
+USER nextjs
 
 CMD ["node", "dist/index.js"]
