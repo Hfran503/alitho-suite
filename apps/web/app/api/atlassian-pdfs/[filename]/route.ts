@@ -42,7 +42,8 @@ export async function GET(
     const buffer = await readFile(pdfPath)
 
     // Return PDF with proper headers
-    return new NextResponse(buffer, {
+    // Convert Buffer to Uint8Array for Next.js compatibility
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
