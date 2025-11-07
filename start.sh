@@ -28,6 +28,16 @@ else
   echo "DATABASE_URL is set (${DATABASE_URL:0:30}...)"
 fi
 
+# Generate Prisma client (ensures it's available for migrations, seeding, and runtime)
+echo "Generating Prisma client..."
+pnpm db:generate
+if [ $? -eq 0 ]; then
+  echo "✓ Prisma client generated successfully"
+else
+  echo "✗ Failed to generate Prisma client"
+  exit 1
+fi
+
 # Run database migrations with explicit environment variable
 echo "Running database migrations..."
 

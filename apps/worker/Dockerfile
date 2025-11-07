@@ -35,9 +35,14 @@ COPY . .
 RUN pnpm --filter @repo/database build
 RUN pnpm --filter @repo/shared build
 RUN pnpm --filter @repo/types build || true
+RUN pnpm --filter @repo/ui build || true
 
 # Build worker
 RUN pnpm --filter worker build
+
+# Build web (needed for combined deployments using start.sh)
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm --filter web build
 
 # Stage 3: Runner
 FROM node:20-bookworm AS runner
@@ -69,15 +74,33 @@ RUN apt-get update && \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application
+# Copy worker application
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/apps/worker/package.json ./apps/worker/
+
+# Copy web application (for combined deployments)
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Copy dependencies
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy workspace packages (needed for runtime)
 COPY --from=builder /app/packages ./packages
+
+# Copy Prisma schema and pnpm workspace files (needed for prisma generate)
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+
+# Copy scripts directory (for load-secrets.sh used by start.sh)
+COPY --from=builder /app/scripts ./scripts
+
+# Copy start.sh (for combined web+worker deployments)
+COPY --from=builder /app/start.sh ./
 
 # Copy templates and fonts for PDF generation
 COPY --from=builder /app/apps/web/public/templates ./apps/web/public/templates
@@ -89,14 +112,19 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Create atlassian-pdfs directory and set ownership
 RUN mkdir -p /app/apps/web/public/atlassian-pdfs && \
-    chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs
+    chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs && \
+    chmod +x /app/start.sh
 
 # Install Playwright browsers (must be after creating user but before switching to it)
 # Find playwright in .pnpm directory and run install
 RUN bash -c 'node node_modules/.pnpm/playwright@*/node_modules/playwright/cli.js install chromium --with-deps'
 
-WORKDIR /app/apps/worker
-
 USER nextjs
 
-CMD ["node", "dist/index.js"]
+WORKDIR /app
+
+# Expose port for web server
+EXPOSE 3000
+
+# Use start.sh for combined web+worker deployment
+CMD ["./start.sh"]

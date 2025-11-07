@@ -1,14 +1,17 @@
 version: '3.8'
 
-# Dokploy Docker Compose Configuration - Worker Only
+# Dokploy Docker Compose Configuration - Combined Web + Worker Deployment
 # This uses AWS Secrets Manager for all sensitive credentials
 # Only requires AWS credentials as environment variables
+# Runs both Next.js web server (port 3000) and background workers
 
 services:
   worker:
     build:
       context: .
       dockerfile: ./apps/worker/Dockerfile
+    ports:
+      - "3000:3000"
     environment:
       # Node Environment
       NODE_ENV: production
