@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
       if (createError.code === 'P2002') {
         console.log(`⚠️  Race condition detected for invoice ${invoiceNumber}, re-trying with transaction...`)
 
-        const retryResult = await db.$transaction(async (tx) => {
+        const retryResult = await db.$transaction(async (tx: Prisma.TransactionClient) => {
           // Lock the row that was just created by another request
           const existingInvoice = await tx.$queryRaw<Array<{ id: string, invoiceNumber: string, payload: any }>>`
             SELECT id, "invoiceNumber", payload
