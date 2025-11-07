@@ -11,10 +11,11 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const { filename } = params
+    // In Next.js 15, params is async
+    const { filename } = await params
 
     // Validate filename (prevent directory traversal)
     if (!filename || filename.includes('..') || filename.includes('/')) {
