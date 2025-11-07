@@ -27,13 +27,10 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/package.json ./package.json
-COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+# Copy all dependencies from deps stage (includes workspace packages)
+COPY --from=deps /app ./
 
-# Copy source files
+# Copy source code (will override package.json files with full source)
 COPY . .
 
 # Generate Prisma Client
