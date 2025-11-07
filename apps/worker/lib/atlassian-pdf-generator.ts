@@ -66,8 +66,8 @@ export async function generateAtlassianWelcomePDF(
       throw new Error('PDF template has no pages');
     }
 
-    // Format text: Add "!" after the print name
-    const text = `${printName} !`;
+    // Format text: Add "!" after the print name (no space)
+    const text = `${printName}!`;
 
     // Calculate font size (auto-scale for longer names)
     const baseSize = 45;
