@@ -26,7 +26,7 @@ async function main() {
   console.log(`Found ${allUsers.length} total users`)
 
   // Find users that need normalization
-  const usersToUpdate = allUsers.filter(user => {
+  const usersToUpdate = allUsers.filter((user: { id: string; email: string; name: string | null }) => {
     const normalized = user.email.toLowerCase().trim()
     return user.email !== normalized
   })
@@ -42,7 +42,7 @@ async function main() {
   const emailMap = new Map<string, typeof allUsers>()
   const duplicates: Array<{ email: string; users: typeof allUsers }> = []
 
-  allUsers.forEach(user => {
+  allUsers.forEach((user: { id: string; email: string; name: string | null }) => {
     const normalized = user.email.toLowerCase().trim()
     if (!emailMap.has(normalized)) {
       emailMap.set(normalized, [])
@@ -61,7 +61,7 @@ async function main() {
     console.error('⚠️  WARNING: Found potential duplicate emails after normalization:\n')
     duplicates.forEach(({ email, users }) => {
       console.error(`   "${email}" would match:`)
-      users.forEach(user => {
+      users.forEach((user: { id: string; email: string; name: string | null }) => {
         console.error(`     - ${user.email} (${user.name}, ID: ${user.id})`)
       })
       console.error()
@@ -76,7 +76,7 @@ async function main() {
 
   // Show users that will be updated
   console.log('The following emails will be normalized:\n')
-  usersToUpdate.forEach(user => {
+  usersToUpdate.forEach((user: { id: string; email: string; name: string | null }) => {
     const normalized = user.email.toLowerCase().trim()
     console.log(`   ${user.email} → ${normalized}`)
     console.log(`   (${user.name}, ID: ${user.id})\n`)
