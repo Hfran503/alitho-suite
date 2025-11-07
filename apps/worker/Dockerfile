@@ -31,10 +31,8 @@ COPY --from=deps /app ./
 # Copy source code (will override package.json files with full source)
 COPY . .
 
-# Generate Prisma Client
-RUN pnpm --filter @repo/database db:generate
-
-# Build workspace packages (shared, types) before building worker
+# Build workspace packages in dependency order
+RUN pnpm --filter @repo/database build
 RUN pnpm --filter @repo/shared build
 RUN pnpm --filter @repo/types build || true
 
