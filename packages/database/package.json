@@ -9,7 +9,7 @@
     "db:migrate": "cd ../.. && prisma migrate deploy --schema=./prisma/schema.prisma",
     "db:migrate:dev": "cd ../.. && prisma migrate dev --schema=./prisma/schema.prisma",
     "db:studio": "cd ../.. && prisma studio --schema=./prisma/schema.prisma",
-    "db:seed": "cd ../.. && tsx packages/database/src/seed.ts"
+    "db:seed": "cd ../.. && NODE_NO_WARNINGS=1 tsx --tsconfig ../../tsconfig.json packages/database/src/seed.ts"
   },
   "prisma": {
     "schema": "../../prisma/schema.prisma"

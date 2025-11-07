@@ -30,15 +30,32 @@ fi
 
 # Generate Prisma client (ensures it's available for migrations, seeding, and runtime)
 echo "Generating Prisma client..."
-pnpm db:generate
+
+# Clear any existing generated clients to avoid stale versions
+echo "Removing any existing Prisma client..."
+rm -rf /app/node_modules/.prisma/client 2>/dev/null || true
+rm -rf /app/node_modules/@prisma/client/runtime 2>/dev/null || true
+
+# Clear module resolution cache
+echo "Clearing module cache..."
+rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
+
+# For pnpm workspaces, generate directly using npx
+cd /app
+echo "Running prisma generate..."
+npx prisma generate --schema=./prisma/schema.prisma
+
 if [ $? -eq 0 ]; then
   echo "✓ Prisma client generated successfully"
-  echo ""
-  echo "Verifying Prisma client installation..."
-  echo "Contents of node_modules/.prisma:"
-  ls -la node_modules/.prisma/ 2>/dev/null || echo "  (directory not found)"
-  echo "Contents of node_modules/.pnpm/@prisma*:"
-  ls -la node_modules/.pnpm/@prisma* 2>/dev/null | head -20 || echo "  (directory not found)"
+
+  # Verify the client was generated
+  if [ -f "node_modules/.prisma/client/index.js" ]; then
+    echo "✓ Prisma client files verified"
+  else
+    echo "✗ Prisma client files not found!"
+    exit 1
+  fi
+
   echo ""
 else
   echo "✗ Failed to generate Prisma client"

@@ -114,7 +114,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Create atlassian-pdfs directory and set ownership
 RUN mkdir -p /app/apps/web/public/atlassian-pdfs && \
     chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs && \
-    chmod +x /app/start.sh
+    chmod +x /app/start.sh && \
+    chown -R nextjs:nodejs /app/node_modules && \
+    chown -R nextjs:nodejs /app/prisma
 
 # Install Playwright browsers (must be after creating user but before switching to it)
 # Find playwright in .pnpm directory and run install
