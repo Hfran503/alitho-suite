@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     // Build carrier ID to name map
     const carrierIdToName: Record<string, string> = {}
-    carrierMappings.forEach((mapping) => {
+    carrierMappings.forEach((mapping: { shipstationCarrierId: string; carrierName: string }) => {
       carrierIdToName[mapping.shipstationCarrierId] = mapping.carrierName
     })
 
