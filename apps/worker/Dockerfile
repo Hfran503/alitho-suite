@@ -11,6 +11,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/worker/package.json ./apps/worker/
 COPY packages/database/package.json ./packages/database/
 COPY packages/types/package.json ./packages/types/
+COPY packages/shared/package.json ./packages/shared/
+
+# Copy Prisma schema (needed for postinstall)
+COPY prisma ./prisma
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile

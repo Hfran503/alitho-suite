@@ -13,6 +13,10 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/database/package.json ./packages/database/
 COPY packages/types/package.json ./packages/types/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/shared/package.json ./packages/shared/
+
+# Copy Prisma schema (needed for postinstall)
+COPY prisma ./prisma
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
