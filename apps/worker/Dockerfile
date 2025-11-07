@@ -45,6 +45,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Enable pnpm (needed for playwright install)
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
 # Install Playwright dependencies for PDF generation
 RUN apt-get update && \
     apt-get install -y \
@@ -73,6 +76,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
+# Copy workspace packages (needed for runtime)
+COPY --from=builder /app/packages ./packages
+
 # Copy templates and fonts for PDF generation
 COPY --from=builder /app/apps/web/public/templates ./apps/web/public/templates
 COPY --from=builder /app/apps/web/public/fonts ./apps/web/public/fonts
@@ -86,7 +92,8 @@ RUN mkdir -p /app/apps/web/public/atlassian-pdfs && \
     chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs
 
 # Install Playwright browsers (must be after creating user but before switching to it)
-RUN node_modules/.bin/playwright install chromium --with-deps
+# Find playwright in .pnpm directory and run install
+RUN bash -c 'node node_modules/.pnpm/playwright@*/node_modules/playwright/cli.js install chromium --with-deps'
 
 WORKDIR /app/apps/worker
 
