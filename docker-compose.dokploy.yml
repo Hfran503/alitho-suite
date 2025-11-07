@@ -9,8 +9,8 @@ services:
     build:
       context: .
       dockerfile: ./apps/web/Dockerfile
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       # Node Environment
       NODE_ENV: production
