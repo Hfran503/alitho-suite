@@ -50,19 +50,19 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        recentLabels: recentLabels.map((label: { id: string; trackingNumber: string | null; status: string; carrier: string | null; cost: number | null; createdAt: Date; updatedAt: Date }) => ({
+        recentLabels: recentLabels.map((label) => ({
           trackingNumber: label.trackingNumber,
           status: label.status,
           carrier: label.carrier,
-          cost: label.cost,
+          cost: label.cost?.toNumber() ?? null,
           createdAt: label.createdAt.toISOString(),
           updatedAt: label.updatedAt.toISOString(),
         })),
         statusCounts,
         summary: {
           total: recentLabels.length,
-          active: recentLabels.filter(l => l.status === 'active').length,
-          voided: recentLabels.filter(l => l.status === 'voided').length,
+          active: recentLabels.filter((l: { status: string }) => l.status === 'active').length,
+          voided: recentLabels.filter((l: { status: string }) => l.status === 'voided').length,
         },
       },
     })
