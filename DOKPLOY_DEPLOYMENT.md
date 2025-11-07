@@ -158,6 +158,89 @@ curl -u "CalithoSuiteAPI:Calitho94520!!" \
 - [ ] Test shipments page
 - [ ] Test invoice webhook processing
 
+## Build Performance Optimization
+
+The Dockerfile is optimized for fast deployments using Docker BuildKit cache mounts:
+
+### Key Optimizations
+
+1. **Playwright Browser Caching** (saves ~3-5 minutes per build)
+   - Chromium browser (~200MB) is cached between builds
+   - Uses BuildKit cache mount at `/root/.cache/ms-playwright`
+
+2. **pnpm Store Caching** (saves ~30-60 seconds per build)
+   - Package installations are cached between builds
+   - Uses BuildKit cache mount at `/root/.local/share/pnpm/store`
+
+3. **Efficient Permission Management** (saves ~30 seconds per build)
+   - Avoids recursive `chown` on large directories (1GB+ node_modules)
+   - Only changes ownership on directories that need write access
+
+### Expected Build Times
+
+- **First build (cold cache):** ~8-10 minutes
+- **Subsequent builds (warm cache):** ~3-5 minutes
+- **Builds with no code changes:** ~2-3 minutes
+
+### Ensuring BuildKit is Enabled
+
+Docker BuildKit **must be enabled** for cache mounts to work:
+
+```bash
+# Enable BuildKit globally
+export DOCKER_BUILDKIT=1
+
+# OR prefix each build command
+DOCKER_BUILDKIT=1 docker-compose build
+
+# For Dokploy, ensure BuildKit is enabled in daemon.json
+# On the Dokploy server:
+sudo vim /etc/docker/daemon.json
+```
+
+Add this to `/etc/docker/daemon.json`:
+```json
+{
+  "features": {
+    "buildkit": true
+  }
+}
+```
+
+Then restart Docker:
+```bash
+sudo systemctl restart docker
+```
+
+### Verifying Cache Usage
+
+Check if cache mounts are working by looking for these lines in build output:
+```
+RUN --mount=type=cache,id=pnpm
+RUN --mount=type=cache,id=playwright
+```
+
+### Troubleshooting Slow Builds
+
+If builds are still slow (>10 minutes):
+
+1. **Check BuildKit is enabled:**
+   ```bash
+   docker info | grep BuildKit
+   ```
+
+2. **Check cache mount storage:**
+   ```bash
+   docker system df -v
+   ```
+
+3. **Clear build cache if corrupted:**
+   ```bash
+   docker builder prune
+   ```
+
+4. **Check Dokploy build logs** for cache mount warnings
+
 ## Support
 
 If you continue to have issues:

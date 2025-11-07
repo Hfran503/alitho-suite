@@ -10,6 +10,9 @@ services:
     build:
       context: .
       dockerfile: ./apps/worker/Dockerfile
+      # Using BuildKit for cache mounts (DOCKER_BUILDKIT=1)
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
     ports:
       - "3000:3000"
     environment:

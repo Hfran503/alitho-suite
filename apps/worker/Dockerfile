@@ -16,8 +16,9 @@ COPY packages/shared/package.json ./packages/shared/
 # Copy Prisma schema (needed for postinstall)
 COPY prisma ./prisma
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies with BuildKit cache mount for faster builds
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Stage 2: Builder
 FROM node:20-bookworm AS builder
@@ -53,9 +54,10 @@ ENV NODE_ENV=production
 # Enable pnpm (needed for playwright install)
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-# Install Playwright dependencies for PDF generation
+# Install Playwright system dependencies for PDF generation
+# Using --no-install-recommends to minimize layer size
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -107,20 +109,24 @@ COPY --from=builder /app/start.sh ./
 COPY --from=builder /app/apps/web/public/templates ./apps/web/public/templates
 COPY --from=builder /app/apps/web/public/fonts ./apps/web/public/fonts
 
+# Install Playwright browsers BEFORE setting up users
+# Cache Playwright browsers between builds using BuildKit cache mount
+# This is the biggest time saver - downloads ~200MB browser once instead of every build
+RUN --mount=type=cache,id=playwright,target=/root/.cache/ms-playwright \
+    bash -c 'node node_modules/.pnpm/playwright@*/node_modules/playwright/cli.js install chromium --with-deps'
+
 # Create user matching web container (nextjs user with UID 1001)
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Create atlassian-pdfs directory and set ownership
-RUN mkdir -p /app/apps/web/public/atlassian-pdfs && \
-    chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs && \
+# Create directories and set permissions EFFICIENTLY
+# IMPORTANT: Avoid chown -R on large directories like node_modules (1GB+)
+# Only change ownership on specific directories that need write access at runtime
+RUN mkdir -p /app/apps/web/public/atlassian-pdfs /app/node_modules/.prisma && \
     chmod +x /app/start.sh && \
-    chown -R nextjs:nodejs /app/node_modules && \
-    chown -R nextjs:nodejs /app/prisma
-
-# Install Playwright browsers (must be after creating user but before switching to it)
-# Find playwright in .pnpm directory and run install
-RUN bash -c 'node node_modules/.pnpm/playwright@*/node_modules/playwright/cli.js install chromium --with-deps'
+    chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs && \
+    chown -R nextjs:nodejs /app/prisma && \
+    chown -R nextjs:nodejs /app/node_modules/.prisma
 
 USER nextjs
 
