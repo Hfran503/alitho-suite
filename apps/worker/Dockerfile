@@ -77,9 +77,6 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/web/public/templates ./apps/web/public/templates
 COPY --from=builder /app/apps/web/public/fonts ./apps/web/public/fonts
 
-# Install Playwright browsers
-RUN npx playwright install chromium --with-deps
-
 # Create user matching web container (nextjs user with UID 1001)
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -87,6 +84,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Create atlassian-pdfs directory and set ownership
 RUN mkdir -p /app/apps/web/public/atlassian-pdfs && \
     chown -R nextjs:nodejs /app/apps/web/public/atlassian-pdfs
+
+# Install Playwright browsers (must be after creating user but before switching to it)
+RUN node_modules/.bin/playwright install chromium --with-deps
 
 WORKDIR /app/apps/worker
 
