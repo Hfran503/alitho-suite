@@ -36,6 +36,11 @@ COPY . .
 # Generate Prisma Client
 RUN pnpm --filter @repo/database db:generate
 
+# Build workspace packages (shared, types, ui) before building web
+RUN pnpm --filter @repo/shared build
+RUN pnpm --filter @repo/types build || true
+RUN pnpm --filter @repo/ui build || true
+
 # Build the application
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter web build

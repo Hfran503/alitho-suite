@@ -34,6 +34,10 @@ COPY . .
 # Generate Prisma Client
 RUN pnpm --filter @repo/database db:generate
 
+# Build workspace packages (shared, types) before building worker
+RUN pnpm --filter @repo/shared build
+RUN pnpm --filter @repo/types build || true
+
 # Build worker
 RUN pnpm --filter worker build
 
