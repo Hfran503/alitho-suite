@@ -123,12 +123,14 @@ export async function generateAtlassianWelcomePDF(
 
     await writeFile(outputPath, pdfBytes);
 
-    // Return path relative to public directory
-    const relativePath = `/atlassian-pdfs/${filename}`;
+    // Return API path for serving the PDF
+    // This works reliably in Docker/standalone builds
+    const apiPath = `/api/atlassian-pdfs/${encodeURIComponent(filename)}`;
 
-    console.log(`✓ PDF generated: ${relativePath}`);
+    console.log(`✓ PDF generated: ${filename}`);
+    console.log(`   Accessible at: ${apiPath}`);
 
-    return relativePath;
+    return apiPath;
   } catch (error) {
     console.error('Error generating Atlassian PDF:', error);
     throw new Error(
