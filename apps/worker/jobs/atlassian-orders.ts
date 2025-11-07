@@ -5,6 +5,9 @@ import { withImapClient, type EmailMessage } from '../lib/imap-client';
 import { parseAtlassianEmail } from '../lib/atlassian-email-parser';
 import { generateAtlassianWelcomePDF } from '../lib/atlassian-pdf-generator';
 import { generateUniqueOrderNumber } from '../lib/atlassian-order-number';
+import { uploadToSFTP, isSFTPConfigured, getSFTPPublicURL } from '../src/lib/sftp';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 export interface AtlassianOrderJobData {
   tenantId: string;
@@ -104,13 +107,43 @@ async function processEmail(
           parsed.employeeData.countryCategory || 'Unknown'
         );
 
-        // Update order with PDF path
+        console.log(`✓ Generated PDF for ${parsed.employeeData.printName} (${orderNumber}): ${pdfPath}`);
+
+        // Upload to SFTP if configured
+        let sftpUrl: string | null = null;
+        if (isSFTPConfigured()) {
+          try {
+            // Convert API path to local file path
+            // PDF path is in format: /api/atlassian-pdfs/filename.pdf
+            const filename = pdfPath.split('/').pop();
+            if (filename) {
+              const decodedFilename = decodeURIComponent(filename);
+              const publicDir = join(process.cwd(), '../../apps/web/public');
+              const localFilePath = join(publicDir, 'atlassian-pdfs', decodedFilename);
+
+              if (existsSync(localFilePath)) {
+                console.log(`Uploading ${decodedFilename} to SFTP (atlassian folder)...`);
+                await uploadToSFTP(localFilePath, decodedFilename, 'atlassian');
+                sftpUrl = getSFTPPublicURL(decodedFilename, 'atlassian');
+                console.log(`✓ PDF uploaded to SFTP: ${sftpUrl}`);
+              } else {
+                console.warn(`Local PDF file not found: ${localFilePath}`);
+              }
+            }
+          } catch (sftpError) {
+            console.error(`Failed to upload PDF to SFTP for order ${order.id}:`, sftpError);
+            // Don't fail the entire processing if SFTP upload fails
+          }
+        }
+
+        // Update order with PDF path and SFTP URL
         await db.atlassianOrder.update({
           where: { id: order.id },
-          data: { pdfPath },
+          data: {
+            pdfPath,
+            ...(sftpUrl && { sftpUrl }),
+          },
         });
-
-        console.log(`✓ Generated PDF for ${parsed.employeeData.printName} (${orderNumber}): ${pdfPath}`);
       } catch (pdfError) {
         console.error(`Failed to generate PDF for order ${order.id}:`, pdfError);
         // Don't fail the entire processing if PDF generation fails

@@ -18,6 +18,7 @@ interface AtlassianOrder {
   lastName: string;
   printName: string;
   pdfPath: string;
+  sftpUrl?: string;
   fullName: string;
   personalEmail: string;
   workEmail: string;
@@ -34,6 +35,7 @@ interface AtlassianOrder {
   manager: string;
   department: string;
   location: string;
+  paceJobNumber: string;
   createdAt: string;
   processedAt: string;
 }
@@ -45,6 +47,12 @@ export default function AtlassianOrdersPage() {
   const [triggeringCheck, setTriggeringCheck] = useState(false);
   const [checkSuccess, setCheckSuccess] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<AtlassianOrder | null>(null);
+  const [sendingToPace, setSendingToPace] = useState(false);
+  const [paceSuccess, setPaceSuccess] = useState<string | null>(null);
+  const [paceError, setPaceError] = useState<string | null>(null);
+  const [sendingAllToPace, setSendingAllToPace] = useState(false);
+  const [batchPaceSuccess, setBatchPaceSuccess] = useState<string | null>(null);
+  const [batchPaceError, setBatchPaceError] = useState<string | null>(null);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -117,6 +125,8 @@ export default function AtlassianOrdersPage() {
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
         return 'bg-green-100 text-green-800';
+      case 'sent_to_pace':
+        return 'bg-blue-100 text-blue-800';
       case 'missing_address':
         return 'bg-orange-100 text-orange-800';
       case 'failed':
@@ -140,6 +150,10 @@ export default function AtlassianOrdersPage() {
   // Group orders by country category
   const groupedOrders = {
     all: orders,
+    readyToSend: orders.filter((o) =>
+      o.status === 'completed' || o.status === 'pending'
+    ),
+    sentToPace: orders.filter((o) => o.status === 'sent_to_pace'),
     philippines: orders.filter((o) => o.countryCategory === 'Philippines'),
     australia: orders.filter((o) => o.countryCategory === 'Australia'),
     india: orders.filter((o) => o.countryCategory === 'India'),
@@ -152,6 +166,8 @@ export default function AtlassianOrdersPage() {
   const getCounts = () => {
     return {
       all: orders.length,
+      readyToSend: groupedOrders.readyToSend.length,
+      sentToPace: groupedOrders.sentToPace.length,
       philippines: groupedOrders.philippines.length,
       australia: groupedOrders.australia.length,
       india: groupedOrders.india.length,
@@ -179,6 +195,9 @@ export default function AtlassianOrdersPage() {
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Order #
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                PACE Job #
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Name
@@ -219,6 +238,15 @@ export default function AtlassianOrdersPage() {
                   <div className="text-sm font-semibold text-blue-600">
                     {order.orderNumber || '-'}
                   </div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {order.paceJobNumber ? (
+                    <div className="text-sm font-semibold text-green-600">
+                      {order.paceJobNumber}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">-</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
@@ -293,6 +321,109 @@ export default function AtlassianOrdersPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleSendToPace = async (orderId: string) => {
+    setSendingToPace(true);
+    setPaceSuccess(null);
+    setPaceError(null);
+
+    try {
+      const response = await fetch(`/api/atlassian/orders/${orderId}/send-to-pace`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPaceSuccess(`Order sent to PACE successfully! PACE Job #${data.data.paceJobNumber}`);
+        // Refresh orders to update status
+        setTimeout(() => {
+          fetchOrders();
+          setPaceSuccess(null);
+        }, 3000);
+      } else {
+        throw new Error(data.error || 'Failed to send order to PACE');
+      }
+    } catch (err) {
+      setPaceError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSendingToPace(false);
+    }
+  };
+
+  const handleSendAllToPace = async () => {
+    setSendingAllToPace(true);
+    setBatchPaceSuccess(null);
+    setBatchPaceError(null);
+
+    try {
+      const response = await fetch('/api/atlassian/orders/send-all-to-pace', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const { totalOrdersProcessed, jobsCreated } = data.data;
+        setBatchPaceSuccess(
+          `Successfully sent ${totalOrdersProcessed} orders to PACE in ${jobsCreated} job(s)!`
+        );
+        // Refresh orders to update status
+        setTimeout(() => {
+          fetchOrders();
+          setBatchPaceSuccess(null);
+        }, 5000);
+      } else {
+        throw new Error(data.error || 'Failed to send orders to PACE');
+      }
+    } catch (err) {
+      setBatchPaceError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSendingAllToPace(false);
+    }
+  };
+
+  const handleDownloadXML = (order: AtlassianOrder) => {
+    const fullName = order.fullName || `${order.firstName} ${order.lastName}`;
+    // Use SFTP URL if available, otherwise fallback to local API URL
+    const pdfUrl = order.sftpUrl || (order.pdfPath ? `${window.location.origin}${order.pdfPath}` : '');
+
+    // Create XML content
+    const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<order>
+  <orderNumber>${order.orderNumber || 'N/A'}</orderNumber>
+  <name>${fullName}</name>
+  <printName>${order.printName || order.firstName || 'N/A'}</printName>
+  <pdfUrl>${pdfUrl}</pdfUrl>
+  <personalEmail>${order.personalEmail || 'N/A'}</personalEmail>
+  <workEmail>${order.workEmail || 'N/A'}</workEmail>
+  <phoneNumber>${order.phoneNumber || 'N/A'}</phoneNumber>
+  <address>
+    <address1>${order.address1 || 'N/A'}</address1>
+    <address2>${order.address2 || ''}</address2>
+    <address3>${order.address3 || ''}</address3>
+    <city>${order.city || 'N/A'}</city>
+    <state>${order.state || 'N/A'}</state>
+    <zipCode>${order.zipCode || 'N/A'}</zipCode>
+    <country>${order.country || 'N/A'}</country>
+  </address>
+  <startDate>${order.startDate || 'N/A'}</startDate>
+  <manager>${order.manager || 'N/A'}</manager>
+  <department>${order.department || 'N/A'}</department>
+  <location>${order.location || 'N/A'}</location>
+  <paceJobNumber>${order.paceJobNumber || 'N/A'}</paceJobNumber>
+  <status>${order.status}</status>
+</order>`;
+
+    // Create blob and download
+    const blob = new Blob([xmlContent], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `order-${order.orderNumber || order.id}.xml`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -306,6 +437,20 @@ export default function AtlassianOrdersPage() {
           <Button onClick={handleExportJSON} variant="outline" disabled={orders.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             Export JSON
+          </Button>
+          <Button
+            onClick={handleSendAllToPace}
+            disabled={sendingAllToPace || counts.readyToSend === 0}
+            variant="default"
+          >
+            {sendingAllToPace ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending to PACE...
+              </>
+            ) : (
+              `Send All to PACE (${counts.readyToSend})`
+            )}
           </Button>
           <Button onClick={handleTriggerCheck} disabled={triggeringCheck}>
             {triggeringCheck ? (
@@ -329,12 +474,24 @@ export default function AtlassianOrdersPage() {
         </div>
       )}
 
+      {batchPaceSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
+          {batchPaceSuccess}
+        </div>
+      )}
+
+      {batchPaceError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
+          {batchPaceError}
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">{error}</div>
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">Total Orders</CardTitle>
@@ -343,20 +500,28 @@ export default function AtlassianOrdersPage() {
             <div className="text-2xl font-bold">{counts.all}</div>
           </CardContent>
         </Card>
+        <Card className="border-2 border-blue-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-blue-600">Ready to Send</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{counts.readyToSend}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-green-600">Sent to PACE</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{counts.sentToPace}</div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">Philippines</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{counts.philippines}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Australia</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{counts.australia}</div>
           </CardContent>
         </Card>
         <Card>
@@ -375,6 +540,8 @@ export default function AtlassianOrdersPage() {
           <Tabs defaultValue="all">
             <TabsList className="mb-4">
               <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
+              <TabsTrigger value="readyToSend" className="text-blue-600">Ready to Send ({counts.readyToSend})</TabsTrigger>
+              <TabsTrigger value="sentToPace" className="text-green-600">Sent to PACE ({counts.sentToPace})</TabsTrigger>
               <TabsTrigger value="philippines">Philippines ({counts.philippines})</TabsTrigger>
               <TabsTrigger value="australia">Australia ({counts.australia})</TabsTrigger>
               <TabsTrigger value="india">India ({counts.india})</TabsTrigger>
@@ -384,6 +551,8 @@ export default function AtlassianOrdersPage() {
             </TabsList>
 
             <TabsContent value="all">{loading ? <Loader2 className="animate-spin" /> : renderOrdersTable(groupedOrders.all)}</TabsContent>
+            <TabsContent value="readyToSend">{renderOrdersTable(groupedOrders.readyToSend)}</TabsContent>
+            <TabsContent value="sentToPace">{renderOrdersTable(groupedOrders.sentToPace)}</TabsContent>
             <TabsContent value="philippines">{renderOrdersTable(groupedOrders.philippines)}</TabsContent>
             <TabsContent value="australia">{renderOrdersTable(groupedOrders.australia)}</TabsContent>
             <TabsContent value="india">{renderOrdersTable(groupedOrders.india)}</TabsContent>
@@ -417,6 +586,47 @@ export default function AtlassianOrdersPage() {
               </button>
             </div>
 
+            {/* PACE Success Message */}
+            {paceSuccess && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-4">
+                {paceSuccess}
+              </div>
+            )}
+
+            {/* PACE Error Message */}
+            {paceError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-4">
+                {paceError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mb-6 space-y-3">
+              <Button
+                onClick={() => handleSendToPace(selectedOrder.id)}
+                disabled={sendingToPace}
+                className="w-full"
+                variant="default"
+              >
+                {sendingToPace ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending to PACE...
+                  </>
+                ) : (
+                  'Send to PACE'
+                )}
+              </Button>
+              <Button
+                onClick={() => handleDownloadXML(selectedOrder)}
+                className="w-full"
+                variant="outline"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download XML
+              </Button>
+            </div>
+
             {/* Order Information */}
             <div className="space-y-6">
               {/* Basic Info */}
@@ -426,6 +636,12 @@ export default function AtlassianOrdersPage() {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="text-gray-600">Order #:</div>
                     <div className="font-bold text-blue-600 text-base">{selectedOrder.orderNumber || '-'}</div>
+                    {selectedOrder.paceJobNumber && (
+                      <>
+                        <div className="text-gray-600">PACE Job #:</div>
+                        <div className="font-bold text-green-600 text-base">{selectedOrder.paceJobNumber}</div>
+                      </>
+                    )}
                     <div className="text-gray-600">Full Name:</div>
                     <div className="font-medium">{selectedOrder.fullName}</div>
                     <div className="text-gray-600">First Name:</div>

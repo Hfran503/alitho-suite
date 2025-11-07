@@ -678,7 +678,9 @@ model AtlassianOrder {
   // Processing metadata
   rawEmail          Json?     // Full email object for debugging
   parsedData        Json?     // Structured parsed data
+  paceJobNumber     String?   // PACE-generated job number (if sent to PACE)
   paceResponse      Json?     // Response from PACE API (if applicable)
+  sftpUrl           String?   // SFTP URL for the PDF file (if uploaded to SFTP)
   errorMessage      String?
   retryCount        Int       @default(0)
   maxRetries        Int       @default(3)
