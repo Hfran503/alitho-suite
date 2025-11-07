@@ -50,7 +50,7 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        recentLabels: recentLabels.map((label) => ({
+        recentLabels: recentLabels.map((label: { id: string; trackingNumber: string | null; status: string; carrier: string | null; cost: any; createdAt: Date; updatedAt: Date }) => ({
           trackingNumber: label.trackingNumber,
           status: label.status,
           carrier: label.carrier,
