@@ -33,6 +33,13 @@ echo "Generating Prisma client..."
 pnpm db:generate
 if [ $? -eq 0 ]; then
   echo "✓ Prisma client generated successfully"
+  echo ""
+  echo "Verifying Prisma client installation..."
+  echo "Contents of node_modules/.prisma:"
+  ls -la node_modules/.prisma/ 2>/dev/null || echo "  (directory not found)"
+  echo "Contents of node_modules/.pnpm/@prisma*:"
+  ls -la node_modules/.pnpm/@prisma* 2>/dev/null | head -20 || echo "  (directory not found)"
+  echo ""
 else
   echo "✗ Failed to generate Prisma client"
   exit 1
@@ -193,15 +200,15 @@ echo "  PACE_API_URL: ${PACE_API_URL:+SET}"
 echo "  PACE_USERNAME: ${PACE_USERNAME:+SET}"
 echo "  PACE_PASSWORD: ${PACE_PASSWORD:+SET}"
 
-# Start web server using standalone mode (correct way for Next.js standalone)
+# Start web server using Next.js built-in server
 cd /app/apps/web
 
 # Set port and hostname for Docker/Dokploy
 export PORT=3000
 export HOSTNAME="0.0.0.0"
 
-echo "Starting Next.js standalone server on 0.0.0.0:3000..."
-node .next/standalone/apps/web/server.js &
+echo "Starting Next.js server on 0.0.0.0:3000..."
+cd /app && pnpm --filter web start &
 WEB_PID=$!
 
 # Start worker

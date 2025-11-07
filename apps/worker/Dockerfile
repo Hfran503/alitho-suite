@@ -74,26 +74,27 @@ RUN apt-get update && \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy the full application structure (not using standalone to preserve pnpm structure)
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy workspace packages
+COPY --from=builder /app/packages ./packages
+
 # Copy worker application
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/apps/worker/package.json ./apps/worker/
 
-# Copy web application (for combined deployments)
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+# Copy web build (using built files, not standalone)
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/package.json ./apps/web/
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Copy dependencies
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-
-# Copy workspace packages (needed for runtime)
-COPY --from=builder /app/packages ./packages
-
-# Copy Prisma schema and pnpm workspace files (needed for prisma generate)
+# Copy Prisma schema (needed for prisma generate at runtime)
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/pnpm-workspace.yaml ./
+
+# Copy pnpm lock (already have workspace.yaml from above)
 COPY --from=builder /app/pnpm-lock.yaml ./
 
 # Copy scripts directory (for load-secrets.sh used by start.sh)
