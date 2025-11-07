@@ -38,6 +38,15 @@ RUN pnpm --filter @repo/shared build
 RUN pnpm --filter @repo/types build || true
 RUN pnpm --filter @repo/ui build || true
 
+# Verify Prisma client was generated during database build
+RUN if [ ! -f "node_modules/.prisma/client/index.js" ]; then \
+    echo "ERROR: Prisma client was not generated during build!"; \
+    echo "Attempting manual generation..."; \
+    npx prisma generate --schema=./prisma/schema.prisma; \
+    fi && \
+    echo "✓ Prisma client verified at build time" && \
+    ls -la node_modules/.prisma/client/ | head -10
+
 # Build worker
 RUN pnpm --filter worker build
 
@@ -80,6 +89,15 @@ RUN apt-get update && \
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
+
+# Verify Prisma client was copied from builder
+RUN if [ -f "node_modules/.prisma/client/index.js" ]; then \
+    echo "✓ Prisma client copied successfully"; \
+    ls -la node_modules/.prisma/client/ | head -5; \
+    else \
+    echo "ERROR: Prisma client not found after copy!"; \
+    exit 1; \
+    fi
 
 # Copy workspace packages
 COPY --from=builder /app/packages ./packages

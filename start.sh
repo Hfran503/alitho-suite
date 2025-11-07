@@ -31,36 +31,38 @@ fi
 # Generate Prisma client (ensures it's available for migrations, seeding, and runtime)
 echo "Generating Prisma client..."
 
-# Clear any existing generated clients to avoid stale versions
-echo "Removing any existing Prisma client..."
-rm -rf /app/node_modules/.prisma/client 2>/dev/null || true
-rm -rf /app/node_modules/@prisma/client/runtime 2>/dev/null || true
+# Check if Prisma client already exists and is valid
+if [ -f "/app/node_modules/.prisma/client/index.js" ] && [ -f "/app/node_modules/.prisma/client/index.d.ts" ]; then
+  echo "✓ Prisma client already exists, skipping generation"
+  echo "  (Client was generated during Docker build)"
+else
+  echo "Prisma client not found or incomplete, generating..."
 
-# Clear module resolution cache
-echo "Clearing module cache..."
-rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
+  # Clear module resolution cache to ensure fresh imports
+  echo "Clearing module cache..."
+  rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
 
-# For pnpm workspaces, generate directly using npx
-cd /app
-echo "Running prisma generate..."
-npx prisma generate --schema=./prisma/schema.prisma
+  # Generate Prisma client
+  cd /app
+  npx prisma generate --schema=./prisma/schema.prisma
 
-if [ $? -eq 0 ]; then
-  echo "✓ Prisma client generated successfully"
+  if [ $? -eq 0 ]; then
+    echo "✓ Prisma client generated successfully"
 
-  # Verify the client was generated
-  if [ -f "node_modules/.prisma/client/index.js" ]; then
-    echo "✓ Prisma client files verified"
+    # Verify the client was generated
+    if [ -f "node_modules/.prisma/client/index.js" ]; then
+      echo "✓ Prisma client files verified"
+    else
+      echo "✗ Prisma client files not found!"
+      exit 1
+    fi
   else
-    echo "✗ Prisma client files not found!"
+    echo "✗ Failed to generate Prisma client"
     exit 1
   fi
-
-  echo ""
-else
-  echo "✗ Failed to generate Prisma client"
-  exit 1
 fi
+
+echo ""
 
 # Run database migrations with explicit environment variable
 echo "Running database migrations..."
