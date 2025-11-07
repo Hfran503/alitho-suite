@@ -176,7 +176,7 @@ export class ImapClient {
       // Search for unseen messages
       const unseenMessages = await client.search({ seen: false });
 
-      if (unseenMessages.length === 0) {
+      if (!unseenMessages || unseenMessages.length === 0) {
         return messages;
       }
 
@@ -257,7 +257,7 @@ export class ImapClient {
       if (permanent) {
         // Permanently delete
         await client.messageFlagsAdd({ uid }, ['\\Deleted']);
-        await client.expunge();
+        // Note: expunge is called automatically by imapflow when lock is released
       } else {
         // Move to trash (if trash folder exists)
         try {
