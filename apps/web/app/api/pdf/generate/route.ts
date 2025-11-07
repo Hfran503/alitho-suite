@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     // }
 
     const body = await request.json()
-    const { templateUrl, templateFile, method = 'form', data, overlays } = body
+    const { templateUrl, templateFile, method = 'form', data, overlays, fontUrl } = body
 
     if (!templateUrl && !templateFile) {
       return NextResponse.json(
@@ -107,12 +107,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Load custom font if provided
+    let fontBuffer: ArrayBuffer | undefined
+    if (fontUrl && fontUrl.startsWith('/')) {
+      try {
+        const fontPath = join(process.cwd(), 'public', fontUrl)
+        const buffer = await readFile(fontPath)
+        fontBuffer = buffer.buffer.slice(
+          buffer.byteOffset,
+          buffer.byteOffset + buffer.byteLength
+        ) as ArrayBuffer
+      } catch (fontError) {
+        console.warn('Failed to load custom font, using default:', fontError)
+      }
+    }
+
     // Generate the PDF based on method
     let pdfBytes: Uint8Array
 
     if (method === 'overlay' && overlays) {
       // Use overlay method with specific coordinates
-      pdfBytes = await addTextOverlays(templateBuffer, overlays)
+      pdfBytes = await addTextOverlays(templateBuffer, overlays, fontBuffer)
     } else {
       // Use form field method (default)
       pdfBytes = await fillPdfFormFields(templateBuffer, data)

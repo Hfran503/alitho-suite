@@ -103,6 +103,68 @@ export async function getNextAuthSecret(): Promise<string> {
 }
 
 /**
+ * Get Cron secret from AWS Secrets Manager
+ * Falls back to environment variables if AWS Secrets Manager is not configured
+ */
+export async function getCronSecret(): Promise<string> {
+  // Try to fetch from AWS Secrets Manager first
+  try {
+    const secretName = process.env.AWS_SECRET_CRON || 'calitho-suite/cron'
+    const secret = await getSecret(secretName)
+    return secret.CRON_SECRET || secret.secret
+  } catch (error) {
+    // Fallback to env var if Secrets Manager fails
+    if (process.env.CRON_SECRET) {
+      console.warn('Failed to fetch Cron secret from AWS, using env var')
+      return process.env.CRON_SECRET
+    }
+    throw new Error('CRON_SECRET not found in Secrets Manager or environment')
+  }
+}
+
+/**
+ * Save Cron secret to AWS Secrets Manager
+ * @param cronSecret - The cron authentication secret
+ */
+export async function saveCronSecret(cronSecret: string): Promise<void> {
+  const secretName = process.env.AWS_SECRET_CRON || 'calitho-suite/cron'
+  const secretString = JSON.stringify({ CRON_SECRET: cronSecret })
+
+  try {
+    // Try to update existing secret first
+    const updateCommand = new UpdateSecretCommand({
+      SecretId: secretName,
+      SecretString: secretString,
+    })
+
+    await client.send(updateCommand)
+
+    // Update cache
+    secretsCache.set(secretName, { CRON_SECRET: cronSecret })
+  } catch (error: any) {
+    // If secret doesn't exist, create it
+    if (error.name === 'ResourceNotFoundException') {
+      const createCommand = new CreateSecretCommand({
+        Name: secretName,
+        SecretString: secretString,
+        Description: 'Cron job authentication secret for automated tasks',
+        Tags: [
+          { Key: 'Application', Value: 'calitho-suite' },
+          { Key: 'Type', Value: 'cron' },
+        ],
+      })
+
+      await client.send(createCommand)
+
+      // Update cache
+      secretsCache.set(secretName, { CRON_SECRET: cronSecret })
+    } else {
+      throw error
+    }
+  }
+}
+
+/**
  * Get Redis URL from AWS Secrets Manager
  * Falls back to environment variables if AWS Secrets Manager is not configured
  */
@@ -609,6 +671,11 @@ export interface EmailCredentials {
   // Resend credentials
   resendApiKey?: string
 
+  // IMAP credentials (for email monitoring)
+  imapServer?: string
+  imapUser?: string
+  imapPassword?: string
+
   // Common fields
   fromEmail?: string
   fromName?: string
@@ -662,6 +729,9 @@ export async function saveEmailCredentials(
     sesAccessKeyId: credentials.sesAccessKeyId ?? existingSecret.sesAccessKeyId,
     sesSecretAccessKey: credentials.sesSecretAccessKey ?? existingSecret.sesSecretAccessKey,
     resendApiKey: credentials.resendApiKey ?? existingSecret.resendApiKey,
+    imapServer: credentials.imapServer ?? existingSecret.imapServer,
+    imapUser: credentials.imapUser ?? existingSecret.imapUser,
+    imapPassword: credentials.imapPassword ?? existingSecret.imapPassword,
     fromEmail: credentials.fromEmail ?? existingSecret.fromEmail,
     fromName: credentials.fromName ?? existingSecret.fromName,
   }

@@ -48,6 +48,11 @@ export function SendEmailIntegrationModal({
   // Resend fields
   const [resendApiKey, setResendApiKey] = useState('')
 
+  // IMAP fields
+  const [imapServer, setImapServer] = useState('')
+  const [imapUser, setImapUser] = useState('')
+  const [imapPassword, setImapPassword] = useState('')
+
   useEffect(() => {
     if (isOpen) {
       checkConfiguration()
@@ -83,6 +88,10 @@ export function SendEmailIntegrationModal({
           // AWS SES fields
           if (creds.sesRegion) setSesRegion(creds.sesRegion)
           if (creds.sesAccessKeyId) setSesAccessKeyId(creds.sesAccessKeyId)
+
+          // IMAP fields
+          if (creds.imapServer) setImapServer(creds.imapServer)
+          if (creds.imapUser) setImapUser(creds.imapUser)
         }
 
         // Show masked credentials if they exist
@@ -92,6 +101,7 @@ export function SendEmailIntegrationModal({
           if (masked.sendgridApiKey) setSendgridApiKey(masked.sendgridApiKey)
           if (masked.sesSecretAccessKey) setSesSecretAccessKey(masked.sesSecretAccessKey)
           if (masked.resendApiKey) setResendApiKey(masked.resendApiKey)
+          if (masked.imapPassword) setImapPassword(masked.imapPassword)
         }
       }
     } catch (error) {
@@ -209,6 +219,9 @@ export function SendEmailIntegrationModal({
         provider,
         fromEmail,
         fromName,
+        imapServer,
+        imapUser,
+        imapPassword,
       }
 
       if (provider === 'smtp') {
@@ -252,7 +265,7 @@ export function SendEmailIntegrationModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Send Emails Integration" size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Email Integration" size="xl">
       <form onSubmit={handleSave} className="space-y-6">
         {/* Configuration Status */}
         {isConfigured && (
@@ -640,9 +653,82 @@ export function SendEmailIntegrationModal({
           </div>
         )}
 
+        {/* IMAP Configuration Section */}
+        <div className="space-y-4 pt-4 border-t">
+          <h4 className="text-sm font-semibold text-gray-900">IMAP Configuration (Email Monitoring)</h4>
+          <p className="text-xs text-gray-500">
+            Configure IMAP settings to monitor incoming emails. These credentials are securely stored in AWS Secrets Manager.
+          </p>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                IMAP Server
+              </label>
+              <input
+                type="text"
+                value={imapServer}
+                onChange={(e) => setImapServer(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="imap.hostinger.com"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  IMAP Username
+                </label>
+                <input
+                  type="email"
+                  value={imapUser}
+                  onChange={(e) => setImapUser(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="info@calithosuite.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  IMAP Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={imapPassword}
+                    onChange={(e) => setImapPassword(e.target.value)}
+                    onFocus={(e) => {
+                      // Clear masked password on focus
+                      if (imapPassword === '••••••••' || imapPassword.includes('•')) {
+                        e.target.select()
+                        setTimeout(() => setImapPassword(''), 0)
+                      }
+                    }}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter IMAP password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Test Email Section */}
         <div className="space-y-4 pt-4 border-t">
-          <h4 className="text-sm font-semibold text-gray-900">Test Configuration</h4>
+          <h4 className="text-sm font-semibold text-gray-900">Test SMTP Configuration</h4>
           <div className="flex gap-2">
             <input
               type="email"

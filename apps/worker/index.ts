@@ -15,6 +15,7 @@ import { netsuitePOLineWorker } from './jobs/netsuite-po-line'
 import { netsuitePOReceiptWorker } from './jobs/netsuite-po-receipt'
 import { vendorBillWorker } from './jobs/vendor-bill'
 import { customerPaymentWorker } from './jobs/customer-payment'
+import { atlassianOrdersWorker } from './jobs/atlassian-orders'
 
 // Debug: Log REDIS_URL to verify it's set
 console.log('🔍 Environment check:')
@@ -39,6 +40,7 @@ const workers = [
   netsuitePOReceiptWorker(connection),
   vendorBillWorker(connection),
   customerPaymentWorker(connection),
+  atlassianOrdersWorker(connection),
 ]
 
 console.log('🚀 Worker started successfully')

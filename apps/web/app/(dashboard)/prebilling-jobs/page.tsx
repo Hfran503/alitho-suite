@@ -29,6 +29,7 @@ type Job = {
   u_planner?: string // Planner ID
   plannerName?: string // Planner name
   plannerEmail?: string // Planner email
+  u_calithosuite_note?: string // Calitho Suite note (lowercase to match PACE database field)
   // Add any other fields you expect from the Job object
 }
 
@@ -63,6 +64,10 @@ export default function PrebillingJobsPage() {
   const [activeAction, setActiveAction] = useState<'prices' | 'duedates' | null>(null)
   const [sendingEstimateAlert, setSendingEstimateAlert] = useState(false)
   const [estimateAlertMessage, setEstimateAlertMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
+  const [showNoteModal, setShowNoteModal] = useState(false)
+  const [selectedJobForNote, setSelectedJobForNote] = useState<Job | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
 
   // Get user session for role check
   const { data: session } = useSession()
@@ -2384,6 +2389,159 @@ export default function PrebillingJobsPage() {
                   Update {selectedJobIds.size} Job{selectedJobIds.size > 1 ? 's' : ''}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Note Modal */}
+      {showNoteModal && selectedJobForNote && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Edit Note</h3>
+                    <p className="text-sm text-gray-600">Job #{selectedJobForNote.job}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowNoteModal(false)
+                    setSelectedJobForNote(null)
+                    setNoteText('')
+                  }}
+                  className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Note
+                  </label>
+                  <span className="text-xs text-gray-500">
+                    {noteText.length} characters
+                  </span>
+                </div>
+                <textarea
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Add a note for this job..."
+                  rows={6}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                />
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex gap-2">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">About Notes</p>
+                    <p className="text-blue-700">This note will be saved to the <span className="font-mono text-xs">u_calithosuite_note</span> field in PACE and can be used to track important information about this job.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowNoteModal(false)
+                  setSelectedJobForNote(null)
+                  setNoteText('')
+                }}
+                disabled={savingNote}
+                className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!selectedJobForNote?.job) return
+
+                  setSavingNote(true)
+                  try {
+                    const response = await fetch('/api/pace/jobs/update-note', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        jobNumber: selectedJobForNote.job,
+                        note: noteText
+                      })
+                    })
+
+                    if (!response.ok) {
+                      throw new Error('Failed to update note')
+                    }
+
+                    // Update local state
+                    setJobs(prevJobs =>
+                      prevJobs.map(j =>
+                        j.job === selectedJobForNote.job
+                          ? { ...j, u_calithosuite_note: noteText }
+                          : j
+                      )
+                    )
+
+                    // Update cache
+                    const cachedData = localStorage.getItem('prebilling_jobs_cache')
+                    if (cachedData) {
+                      const parsed = JSON.parse(cachedData)
+                      const updated = parsed.map((j: Job) =>
+                        j.job === selectedJobForNote.job
+                          ? { ...j, u_calithosuite_note: noteText }
+                          : j
+                      )
+                      localStorage.setItem('prebilling_jobs_cache', JSON.stringify(updated))
+                    }
+
+                    setShowNoteModal(false)
+                    setSelectedJobForNote(null)
+                    setNoteText('')
+                  } catch (error) {
+                    console.error('Error updating note:', error)
+                    alert('Failed to update note. Please try again.')
+                  } finally {
+                    setSavingNote(false)
+                  }
+                }}
+                disabled={savingNote}
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium shadow-sm flex items-center gap-2"
+              >
+                {savingNote ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Note
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

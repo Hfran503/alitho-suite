@@ -22,237 +22,99 @@ const WEBHOOK_URL = process.argv[2] || process.env.WEBHOOK_URL || 'http://localh
 const WEBHOOK_USER = process.argv[3] || process.env.WEBHOOK_USER || process.env.PACE_WEBHOOK_USERNAME
 const WEBHOOK_PASS = process.argv[4] || process.env.WEBHOOK_PASS || process.env.PACE_WEBHOOK_PASSWORD
 
-// Test invoice data - 5 parts for invoice #15045040 (based on real invoice 56946)
+// Test invoice data - single invoice #145045070 (real data from invoice 56904)
 const invoiceParts = [
   {
     invoice: {
-      id: 91001,
-      jobNum: "1002560",
-      invoiceNum: "15045040",
-      invoiceAmount: 114.53,
+      id: 11813,
+      invoiceId: "1",
+      jobNum: "113062",
+      invoiceNum: "145045070",
+      invoiceAmount: 1359.880000,
       taxAmount: 0,
-      customerId: "00001094",
-      customerName: "University of California Office of the President",
-      invoiceDate: "2025-11-05",
-      poNumber: "TEST-PO-001"
+      customerId: "COL163",
+      customerName: "COLLECTIVE HEALTH, INC.",
+      invoiceDate: "2025-10-29",
+      poNumber: ""
     },
     salesDistributions: [
       {
-        id: 90001,
-        invoice: "Invoice (15045040) Job 1002560 Part 01",
-        amount: 92.00,
+        id: 49986,
+        invoice: "Invoice (145045070) Job 113062 Part 01",
+        amount: 284.380000,
+        quantity: 1,
+        salesCategoryId: 5022,
+        salesCategoryName: "Digital"
+      },
+      {
+        id: 49987,
+        invoice: "Invoice (145045070) Job 113062 Part 01",
+        amount: 297.810000,
         quantity: 1,
         salesCategoryId: 7010,
         salesCategoryName: "IL: Print - General"
+      },
+      {
+        id: 49988,
+        invoice: "Invoice (145045070) Job 113062 Part 01",
+        amount: 95.470000,
+        quantity: 1,
+        salesCategoryId: 5025,
+        salesCategoryName: "Finishing"
+      },
+      {
+        id: 49989,
+        invoice: "Invoice (145045070) Job 113062 Part 01",
+        amount: 392.530000,
+        quantity: 1,
+        salesCategoryId: 5031,
+        salesCategoryName: "Mailing"
+      },
+      {
+        id: 49990,
+        invoice: "Invoice (145045070) Job 113062 Part 01",
+        amount: 75.520000,
+        quantity: 1,
+        salesCategoryId: 5023,
+        salesCategoryName: "Offset"
+      },
+      {
+        id: 49991,
+        invoice: "Invoice (145045070) Job 113062 Part 01",
+        amount: 216.290000,
+        quantity: 1,
+        salesCategoryId: 5021,
+        salesCategoryName: "Prepress"
       }
     ],
     invoiceExtras: [
       {
-        id: 90101,
-        lineNum: null,
-        price: 13.64,
-        quantity: 1,
-        invoiceExtraTypeId: 1,
-        invoiceExtraTypeName: "Freight"
-      },
-      {
-        id: 90102,
+        id: 12761,
         lineNum: 1,
-        price: 8.89,
+        price: -2.120000,
         quantity: 1,
-        invoiceExtraTypeId: 6,
-        invoiceExtraTypeName: "Handling"
+        invoiceExtraTypeId: 5,
+        invoiceExtraTypeName: "Postage Due"
       }
     ],
     metadata: {
-      totalSalesDistLines: 1,
-      totalInvoiceExtras: 2,
+      totalSalesDistLines: 6,
+      totalInvoiceExtras: 1,
       objectType: "Invoice",
-      exportedAt: new Date().toISOString()
-    }
-  },
-  {
-    invoice: {
-      id: 91002,
-      jobNum: "113020",
-      invoiceNum: "15045040",
-      invoiceAmount: 1562.50,
-      taxAmount: 0,
-      customerId: "00001094",
-      customerName: "University of California Office of the President",
-      invoiceDate: "2025-11-05",
-      poNumber: "TEST-PO-001"
-    },
-    salesDistributions: [
-      {
-        id: 90002,
-        invoice: "Invoice (15045040) Job 113020 Part 01",
-        amount: 1562.50,
-        quantity: 1,
-        salesCategoryId: 7038,
-        salesCategoryName: "IL: Warehousing"
-      }
-    ],
-    invoiceExtras: [],
-    metadata: {
-      totalSalesDistLines: 1,
-      totalInvoiceExtras: 0,
-      objectType: "Invoice",
-      exportedAt: new Date().toISOString()
-    }
-  },
-  {
-    invoice: {
-      id: 91003,
-      jobNum: "1002556",
-      invoiceNum: "15045040",
-      invoiceAmount: 228.48,
-      taxAmount: 0,
-      customerId: "00001094",
-      customerName: "University of California Office of the President",
-      invoiceDate: "2025-11-05",
-      poNumber: "TEST-PO-001"
-    },
-    salesDistributions: [
-      {
-        id: 90003,
-        invoice: "Invoice (15045040) Job 1002556 Part 01",
-        amount: 23.00,
-        quantity: 1,
-        salesCategoryId: 7010,
-        salesCategoryName: "IL: Print - General"
-      }
-    ],
-    invoiceExtras: [
-      {
-        id: 90103,
-        lineNum: null,
-        price: 196.59,
-        quantity: 1,
-        invoiceExtraTypeId: 1,
-        invoiceExtraTypeName: "Freight"
-      },
-      {
-        id: 90104,
-        lineNum: 1,
-        price: 8.89,
-        quantity: 1,
-        invoiceExtraTypeId: 6,
-        invoiceExtraTypeName: "Handling"
-      }
-    ],
-    metadata: {
-      totalSalesDistLines: 1,
-      totalInvoiceExtras: 2,
-      objectType: "Invoice",
-      exportedAt: new Date().toISOString()
-    }
-  },
-  {
-    invoice: {
-      id: 91004,
-      jobNum: "1002588",
-      invoiceNum: "15045040",
-      invoiceAmount: 206.52,
-      taxAmount: 0,
-      customerId: "00001094",
-      customerName: "University of California Office of the President",
-      invoiceDate: "2025-11-05",
-      poNumber: "TEST-PO-001"
-    },
-    salesDistributions: [
-      {
-        id: 90004,
-        invoice: "Invoice (15045040) Job 1002588 Part 01",
-        amount: 20.70,
-        quantity: 1,
-        salesCategoryId: 7010,
-        salesCategoryName: "IL: Print - General"
-      }
-    ],
-    invoiceExtras: [
-      {
-        id: 90105,
-        lineNum: null,
-        price: 176.93,
-        quantity: 1,
-        invoiceExtraTypeId: 1,
-        invoiceExtraTypeName: "Freight"
-      },
-      {
-        id: 90106,
-        lineNum: 1,
-        price: 8.89,
-        quantity: 1,
-        invoiceExtraTypeId: 6,
-        invoiceExtraTypeName: "Handling"
-      }
-    ],
-    metadata: {
-      totalSalesDistLines: 1,
-      totalInvoiceExtras: 2,
-      objectType: "Invoice",
-      exportedAt: new Date().toISOString()
-    }
-  },
-  {
-    invoice: {
-      id: 91005,
-      jobNum: "1002636",
-      invoiceNum: "15045040",
-      invoiceAmount: 228.09,
-      taxAmount: 0,
-      customerId: "00001094",
-      customerName: "University of California Office of the President",
-      invoiceDate: "2025-11-05",
-      poNumber: "TEST-PO-001"
-    },
-    salesDistributions: [
-      {
-        id: 90005,
-        invoice: "Invoice (15045040) Job 1002636 Part 01",
-        amount: 23.00,
-        quantity: 1,
-        salesCategoryId: 7010,
-        salesCategoryName: "IL: Print - General"
-      }
-    ],
-    invoiceExtras: [
-      {
-        id: 90107,
-        lineNum: null,
-        price: 196.20,
-        quantity: 1,
-        invoiceExtraTypeId: 1,
-        invoiceExtraTypeName: "Freight"
-      },
-      {
-        id: 90108,
-        lineNum: 1,
-        price: 8.89,
-        quantity: 1,
-        invoiceExtraTypeId: 6,
-        invoiceExtraTypeName: "Handling"
-      }
-    ],
-    metadata: {
-      totalSalesDistLines: 1,
-      totalInvoiceExtras: 2,
-      objectType: "Invoice",
-      exportedAt: new Date().toISOString()
+      exportedAt: "2025-10-30 14:36:09"
     }
   }
 ]
 
-// Expected totals
-const EXPECTED_SALES_DIST = 5
-const EXPECTED_INVOICE_EXTRAS = 8
-const EXPECTED_TOTAL_AMOUNT = 2340.12
+// Expected totals: $1,362.00 (sales) - $2.12 (postage due) = $1,359.88
+const EXPECTED_SALES_DIST = 6
+const EXPECTED_INVOICE_EXTRAS = 1
+const EXPECTED_TOTAL_AMOUNT = 1359.88
 
-console.log('🧪 Testing Invoice Race Condition Handling')
+console.log('🧪 Testing Single Invoice Submission')
 console.log('==========================================')
 console.log(`Webhook URL: ${WEBHOOK_URL}`)
-console.log(`Invoice Number: 15045040`)
+console.log(`Invoice Number: 145045070`)
 console.log(`Parts to send: ${invoiceParts.length}`)
 console.log(`Authentication: ${WEBHOOK_USER && WEBHOOK_PASS ? `Basic Auth (user: ${WEBHOOK_USER})` : 'None'}`)
 console.log('')
@@ -386,7 +248,7 @@ async function runTest() {
   } else {
     console.log('⚠️  Unable to verify final result - check the database directly')
     console.log('   Run this query to check:')
-    console.log('   SELECT payload FROM "InvoiceIntegration" WHERE "invoiceNumber" = \'15045040\';')
+    console.log('   SELECT payload FROM "InvoiceIntegration" WHERE "invoiceNumber" = \'145045070\';')
   }
 }
 

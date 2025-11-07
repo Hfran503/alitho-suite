@@ -44,7 +44,8 @@ export default function TestPdfPage() {
             <li>Enter a name (e.g., &quot;Alex&quot;) in the input field above</li>
             <li>Click &quot;Download PDF&quot; to generate and download</li>
             <li>Or click &quot;Preview&quot; to open in a new tab</li>
-            <li>The PDF will show: &quot;Welcome to the team, Alex!&quot;</li>
+            <li>The name will be centered on the certificate using CharlieDisplay font at 45px</li>
+            <li>Font size automatically reduces for longer names to fit the rectangle</li>
           </ol>
         </div>
 
@@ -54,15 +55,23 @@ export default function TestPdfPage() {
             Code Example
           </h3>
           <pre className="text-sm">
-            <code>{`import { generatePdf } from '@/lib/client/pdf-api'
-
-// Generate PDF with name replacement
-await generatePdf({
-  templateUrl: '/templates/Atlassian_Template.pdf',
-  data: {
-    name: 'Alex',  // Replaces {name} with "Alex"
-  },
-  filename: 'welcome-alex.pdf',
+            <code>{`// Generate PDF with calibrated settings
+const response = await fetch('/api/pdf/generate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    templateUrl: '/templates/Atlassian_Template_v1.pdf',
+    method: 'overlay',
+    fontUrl: '/fonts/CharlieDisplay-Regular.otf',
+    overlays: [{
+      text: 'Alex',
+      x: 470,        // Center X
+      y: 325,        // Center Y
+      fontSize: 45,  // Auto-scaled
+      color: { r: 0, g: 0, b: 0 },
+      align: 'center'
+    }]
+  })
 })`}</code>
           </pre>
         </div>

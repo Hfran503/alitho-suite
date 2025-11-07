@@ -1,4 +1,5 @@
-import { PDFDocument, PDFPage, rgb, StandardFonts } from 'pdf-lib'
+import { PDFDocument, PDFPage, rgb, cmyk, StandardFonts } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 
 /**
  * Interface for template variables that will be replaced in the PDF
@@ -137,6 +138,7 @@ export async function fillPdfFormFields(
  *
  * @param templateBuffer - The PDF template
  * @param overlays - Array of text overlays with positions
+ * @param customFontBuffer - Optional custom font buffer (for .otf or .ttf fonts)
  * @returns Promise<Uint8Array> - The modified PDF
  *
  * @example
@@ -153,11 +155,23 @@ export async function addTextOverlays(
     y: number
     page?: number
     fontSize?: number
-    color?: { r: number; g: number; b: number }
-  }>
+    color?: { r: number; g: number; b: number } | { c: number; m: number; y: number; k: number }
+    align?: 'left' | 'center' | 'right'
+  }>,
+  customFontBuffer?: ArrayBuffer | Uint8Array
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(templateBuffer)
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+
+  // Register fontkit for custom font support
+  if (customFontBuffer) {
+    pdfDoc.registerFontkit(fontkit)
+  }
+
+  // Use custom font if provided, otherwise use Helvetica
+  const font = customFontBuffer
+    ? await pdfDoc.embedFont(customFontBuffer)
+    : await pdfDoc.embedFont(StandardFonts.Helvetica)
+
   const pages = pdfDoc.getPages()
 
   overlays.forEach((overlay) => {
@@ -167,14 +181,63 @@ export async function addTextOverlays(
       return
     }
 
-    const color = overlay.color
-      ? rgb(overlay.color.r, overlay.color.g, overlay.color.b)
-      : rgb(0, 0, 0)
+    // Handle both RGB and CMYK colors
+    let color
+    if (overlay.color) {
+      if ('c' in overlay.color && 'm' in overlay.color && 'y' in overlay.color && 'k' in overlay.color) {
+        // CMYK color
+        color = cmyk(overlay.color.c, overlay.color.m, overlay.color.y, overlay.color.k)
+      } else if ('r' in overlay.color && 'g' in overlay.color && 'b' in overlay.color) {
+        // RGB color
+        color = rgb(overlay.color.r, overlay.color.g, overlay.color.b)
+      } else {
+        // Default to CMYK black
+        color = cmyk(0, 0, 0, 1)
+      }
+    } else {
+      // Default to CMYK black (C:0%, M:0%, Y:0%, K:100%)
+      color = cmyk(0, 0, 0, 1)
+    }
+
+    const fontSize = overlay.fontSize ?? 12
+
+    // Calculate text width and height for alignment
+    const textWidth = font.widthOfTextAtSize(overlay.text, fontSize)
+    const textHeight = font.heightAtSize(fontSize)
+
+    // Get font metrics for proper vertical centering
+    const ascent = font.heightAtSize(fontSize, { descender: false })
+    const descent = textHeight - ascent
+
+    let xPosition = overlay.x
+    let yPosition = overlay.y
+
+    // Horizontal alignment
+    if (overlay.align === 'center') {
+      xPosition = overlay.x - textWidth / 2
+    } else if (overlay.align === 'right') {
+      xPosition = overlay.x - textWidth
+    }
+
+    // Vertical centering: PDF drawText uses baseline
+    // To center vertically, we need to move up by half the height minus the descent
+    yPosition = overlay.y - (textHeight / 2) + descent
+
+    console.log('📝 PDF Text Rendering:', {
+      text: overlay.text,
+      requestedCenter: { x: overlay.x, y: overlay.y },
+      actualPosition: { x: xPosition, y: yPosition },
+      fontSize,
+      textWidth,
+      textHeight,
+      ascent,
+      descent,
+    })
 
     page.drawText(overlay.text, {
-      x: overlay.x,
-      y: overlay.y,
-      size: overlay.fontSize ?? 12,
+      x: xPosition,
+      y: yPosition,
+      size: fontSize,
       font,
       color,
     })

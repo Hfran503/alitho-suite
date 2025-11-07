@@ -8,6 +8,7 @@ import { ShipmentTypesSettings } from '@/components/settings/ShipmentTypesSettin
 import { MenuConfigurationSettings } from '@/components/settings/MenuConfigurationSettings'
 import { DepartmentsSettings } from '@/components/settings/DepartmentsSettings'
 import { EstimateSettings } from '@/components/settings/EstimateSettings'
+import { SecuritySettings } from '@/components/settings/SecuritySettings'
 
 type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'departments' | 'estimates' | 'teams' | 'billing' | 'security'
 
@@ -22,9 +23,9 @@ export default function SettingsPage() {
     { id: 'menu-config' as Tab, name: 'Navigation Menu', icon: '📋' },
     { id: 'departments' as Tab, name: 'Departments', icon: '🏭' },
     { id: 'estimates' as Tab, name: 'Estimates', icon: '📝' },
+    { id: 'security' as Tab, name: 'Security', icon: '🔒' },
     { id: 'teams' as Tab, name: 'Teams', icon: '🏢', disabled: true },
     { id: 'billing' as Tab, name: 'Billing', icon: '💳', disabled: true },
-    { id: 'security' as Tab, name: 'Security', icon: '🔒', disabled: true },
   ]
 
   return (
@@ -74,9 +75,9 @@ export default function SettingsPage() {
         {activeTab === 'menu-config' && <MenuConfigurationSettings />}
         {activeTab === 'departments' && <DepartmentsSettings />}
         {activeTab === 'estimates' && <EstimateSettings />}
+        {activeTab === 'security' && <SecuritySettings />}
         {activeTab === 'teams' && <div className="text-gray-500">Teams settings coming soon...</div>}
         {activeTab === 'billing' && <div className="text-gray-500">Billing settings coming soon...</div>}
-        {activeTab === 'security' && <div className="text-gray-500">Security settings coming soon...</div>}
       </div>
     </div>
   )

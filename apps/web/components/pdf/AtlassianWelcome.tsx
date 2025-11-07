@@ -37,16 +37,31 @@ export function AtlassianWelcome() {
   }
 
   const generateWithOverlay = async (personName: string) => {
-    // Use the PDF with form field
+    // Calculate font size (simple auto-scaling)
+    const baseSize = 45
+    const maxWidth = 468 * 0.95 // 95% of rectangle width
+    const estimatedWidth = personName.length * (baseSize * 0.6) // Rough estimate
+    const fontSize = estimatedWidth > maxWidth ? Math.floor((maxWidth / estimatedWidth) * baseSize) : baseSize
+
+    // Use calibrated position from adjust-pdf page
     const response = await fetch('/api/pdf/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateUrl: '/templates/Atlassian_Template_WithFormField.pdf',
-        method: 'form',
-        data: {
-          name: personName,
-        },
+        templateUrl: '/templates/Atlassian_Template_v1.pdf',
+        method: 'overlay',
+        fontUrl: '/fonts/CharlieDisplay-Regular.otf',
+        data: {},
+        overlays: [
+          {
+            text: personName,
+            x: 470, // Center X (236 + 468/2)
+            y: 325, // Center Y (260 + 130/2)
+            fontSize: fontSize,
+            color: { c: 0, m: 0, y: 0, k: 1 }, // CMYK black
+            align: 'center',
+          },
+        ],
       }),
     })
 
@@ -74,13 +89,30 @@ export function AtlassianWelcome() {
     setError(null)
 
     try {
+      // Calculate font size (simple auto-scaling)
+      const baseSize = 45
+      const maxWidth = 468 * 0.95
+      const estimatedWidth = name.length * (baseSize * 0.6)
+      const fontSize = estimatedWidth > maxWidth ? Math.floor((maxWidth / estimatedWidth) * baseSize) : baseSize
+
       const response = await fetch('/api/pdf/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateUrl: '/templates/Atlassian_Template_WithFormField.pdf',
-          method: 'form',
-          data: { name },
+          templateUrl: '/templates/Atlassian_Template_v1.pdf',
+          method: 'overlay',
+          fontUrl: '/fonts/CharlieDisplay-Regular.otf',
+          data: {},
+          overlays: [
+            {
+              text: name,
+              x: 470,
+              y: 325,
+              fontSize: fontSize,
+              color: { c: 0, m: 0, y: 0, k: 1 }, // CMYK black
+              align: 'center',
+            },
+          ],
         }),
       })
 
@@ -101,8 +133,8 @@ export function AtlassianWelcome() {
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4">Atlassian Welcome Generator</h2>
       <p className="text-gray-600 mb-6">
-        Generate a personalized welcome PDF. The template will replace {'{name}'}{' '}
-        with the actual name.
+        Generate a personalized welcome PDF with the name centered on the certificate
+        using CharlieDisplay font (auto-scaled to fit).
       </p>
 
       <div className="space-y-4">
@@ -121,8 +153,8 @@ export function AtlassianWelcome() {
             disabled={loading}
           />
           <p className="text-xs text-gray-500 mt-1">
-            This will replace {'{name}'} in &quot;Welcome to the team, {'{name}'}
-            !&quot;
+            Name will be centered on the certificate at 45px CharlieDisplay font
+            (auto-scales if too long)
           </p>
         </div>
 
@@ -157,10 +189,13 @@ export function AtlassianWelcome() {
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
-          <p className="font-semibold mb-1">Example:</p>
-          <p className="text-gray-700">
-            Input: &quot;Alex&quot; → Output: &quot;Welcome to the team, Alex!&quot;
-          </p>
+          <p className="font-semibold mb-1">Settings:</p>
+          <ul className="text-gray-700 space-y-1 text-xs">
+            <li>• Font: CharlieDisplay Regular (45px base)</li>
+            <li>• Position: Centered at (470, 325)</li>
+            <li>• Rectangle: 468 × 130 pts</li>
+            <li>• Auto-scales for longer names</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -176,13 +211,30 @@ export function QuickAtlassianWelcome() {
   const generate = async () => {
     if (!name) return
 
+    // Calculate font size (simple auto-scaling)
+    const baseSize = 45
+    const maxWidth = 468 * 0.95
+    const estimatedWidth = name.length * (baseSize * 0.6)
+    const fontSize = estimatedWidth > maxWidth ? Math.floor((maxWidth / estimatedWidth) * baseSize) : baseSize
+
     const response = await fetch('/api/pdf/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateUrl: '/templates/Atlassian_Template_WithFormField.pdf',
-        method: 'form',
-        data: { name },
+        templateUrl: '/templates/Atlassian_Template_v1.pdf',
+        method: 'overlay',
+        fontUrl: '/fonts/CharlieDisplay-Regular.otf',
+        data: {},
+        overlays: [
+          {
+            text: name,
+            x: 470,
+            y: 325,
+            fontSize: fontSize,
+            color: { c: 0, m: 0, y: 0, k: 1 }, // CMYK black
+            align: 'center',
+          },
+        ],
       }),
     })
 

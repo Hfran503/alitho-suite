@@ -84,6 +84,13 @@ export async function GET() {
       // Include common fields
       configData.fromEmail = credentials.fromEmail
       configData.fromName = credentials.fromName
+
+      // Include IMAP fields (non-sensitive)
+      configData.imapServer = credentials.imapServer
+      configData.imapUser = credentials.imapUser
+      if (credentials.imapPassword) {
+        maskedCredentials.imapPassword = '••••••••'
+      }
     } catch (error) {
       console.error('Error fetching email credentials:', error)
     }
@@ -148,6 +155,9 @@ export async function POST(request: NextRequest) {
       resendApiKey,
       fromEmail,
       fromName,
+      imapServer,
+      imapUser,
+      imapPassword,
     } = body
 
     // Validate required fields based on provider
@@ -186,6 +196,13 @@ export async function POST(request: NextRequest) {
       provider,
       fromEmail,
       fromName,
+      imapServer,
+      imapUser,
+    }
+
+    // Only include IMAP password if it's not masked
+    if (imapPassword && !imapPassword.includes('••')) {
+      credentials.imapPassword = imapPassword
     }
 
     // Only include credentials if they're not masked (i.e., they've been changed)

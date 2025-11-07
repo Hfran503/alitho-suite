@@ -31,6 +31,7 @@ model Tenant {
   poReceiptIntegrations    PoReceiptIntegration[]
   vendorBillIntegrations   VendorBillIntegration[]
   customerPaymentIntegrations CustomerPaymentIntegration[]
+  atlassianOrders        AtlassianOrder[]
   JobSchedule              JobSchedule[]
   memberships            Membership[]
   menuConfigurations     MenuConfiguration[]
@@ -636,6 +637,63 @@ model CustomerPaymentIntegration {
   @@index([tenantId])
   @@index([status])
   @@index([processDate])
+  @@index([createdAt])
+  @@index([status, retryCount])
+}
+
+model AtlassianOrder {
+  id                String    @id @default(cuid())
+  orderNumber       String?   @unique // CS501, CS502, etc.
+  emailMessageId    String?   @unique // IMAP message ID for tracking
+  emailSubject      String?
+  emailFrom         String?
+  emailDate         DateTime?
+  emailBodyHtml     String?   @db.Text // Original HTML email body
+  status            String    @default("pending") // pending, processing, completed, failed, missing_address
+
+  // Extracted employee data
+  firstName         String?
+  lastName          String?
+  printName         String?   // First name only for labels
+  pdfPath           String?   // Path to generated PDF welcome packet
+  fullName          String?
+  personalEmail     String?
+  workEmail         String?
+  phoneNumber       String?
+  address1          String?
+  address2          String?
+  address3          String?
+  city              String?
+  state             String?
+  zipCode           String?
+  country           String?
+  countryCategory   String?   // Philippines, Australia, India, United States of America, International US
+
+  // Additional fields from Atlassian welcome packet
+  startDate         String?
+  manager           String?
+  department        String?
+  location          String?
+
+  // Processing metadata
+  rawEmail          Json?     // Full email object for debugging
+  parsedData        Json?     // Structured parsed data
+  paceResponse      Json?     // Response from PACE API (if applicable)
+  errorMessage      String?
+  retryCount        Int       @default(0)
+  maxRetries        Int       @default(3)
+  lastAttemptAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  processedAt       DateTime? // When successfully processed
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([emailMessageId])
+  @@index([country])
+  @@index([countryCategory])
   @@index([createdAt])
   @@index([status, retryCount])
 }

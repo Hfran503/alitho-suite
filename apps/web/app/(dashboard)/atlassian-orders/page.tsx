@@ -1,0 +1,569 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, RefreshCw, Download } from 'lucide-react';
+
+interface AtlassianOrder {
+  id: string;
+  orderNumber: string;
+  emailSubject: string;
+  emailFrom: string;
+  emailDate: string;
+  status: string;
+  firstName: string;
+  lastName: string;
+  printName: string;
+  pdfPath: string;
+  fullName: string;
+  personalEmail: string;
+  workEmail: string;
+  phoneNumber: string;
+  address1: string;
+  address2: string;
+  address3: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  countryCategory: string;
+  startDate: string;
+  manager: string;
+  department: string;
+  location: string;
+  createdAt: string;
+  processedAt: string;
+}
+
+export default function AtlassianOrdersPage() {
+  const [orders, setOrders] = useState<AtlassianOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [triggeringCheck, setTriggeringCheck] = useState(false);
+  const [checkSuccess, setCheckSuccess] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<AtlassianOrder | null>(null);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/atlassian/orders');
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOrders(data.data);
+      } else {
+        throw new Error('API returned unsuccessful response');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Fetch orders error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const handleTriggerCheck = async () => {
+    setTriggeringCheck(true);
+    setCheckSuccess(null);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/atlassian/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          folderPath: 'AtlassianOrders',
+          deleteAfterProcessing: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setCheckSuccess('Email check queued successfully! Refreshing in 5 seconds...');
+        setTimeout(() => {
+          fetchOrders();
+          setCheckSuccess(null);
+        }, 5000);
+      } else {
+        throw new Error(data.error || 'Failed to queue check');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setTriggeringCheck(false);
+    }
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'missing_address':
+        return 'bg-orange-100 text-orange-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Group orders by country category
+  const groupedOrders = {
+    all: orders,
+    philippines: orders.filter((o) => o.countryCategory === 'Philippines'),
+    australia: orders.filter((o) => o.countryCategory === 'Australia'),
+    india: orders.filter((o) => o.countryCategory === 'India'),
+    usa: orders.filter((o) => o.countryCategory === 'United States of America'),
+    international: orders.filter((o) => o.countryCategory === 'International US'),
+    missing: orders.filter((o) => o.status === 'missing_address'),
+  };
+
+  // Get count for each tab
+  const getCounts = () => {
+    return {
+      all: orders.length,
+      philippines: groupedOrders.philippines.length,
+      australia: groupedOrders.australia.length,
+      india: groupedOrders.india.length,
+      usa: groupedOrders.usa.length,
+      international: groupedOrders.international.length,
+      missing: groupedOrders.missing.length,
+    };
+  };
+
+  const counts = getCounts();
+
+  const renderOrdersTable = (ordersList: AtlassianOrder[]) => {
+    if (ordersList.length === 0) {
+      return (
+        <div className="text-center py-8 text-gray-500">
+          No orders found in this category.
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Order #
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Email
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Address
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Country
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Start Date
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                PDF
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Processed
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {ordersList.map((order) => (
+              <tr
+                key={order.id}
+                onClick={() => setSelectedOrder(order)}
+                className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                  selectedOrder?.id === order.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                }`}
+              >
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="text-sm font-semibold text-blue-600">
+                    {order.orderNumber || '-'}
+                  </div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
+                    {order.fullName || `${order.firstName} ${order.lastName}`}
+                  </div>
+                  {order.printName && (
+                    <div className="text-xs text-gray-500">Print: {order.printName}</div>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">{order.personalEmail || order.workEmail}</div>
+                  {order.phoneNumber && (
+                    <div className="text-xs text-gray-500">{order.phoneNumber}</div>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-sm text-gray-900">
+                    {order.address1 || <span className="text-red-500 font-semibold">Missing</span>}
+                  </div>
+                  {order.address2 && <div className="text-xs text-gray-500">{order.address2}</div>}
+                  {order.city && order.state && (
+                    <div className="text-xs text-gray-500">
+                      {order.city}, {order.state} {order.zipCode}
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {order.country}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  {order.startDate || '-'}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <Badge className={getStatusBadgeColor(order.status)}>
+                    {order.status.replace('_', ' ')}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {order.pdfPath ? (
+                    <a
+                      href={order.pdfPath}
+                      download
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      Download
+                    </a>
+                  ) : (
+                    <span className="text-xs text-gray-400">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  {formatDate(order.processedAt || order.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const handleExportJSON = () => {
+    const dataStr = JSON.stringify(groupedOrders, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `atlassian-orders-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Atlassian Orders</h1>
+          <p className="text-gray-600 mt-1">
+            Manage and view Atlassian welcome packet orders from email
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={handleExportJSON} variant="outline" disabled={orders.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export JSON
+          </Button>
+          <Button onClick={handleTriggerCheck} disabled={triggeringCheck}>
+            {triggeringCheck ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Checking...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Check Emails
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {checkSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
+          {checkSuccess}
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">{error}</div>
+      )}
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Total Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{counts.all}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Philippines</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{counts.philippines}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Australia</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{counts.australia}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-red-600">Missing Address</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{counts.missing}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Card>
+        <CardContent className="pt-6">
+          <Tabs defaultValue="all">
+            <TabsList className="mb-4">
+              <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
+              <TabsTrigger value="philippines">Philippines ({counts.philippines})</TabsTrigger>
+              <TabsTrigger value="australia">Australia ({counts.australia})</TabsTrigger>
+              <TabsTrigger value="india">India ({counts.india})</TabsTrigger>
+              <TabsTrigger value="usa">USA ({counts.usa})</TabsTrigger>
+              <TabsTrigger value="international">International ({counts.international})</TabsTrigger>
+              <TabsTrigger value="missing">Missing Address ({counts.missing})</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="all">{loading ? <Loader2 className="animate-spin" /> : renderOrdersTable(groupedOrders.all)}</TabsContent>
+            <TabsContent value="philippines">{renderOrdersTable(groupedOrders.philippines)}</TabsContent>
+            <TabsContent value="australia">{renderOrdersTable(groupedOrders.australia)}</TabsContent>
+            <TabsContent value="india">{renderOrdersTable(groupedOrders.india)}</TabsContent>
+            <TabsContent value="usa">{renderOrdersTable(groupedOrders.usa)}</TabsContent>
+            <TabsContent value="international">{renderOrdersTable(groupedOrders.international)}</TabsContent>
+            <TabsContent value="missing">{renderOrdersTable(groupedOrders.missing)}</TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setSelectedOrder(null)}
+          />
+
+          {/* Modal Panel */}
+          <div className="fixed inset-y-0 right-0 w-full sm:w-2/3 lg:w-1/2 bg-white shadow-2xl z-50 overflow-y-auto">
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Order Details</h2>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Order Information */}
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Employee Information</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-600">Order #:</div>
+                    <div className="font-bold text-blue-600 text-base">{selectedOrder.orderNumber || '-'}</div>
+                    <div className="text-gray-600">Full Name:</div>
+                    <div className="font-medium">{selectedOrder.fullName}</div>
+                    <div className="text-gray-600">First Name:</div>
+                    <div className="font-medium">{selectedOrder.firstName}</div>
+                    <div className="text-gray-600">Last Name:</div>
+                    <div className="font-medium">{selectedOrder.lastName}</div>
+                    <div className="text-gray-600">Print Name:</div>
+                    <div className="font-medium">{selectedOrder.printName || selectedOrder.firstName}</div>
+                    {selectedOrder.pdfPath && (
+                      <>
+                        <div className="text-gray-600">PDF:</div>
+                        <div>
+                          <a
+                            href={selectedOrder.pdfPath}
+                            download
+                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                          >
+                            <Download className="w-4 h-4 mr-1.5" />
+                            Download Welcome PDF
+                          </a>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Info */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Contact Information</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-600">Personal Email:</div>
+                    <div className="font-medium">{selectedOrder.personalEmail || 'N/A'}</div>
+                    <div className="text-gray-600">Work Email:</div>
+                    <div className="font-medium">{selectedOrder.workEmail || 'N/A'}</div>
+                    <div className="text-gray-600">Phone:</div>
+                    <div className="font-medium">{selectedOrder.phoneNumber || 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Address */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Address</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="text-sm">
+                    <div>{selectedOrder.address1}</div>
+                    {selectedOrder.address2 && <div>{selectedOrder.address2}</div>}
+                    {selectedOrder.address3 && <div>{selectedOrder.address3}</div>}
+                    <div>
+                      {selectedOrder.city}, {selectedOrder.state} {selectedOrder.zipCode}
+                    </div>
+                    <div className="font-medium">{selectedOrder.country}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Employment */}
+              {(selectedOrder.startDate || selectedOrder.manager || selectedOrder.department) && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Employment Details</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {selectedOrder.startDate && (
+                        <>
+                          <div className="text-gray-600">Start Date:</div>
+                          <div className="font-medium">{selectedOrder.startDate}</div>
+                        </>
+                      )}
+                      {selectedOrder.manager && (
+                        <>
+                          <div className="text-gray-600">Manager:</div>
+                          <div className="font-medium">{selectedOrder.manager}</div>
+                        </>
+                      )}
+                      {selectedOrder.department && (
+                        <>
+                          <div className="text-gray-600">Department:</div>
+                          <div className="font-medium">{selectedOrder.department}</div>
+                        </>
+                      )}
+                      {selectedOrder.location && (
+                        <>
+                          <div className="text-gray-600">Location:</div>
+                          <div className="font-medium">{selectedOrder.location}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Email Metadata */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Email Metadata</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Subject:</span>
+                      <span className="font-medium text-right">{selectedOrder.emailSubject}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">From:</span>
+                      <span className="font-medium">{selectedOrder.emailFrom}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Email Date:</span>
+                      <span className="font-medium">
+                        {new Date(selectedOrder.emailDate).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Processed:</span>
+                      <span className="font-medium">
+                        {new Date(selectedOrder.processedAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Raw JSON (Collapsed by default) */}
+              <div>
+                <details>
+                  <summary className="text-sm font-semibold text-gray-700 uppercase mb-3 cursor-pointer hover:text-gray-900">
+                    Raw Order Data (JSON)
+                  </summary>
+                  <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-xs overflow-x-auto mt-3">
+                    {JSON.stringify(selectedOrder, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+        </>
+      )}
+    </div>
+  );
+}
