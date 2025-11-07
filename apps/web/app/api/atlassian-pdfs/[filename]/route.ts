@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  * This ensures PDFs are accessible even in Docker/standalone builds
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
