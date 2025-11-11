@@ -44,14 +44,14 @@ export async function POST(_request: NextRequest) {
     }
 
     // Group orders by country category
-    const ordersByCountry = eligibleOrders.reduce((acc, order) => {
+    const ordersByCountry = eligibleOrders.reduce((acc: Record<string, typeof eligibleOrders>, order) => {
       const country = order.countryCategory || 'Unknown';
       if (!acc[country]) {
         acc[country] = [];
       }
       acc[country].push(order);
       return acc;
-    }, {} as Record<string, typeof eligibleOrders>);
+    }, {});
 
     const results: Record<string, any> = {};
     let totalJobsCreated = 0;
