@@ -50,14 +50,20 @@ interface Job {
   plannerEmail?: string
 }
 
-// Connect to Redis for queue
-const connection = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  maxRetriesPerRequest: null,
-})
+// Lazy initialization of Redis connection and email queue
+let emailQueue: Queue | null = null
 
-const emailQueue = new Queue('emails', { connection })
+function getEmailQueue() {
+  if (!emailQueue) {
+    const connection = new Redis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      maxRetriesPerRequest: null,
+    })
+    emailQueue = new Queue('emails', { connection })
+  }
+  return emailQueue
+}
 
 async function fetchPrebillingJobs(_tenantId: string) {
   // This function replicates the logic from /api/pace/jobs/prebilling
@@ -621,7 +627,7 @@ export async function GET(request: NextRequest) {
 
           try {
             // Queue email job
-            await emailQueue.add('send-email', {
+            await getEmailQueue().add('send-email', {
               to: csrEmail,
               bcc: bccEmail,
               subject: `Daily Prebilling Report - ${new Date().toLocaleDateString()}`,
