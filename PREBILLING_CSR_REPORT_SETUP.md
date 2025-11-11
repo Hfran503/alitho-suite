@@ -1,6 +1,6 @@
 # Prebilling CSR Report - Automated Daily Email Setup
 
-This document explains how to set up automated daily prebilling reports that are sent to CSRs at 8:10 AM California time.
+This document explains how to set up automated daily prebilling reports that are sent to CSRs at 8:00 AM California time.
 
 ## Overview
 

@@ -172,16 +172,34 @@ function mapFieldsToEmployeeData(
   let lastName = fields['Last Name'] || nameFromSubject?.lastName || '';
   const fullName = nameFromSubject?.fullName || `${firstName} ${lastName}`.trim();
 
-  // Create print name - ALWAYS use first word of the full name from subject, or first word of firstName
-  // This ensures we get just "Prageeth" even if firstName is "Prageeth Harshapriya"
+  // Create print name - extract first name, handling initials properly
+  // If first word is 1-2 chars (initial like "B"), use first 2 words
+  // Otherwise use just the first word
   let printName = '';
-  if (nameFromSubject?.fullName) {
-    // Use first word from the subject-parsed full name (most reliable)
-    const firstWord = nameFromSubject.fullName.split(/\s+/)[0];
-    printName = firstWord || '';
-  } else if (firstName) {
-    // Fallback: use first word of firstName field
-    printName = firstName.split(/\s+/).filter(w => w.length > 0)[0] || '';
+  if (firstName) {
+    // Use firstName field (most reliable source)
+    const nameParts = firstName.split(/\s+/).filter(w => w.length > 0);
+    if (nameParts.length > 0) {
+      const firstWord = nameParts[0];
+      // If first word is 1-2 characters (likely an initial like "B"), use first 2 words
+      if (firstWord.length <= 2 && nameParts.length > 1) {
+        printName = `${nameParts[0]} ${nameParts[1]}`;
+      } else {
+        printName = firstWord;
+      }
+    }
+  } else if (nameFromSubject?.fullName) {
+    // Fallback: use full name from subject
+    const nameParts = nameFromSubject.fullName.split(/\s+/).filter(w => w.length > 0);
+    if (nameParts.length > 0) {
+      const firstWord = nameParts[0];
+      // If first word is 1-2 characters (likely an initial), use first 2 words
+      if (firstWord.length <= 2 && nameParts.length > 1) {
+        printName = `${nameParts[0]} ${nameParts[1]}`;
+      } else {
+        printName = firstWord;
+      }
+    }
   }
 
   // Address fields

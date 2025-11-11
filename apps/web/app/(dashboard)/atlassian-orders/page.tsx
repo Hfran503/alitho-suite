@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Loader2, RefreshCw, Download } from 'lucide-react';
 
 interface AtlassianOrder {
@@ -53,6 +54,13 @@ export default function AtlassianOrdersPage() {
   const [sendingAllToPace, setSendingAllToPace] = useState(false);
   const [batchPaceSuccess, setBatchPaceSuccess] = useState<string | null>(null);
   const [batchPaceError, setBatchPaceError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedOrder, setEditedOrder] = useState<AtlassianOrder | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [regeneratingPdf, setRegeneratingPdf] = useState(false);
+  const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -424,6 +432,120 @@ export default function AtlassianOrdersPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleEditOrder = () => {
+    if (selectedOrder) {
+      setEditedOrder({ ...selectedOrder });
+      setIsEditing(true);
+      setUpdateSuccess(null);
+      setUpdateError(null);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedOrder(null);
+    setUpdateSuccess(null);
+    setUpdateError(null);
+  };
+
+  const handleSaveOrder = async () => {
+    if (!editedOrder) return;
+
+    try {
+      const response = await fetch(`/api/atlassian/orders/${editedOrder.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: editedOrder.firstName,
+          lastName: editedOrder.lastName,
+          fullName: editedOrder.fullName,
+          printName: editedOrder.printName,
+          personalEmail: editedOrder.personalEmail,
+          workEmail: editedOrder.workEmail,
+          phoneNumber: editedOrder.phoneNumber,
+          address1: editedOrder.address1,
+          address2: editedOrder.address2,
+          address3: editedOrder.address3,
+          city: editedOrder.city,
+          state: editedOrder.state,
+          zipCode: editedOrder.zipCode,
+          country: editedOrder.country,
+          countryCategory: editedOrder.countryCategory,
+          startDate: editedOrder.startDate,
+          manager: editedOrder.manager,
+          department: editedOrder.department,
+          location: editedOrder.location,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setUpdateSuccess('Order updated successfully!');
+        setIsEditing(false);
+        // Update the selected order with new data
+        setSelectedOrder(data.data);
+        // Refresh the orders list
+        setTimeout(() => {
+          fetchOrders();
+          setUpdateSuccess(null);
+        }, 2000);
+      } else {
+        throw new Error(data.error || 'Failed to update order');
+      }
+    } catch (err) {
+      setUpdateError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleFieldChange = (field: keyof AtlassianOrder, value: string) => {
+    if (editedOrder) {
+      setEditedOrder({
+        ...editedOrder,
+        [field]: value,
+      });
+    }
+  };
+
+  const handleRegeneratePdf = async (orderId: string) => {
+    setRegeneratingPdf(true);
+    setPdfSuccess(null);
+    setPdfError(null);
+
+    try {
+      const response = await fetch(`/api/atlassian/orders/${orderId}/regenerate-pdf`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPdfSuccess('PDF regenerated successfully!');
+        // Update the selected order with new PDF path
+        if (selectedOrder) {
+          setSelectedOrder({
+            ...selectedOrder,
+            pdfPath: data.data.pdfPath,
+            sftpUrl: null,
+          });
+        }
+        // Refresh orders to update the list
+        setTimeout(() => {
+          fetchOrders();
+          setPdfSuccess(null);
+        }, 3000);
+      } else {
+        throw new Error(data.error || 'Failed to regenerate PDF');
+      }
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setRegeneratingPdf(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -569,7 +691,15 @@ export default function AtlassianOrdersPage() {
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black bg-opacity-50 z-40"
-            onClick={() => setSelectedOrder(null)}
+            onClick={() => {
+              setSelectedOrder(null);
+              setIsEditing(false);
+              setEditedOrder(null);
+              setUpdateSuccess(null);
+              setUpdateError(null);
+              setPdfSuccess(null);
+              setPdfError(null);
+            }}
           />
 
           {/* Modal Panel */}
@@ -579,7 +709,15 @@ export default function AtlassianOrdersPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Order Details</h2>
               <button
-                onClick={() => setSelectedOrder(null)}
+                onClick={() => {
+                  setSelectedOrder(null);
+                  setIsEditing(false);
+                  setEditedOrder(null);
+                  setUpdateSuccess(null);
+                  setUpdateError(null);
+                  setPdfSuccess(null);
+                  setPdfError(null);
+                }}
                 className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
               >
                 ×
@@ -600,31 +738,102 @@ export default function AtlassianOrdersPage() {
               </div>
             )}
 
+            {/* Update Success Message */}
+            {updateSuccess && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-4">
+                {updateSuccess}
+              </div>
+            )}
+
+            {/* Update Error Message */}
+            {updateError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-4">
+                {updateError}
+              </div>
+            )}
+
+            {/* PDF Success Message */}
+            {pdfSuccess && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-4">
+                {pdfSuccess}
+              </div>
+            )}
+
+            {/* PDF Error Message */}
+            {pdfError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-4">
+                {pdfError}
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="mb-6 space-y-3">
-              <Button
-                onClick={() => handleSendToPace(selectedOrder.id)}
-                disabled={sendingToPace}
-                className="w-full"
-                variant="default"
-              >
-                {sendingToPace ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending to PACE...
-                  </>
-                ) : (
-                  'Send to PACE'
-                )}
-              </Button>
-              <Button
-                onClick={() => handleDownloadXML(selectedOrder)}
-                className="w-full"
-                variant="outline"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download XML
-              </Button>
+              {isEditing ? (
+                <>
+                  <Button
+                    onClick={handleSaveOrder}
+                    className="w-full"
+                    variant="default"
+                  >
+                    Save Changes
+                  </Button>
+                  <Button
+                    onClick={handleCancelEdit}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={handleEditOrder}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    Edit Order
+                  </Button>
+                  <Button
+                    onClick={() => handleRegeneratePdf(selectedOrder.id)}
+                    disabled={regeneratingPdf}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    {regeneratingPdf ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Regenerating PDF...
+                      </>
+                    ) : (
+                      'Regenerate PDF'
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => handleSendToPace(selectedOrder.id)}
+                    disabled={sendingToPace}
+                    className="w-full"
+                    variant="default"
+                  >
+                    {sendingToPace ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending to PACE...
+                      </>
+                    ) : (
+                      'Send to PACE'
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => handleDownloadXML(selectedOrder)}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download XML
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Order Information */}
@@ -633,39 +842,86 @@ export default function AtlassianOrdersPage() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Employee Information</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-gray-600">Order #:</div>
-                    <div className="font-bold text-blue-600 text-base">{selectedOrder.orderNumber || '-'}</div>
-                    {selectedOrder.paceJobNumber && (
-                      <>
-                        <div className="text-gray-600">PACE Job #:</div>
-                        <div className="font-bold text-green-600 text-base">{selectedOrder.paceJobNumber}</div>
-                      </>
-                    )}
-                    <div className="text-gray-600">Full Name:</div>
-                    <div className="font-medium">{selectedOrder.fullName}</div>
-                    <div className="text-gray-600">First Name:</div>
-                    <div className="font-medium">{selectedOrder.firstName}</div>
-                    <div className="text-gray-600">Last Name:</div>
-                    <div className="font-medium">{selectedOrder.lastName}</div>
-                    <div className="text-gray-600">Print Name:</div>
-                    <div className="font-medium">{selectedOrder.printName || selectedOrder.firstName}</div>
-                    {selectedOrder.pdfPath && (
-                      <>
-                        <div className="text-gray-600">PDF:</div>
+                  {isEditing && editedOrder ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Order #:</label>
+                        <div className="font-bold text-blue-600 text-base">{editedOrder.orderNumber || '-'}</div>
+                      </div>
+                      {editedOrder.paceJobNumber && (
                         <div>
-                          <a
-                            href={selectedOrder.pdfPath}
-                            download
-                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                          >
-                            <Download className="w-4 h-4 mr-1.5" />
-                            Download Welcome PDF
-                          </a>
+                          <label className="text-xs text-gray-600 mb-1 block">PACE Job #:</label>
+                          <div className="font-bold text-green-600 text-base">{editedOrder.paceJobNumber}</div>
                         </div>
-                      </>
-                    )}
-                  </div>
+                      )}
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Full Name:</label>
+                        <Input
+                          value={editedOrder.fullName || ''}
+                          onChange={(e) => handleFieldChange('fullName', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">First Name:</label>
+                        <Input
+                          value={editedOrder.firstName || ''}
+                          onChange={(e) => handleFieldChange('firstName', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Last Name:</label>
+                        <Input
+                          value={editedOrder.lastName || ''}
+                          onChange={(e) => handleFieldChange('lastName', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Print Name:</label>
+                        <Input
+                          value={editedOrder.printName || ''}
+                          onChange={(e) => handleFieldChange('printName', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-gray-600">Order #:</div>
+                      <div className="font-bold text-blue-600 text-base">{selectedOrder.orderNumber || '-'}</div>
+                      {selectedOrder.paceJobNumber && (
+                        <>
+                          <div className="text-gray-600">PACE Job #:</div>
+                          <div className="font-bold text-green-600 text-base">{selectedOrder.paceJobNumber}</div>
+                        </>
+                      )}
+                      <div className="text-gray-600">Full Name:</div>
+                      <div className="font-medium">{selectedOrder.fullName}</div>
+                      <div className="text-gray-600">First Name:</div>
+                      <div className="font-medium">{selectedOrder.firstName}</div>
+                      <div className="text-gray-600">Last Name:</div>
+                      <div className="font-medium">{selectedOrder.lastName}</div>
+                      <div className="text-gray-600">Print Name:</div>
+                      <div className="font-medium">{selectedOrder.printName || selectedOrder.firstName}</div>
+                      {selectedOrder.pdfPath && (
+                        <>
+                          <div className="text-gray-600">PDF:</div>
+                          <div>
+                            <a
+                              href={selectedOrder.pdfPath}
+                              download
+                              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                            >
+                              <Download className="w-4 h-4 mr-1.5" />
+                              Download Welcome PDF
+                            </a>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -673,14 +929,46 @@ export default function AtlassianOrdersPage() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Contact Information</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-gray-600">Personal Email:</div>
-                    <div className="font-medium">{selectedOrder.personalEmail || 'N/A'}</div>
-                    <div className="text-gray-600">Work Email:</div>
-                    <div className="font-medium">{selectedOrder.workEmail || 'N/A'}</div>
-                    <div className="text-gray-600">Phone:</div>
-                    <div className="font-medium">{selectedOrder.phoneNumber || 'N/A'}</div>
-                  </div>
+                  {isEditing && editedOrder ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Personal Email:</label>
+                        <Input
+                          value={editedOrder.personalEmail || ''}
+                          onChange={(e) => handleFieldChange('personalEmail', e.target.value)}
+                          className="text-sm"
+                          type="email"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Work Email:</label>
+                        <Input
+                          value={editedOrder.workEmail || ''}
+                          onChange={(e) => handleFieldChange('workEmail', e.target.value)}
+                          className="text-sm"
+                          type="email"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Phone:</label>
+                        <Input
+                          value={editedOrder.phoneNumber || ''}
+                          onChange={(e) => handleFieldChange('phoneNumber', e.target.value)}
+                          className="text-sm"
+                          type="tel"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-gray-600">Personal Email:</div>
+                      <div className="font-medium">{selectedOrder.personalEmail || 'N/A'}</div>
+                      <div className="text-gray-600">Work Email:</div>
+                      <div className="font-medium">{selectedOrder.workEmail || 'N/A'}</div>
+                      <div className="text-gray-600">Phone:</div>
+                      <div className="font-medium">{selectedOrder.phoneNumber || 'N/A'}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -688,49 +976,147 @@ export default function AtlassianOrdersPage() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Address</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="text-sm">
-                    <div>{selectedOrder.address1}</div>
-                    {selectedOrder.address2 && <div>{selectedOrder.address2}</div>}
-                    {selectedOrder.address3 && <div>{selectedOrder.address3}</div>}
-                    <div>
-                      {selectedOrder.city}, {selectedOrder.state} {selectedOrder.zipCode}
+                  {isEditing && editedOrder ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Address 1:</label>
+                        <Input
+                          value={editedOrder.address1 || ''}
+                          onChange={(e) => handleFieldChange('address1', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Address 2:</label>
+                        <Input
+                          value={editedOrder.address2 || ''}
+                          onChange={(e) => handleFieldChange('address2', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Address 3:</label>
+                        <Input
+                          value={editedOrder.address3 || ''}
+                          onChange={(e) => handleFieldChange('address3', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">City:</label>
+                        <Input
+                          value={editedOrder.city || ''}
+                          onChange={(e) => handleFieldChange('city', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">State:</label>
+                        <Input
+                          value={editedOrder.state || ''}
+                          onChange={(e) => handleFieldChange('state', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Zip Code:</label>
+                        <Input
+                          value={editedOrder.zipCode || ''}
+                          onChange={(e) => handleFieldChange('zipCode', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 mb-1 block">Country:</label>
+                        <Input
+                          value={editedOrder.country || ''}
+                          onChange={(e) => handleFieldChange('country', e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
                     </div>
-                    <div className="font-medium">{selectedOrder.country}</div>
-                  </div>
+                  ) : (
+                    <div className="text-sm">
+                      <div>{selectedOrder.address1}</div>
+                      {selectedOrder.address2 && <div>{selectedOrder.address2}</div>}
+                      {selectedOrder.address3 && <div>{selectedOrder.address3}</div>}
+                      <div>
+                        {selectedOrder.city}, {selectedOrder.state} {selectedOrder.zipCode}
+                      </div>
+                      <div className="font-medium">{selectedOrder.country}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Employment */}
-              {(selectedOrder.startDate || selectedOrder.manager || selectedOrder.department) && (
+              {(selectedOrder.startDate || selectedOrder.manager || selectedOrder.department || isEditing) && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Employment Details</h3>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      {selectedOrder.startDate && (
-                        <>
-                          <div className="text-gray-600">Start Date:</div>
-                          <div className="font-medium">{selectedOrder.startDate}</div>
-                        </>
-                      )}
-                      {selectedOrder.manager && (
-                        <>
-                          <div className="text-gray-600">Manager:</div>
-                          <div className="font-medium">{selectedOrder.manager}</div>
-                        </>
-                      )}
-                      {selectedOrder.department && (
-                        <>
-                          <div className="text-gray-600">Department:</div>
-                          <div className="font-medium">{selectedOrder.department}</div>
-                        </>
-                      )}
-                      {selectedOrder.location && (
-                        <>
-                          <div className="text-gray-600">Location:</div>
-                          <div className="font-medium">{selectedOrder.location}</div>
-                        </>
-                      )}
-                    </div>
+                    {isEditing && editedOrder ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Start Date:</label>
+                          <Input
+                            value={editedOrder.startDate || ''}
+                            onChange={(e) => handleFieldChange('startDate', e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Manager:</label>
+                          <Input
+                            value={editedOrder.manager || ''}
+                            onChange={(e) => handleFieldChange('manager', e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Department:</label>
+                          <Input
+                            value={editedOrder.department || ''}
+                            onChange={(e) => handleFieldChange('department', e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Location:</label>
+                          <Input
+                            value={editedOrder.location || ''}
+                            onChange={(e) => handleFieldChange('location', e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {selectedOrder.startDate && (
+                          <>
+                            <div className="text-gray-600">Start Date:</div>
+                            <div className="font-medium">{selectedOrder.startDate}</div>
+                          </>
+                        )}
+                        {selectedOrder.manager && (
+                          <>
+                            <div className="text-gray-600">Manager:</div>
+                            <div className="font-medium">{selectedOrder.manager}</div>
+                          </>
+                        )}
+                        {selectedOrder.department && (
+                          <>
+                            <div className="text-gray-600">Department:</div>
+                            <div className="font-medium">{selectedOrder.department}</div>
+                          </>
+                        )}
+                        {selectedOrder.location && (
+                          <>
+                            <div className="text-gray-600">Location:</div>
+                            <div className="font-medium">{selectedOrder.location}</div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

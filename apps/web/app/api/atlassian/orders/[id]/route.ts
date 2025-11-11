@@ -95,6 +95,8 @@ export async function PATCH(
       'status',
       'firstName',
       'lastName',
+      'fullName',
+      'printName',
       'personalEmail',
       'workEmail',
       'phoneNumber',

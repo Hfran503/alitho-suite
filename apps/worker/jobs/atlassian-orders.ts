@@ -1,9 +1,9 @@
 import { Worker, Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { db } from '@repo/database';
+import { generateAtlassianWelcomePDF } from '@repo/shared';
 import { withImapClient, type EmailMessage } from '../lib/imap-client';
 import { parseAtlassianEmail } from '../lib/atlassian-email-parser';
-import { generateAtlassianWelcomePDF } from '../lib/atlassian-pdf-generator';
 import { generateUniqueOrderNumber } from '../lib/atlassian-order-number';
 import { uploadToSFTP, isSFTPConfigured, getSFTPPublicURL } from '../src/lib/sftp';
 import { join } from 'path';
