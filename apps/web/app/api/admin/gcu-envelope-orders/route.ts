@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { isAdminRole } from '@/lib/roles'
+import { isStaffRole } from '@/lib/roles'
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions)
@@ -12,9 +12,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify admin role
+    // Verify staff role (admin/manager access)
     const userRole = (session.user as any).role
-    if (!isAdminRole(userRole)) {
+    if (!isStaffRole(userRole)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
