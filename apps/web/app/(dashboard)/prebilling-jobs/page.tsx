@@ -136,7 +136,7 @@ export default function PrebillingJobsPage() {
         setCSRFilter(matchingCSR)
       }
     }
-  }, [jobs, userRole, userName, csrFilter])
+  }, [jobs, userRole, userName])
 
   const fetchOpenJobs = async () => {
     setLoading(true)
