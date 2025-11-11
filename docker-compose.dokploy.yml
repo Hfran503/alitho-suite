@@ -24,10 +24,16 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
 
+      # Redis Configuration (for BullMQ job queues)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
       # All other secrets (DATABASE_URL, REDIS_URL, email credentials, etc.)
       # will be automatically fetched from AWS Secrets Manager by the app
     volumes:
       - atlassian-pdfs:/app/apps/web/public/atlassian-pdfs
+    depends_on:
+      - redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "process.exit(0)"]
@@ -36,8 +42,26 @@ services:
       retries: 3
       start_period: 60s
 
+  # ============================================
+  # CACHE & QUEUES (Redis)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   # Shared volume for Atlassian PDFs
   # Worker generates PDFs -> Web serves them at /atlassian-pdfs/*
   atlassian-pdfs:
+    driver: local
+  # Redis data persistence
+  redisdata:
     driver: local
