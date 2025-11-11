@@ -10,6 +10,12 @@ import { existsSync } from 'fs'
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 
+// Get base URL for absolute links in emails
+function getBaseUrl(): string {
+  // Use NEXT_PUBLIC_BASE_URL if set, otherwise default to production domain
+  return process.env.NEXT_PUBLIC_BASE_URL || 'https://calithosuite.com'
+}
+
 // Generate unique order number (e.g., GCU-2025-001234)
 function generateOrderNumber(): string {
   const year = new Date().getFullYear()
@@ -20,22 +26,29 @@ function generateOrderNumber(): string {
 }
 
 // Generate email HTML for order notification
-function generateOrderEmailHTML(order: {
-  orderNumber: string
-  orderId: string
-  quantity: number
-  position: string
-  address: string
-  notes: string | null
-  printPdfUrl: string | null
-  proofPdfUrl: string | null
-  createdByEmail: string
-  submittedAt: Date
-}): string {
+function generateOrderEmailHTML(
+  order: {
+    orderNumber: string
+    orderId: string
+    quantity: number
+    position: string
+    address: string
+    notes: string | null
+    printPdfUrl: string | null
+    proofPdfUrl: string | null
+    createdByEmail: string
+    submittedAt: Date
+  },
+  baseUrl: string
+): string {
   const formattedDate = new Date(order.submittedAt).toLocaleString('en-US', {
     dateStyle: 'full',
     timeStyle: 'short',
   })
+
+  // Convert relative URLs to absolute URLs for email
+  const printPdfAbsoluteUrl = order.printPdfUrl ? `${baseUrl}${order.printPdfUrl}` : null
+  const proofPdfAbsoluteUrl = order.proofPdfUrl ? `${baseUrl}${order.proofPdfUrl}` : null
 
   return `
     <html>
@@ -104,13 +117,13 @@ function generateOrderEmailHTML(order: {
 
             <div class="download-section">
               <p style="margin: 0 0 12px 0; font-weight: 600; color: #1e40af;">Download Files:</p>
-              ${order.printPdfUrl ? `
-                <a href="${order.printPdfUrl}" class="download-button" target="_blank">
+              ${printPdfAbsoluteUrl ? `
+                <a href="${printPdfAbsoluteUrl}" class="download-button" target="_blank">
                   📄 Download Print PDF
                 </a>
               ` : ''}
-              ${order.proofPdfUrl ? `
-                <a href="${order.proofPdfUrl}" class="download-button" target="_blank">
+              ${proofPdfAbsoluteUrl ? `
+                <a href="${proofPdfAbsoluteUrl}" class="download-button" target="_blank">
                   📋 Download Proof PDF
                 </a>
               ` : ''}
@@ -329,6 +342,7 @@ export async function POST(req: NextRequest) {
     // Send email notification
     try {
       const emailQueue = await getEmailQueue()
+      const baseUrl = getBaseUrl()
       const emailHTML = generateOrderEmailHTML({
         orderNumber: order.orderNumber,
         orderId: order.orderId,
@@ -340,7 +354,7 @@ export async function POST(req: NextRequest) {
         proofPdfUrl: order.proofPdfUrl,
         createdByEmail: order.createdByEmail,
         submittedAt: order.submittedAt!,
-      })
+      }, baseUrl)
 
       await emailQueue.add('send-email', {
         to: 'hector.franco@calitho.com',
@@ -348,6 +362,15 @@ export async function POST(req: NextRequest) {
         html: emailHTML,
         text: `New GCU custom envelope order ${order.orderNumber} has been placed. Please view this email in HTML format for full details.`,
         tenantId,
+      }, {
+        priority: 1, // High priority (lower number = higher priority)
+        attempts: 3, // Retry up to 3 times if it fails
+        backoff: {
+          type: 'exponential',
+          delay: 2000, // 2 second initial delay between retries
+        },
+        removeOnComplete: true, // Clean up completed jobs
+        removeOnFail: false, // Keep failed jobs for debugging
       })
 
       console.log(`✓ Queued email notification for order ${order.orderNumber}`)
