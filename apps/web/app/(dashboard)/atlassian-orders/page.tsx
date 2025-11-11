@@ -528,7 +528,7 @@ export default function AtlassianOrdersPage() {
           setSelectedOrder({
             ...selectedOrder,
             pdfPath: data.data.pdfPath,
-            sftpUrl: null,
+            sftpUrl: undefined,
           });
         }
         // Refresh orders to update the list
