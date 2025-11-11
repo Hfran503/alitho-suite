@@ -4,7 +4,6 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { s3Client, getPublicUrl } from '@/lib/s3'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { nanoid } from 'nanoid'
 import { isCustomerRole } from '@/lib/roles'
 import { getEmailQueue } from '@/lib/queue'
 
@@ -132,6 +131,51 @@ function generateOrderEmailHTML(order: {
   `
 }
 
+export async function GET(req: NextRequest) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user's tenant
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: true,
+      },
+    })
+
+    if (!user || !user.memberships[0]) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 404 })
+    }
+
+    const tenantId = user.memberships[0].tenantId
+
+    // Fetch all orders for this tenant, sorted by newest first
+    const orders = await db.gcuEnvelopeOrder.findMany({
+      where: {
+        tenantId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    return NextResponse.json({
+      success: true,
+      orders,
+    })
+  } catch (error) {
+    console.error('Error fetching GCU envelope orders:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch orders' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Check authentication
@@ -226,12 +270,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const timestamp = Date.now()
-    const uniqueId = nanoid(10)
-
-    // Upload PRINT PDF to S3
+    // Upload PRINT PDF to S3 with formatted filename
     const printBuffer = Buffer.from(await printPdf.arrayBuffer())
-    const printS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/print-${timestamp}-${uniqueId}.pdf`
+    const printFileName = `${orderId} - ${quantity} - print.pdf`
+    const printS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/${printFileName}`
 
     await s3Client.send(
       new PutObjectCommand({
@@ -244,13 +286,14 @@ export async function POST(req: NextRequest) {
 
     const printPdfUrl = getPublicUrl(printS3Key)
 
-    // Upload PROOF PDF to S3 (optional)
+    // Upload PROOF PDF to S3 (optional) with formatted filename
     let proofS3Key: string | null = null
     let proofPdfUrl: string | null = null
 
     if (proofPdf) {
       const proofBuffer = Buffer.from(await proofPdf.arrayBuffer())
-      proofS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/proof-${timestamp}-${uniqueId}.pdf`
+      const proofFileName = `${orderId} - ${quantity} - proof.pdf`
+      proofS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/${proofFileName}`
 
       await s3Client.send(
         new PutObjectCommand({
