@@ -21,6 +21,7 @@ type Job = {
   proposalPO?: string // PO from proposal
   csr?: string // CSR ID
   csrName?: string // CSR name
+  csrEmail?: string // CSR email
   part1Estimate?: string // Estimate number from JobPart Part 1
   jobType?: number // JobType ID
   jobTypeDescription?: string // JobType description
@@ -2011,7 +2012,17 @@ export default function PrebillingJobsPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">CSR</label>
-                    <p className="text-base font-semibold text-gray-900">{getFirstName(selectedJob.csrName || selectedJob.csr) || '-'}</p>
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-base font-semibold text-gray-900">{getFirstName(selectedJob.csrName || selectedJob.csr) || '-'}</p>
+                      {selectedJob.csrEmail && (
+                        <a
+                          href={`mailto:${selectedJob.csrEmail}`}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {selectedJob.csrEmail}
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Planner</label>

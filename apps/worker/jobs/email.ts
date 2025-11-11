@@ -10,13 +10,14 @@ interface EmailJobData {
   templateData?: Record<string, any>
   text?: string
   html?: string
+  bcc?: string | string[]
   tenantId: string
 }
 
 async function processEmail(job: Job<EmailJobData>) {
-  const { to, subject, templateName, text, html, tenantId } = job.data
+  const { to, subject, templateName, text, html, bcc, tenantId } = job.data
 
-  console.log(`Sending email to ${to}: ${subject}`)
+  console.log(`Sending email to ${to}: ${subject}${bcc ? ` (BCC: ${bcc})` : ''}`)
 
   try {
     // Get email credentials from AWS Secrets Manager
@@ -53,6 +54,7 @@ async function processEmail(job: Job<EmailJobData>) {
         subject,
         text: text || `Email from template: ${templateName}`,
         html: html || `<p>Email from template: ${templateName}</p>`,
+        bcc: bcc,
       })
 
       emailSent = true
@@ -67,6 +69,7 @@ async function processEmail(job: Job<EmailJobData>) {
         subject,
         text: text || `Email from template: ${templateName}`,
         html: html || `<p>Email from template: ${templateName}</p>`,
+        bcc: bcc,
       })
 
       emailSent = true
@@ -86,6 +89,7 @@ async function processEmail(job: Job<EmailJobData>) {
         Source: credentials.fromEmail,
         Destination: {
           ToAddresses: Array.isArray(to) ? to : [to],
+          ...(bcc && { BccAddresses: Array.isArray(bcc) ? bcc : [bcc] }),
         },
         Message: {
           Subject: {
@@ -114,6 +118,7 @@ async function processEmail(job: Job<EmailJobData>) {
         to: Array.isArray(to) ? to : [to],
         subject,
         html: html || `<p>Email from template: ${templateName}</p>`,
+        ...(bcc && { bcc: Array.isArray(bcc) ? bcc : [bcc] }),
       })
 
       emailSent = true

@@ -349,25 +349,33 @@ export async function GET() {
 
         if (csrResponse.ok) {
           const csrData = await csrResponse.json()
-          return { csrId, csrName: csrData.name || csrData.id }
+          return {
+            csrId,
+            csrName: csrData.name || csrData.id,
+            csrEmail: csrData.email || null
+          }
         }
       } catch (err) {
         console.error(`Error fetching CSR ${csrId}:`, err)
       }
-      return { csrId, csrName: null }
+      return { csrId, csrName: null, csrEmail: null }
     })
 
     const csrResults = await Promise.all(csrPromises)
     const csrNameMap = new Map(csrResults.map(r => [r.csrId, r.csrName]))
+    const csrEmailMap = new Map(csrResults.map(r => [r.csrId, r.csrEmail]))
 
-    // Add CSR name to each job
+    // Add CSR name and email to each job
     jobs.forEach(job => {
       if (job.csr && csrNameMap.has(job.csr)) {
         job.csrName = csrNameMap.get(job.csr) || null
       }
+      if (job.csr && csrEmailMap.has(job.csr)) {
+        job.csrEmail = csrEmailMap.get(job.csr) || null
+      }
     })
 
-    console.log(`✅ Enriched jobs with CSR names`)
+    console.log(`✅ Enriched jobs with CSR names and emails`)
 
     // Enrich jobs with Planner names and emails
     const uniquePlanners = [...new Set(jobs.map(j => j.u_planner).filter(Boolean))]
