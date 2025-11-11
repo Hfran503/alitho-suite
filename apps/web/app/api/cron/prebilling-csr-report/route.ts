@@ -55,11 +55,15 @@ let emailQueue: Queue | null = null
 
 function getEmailQueue() {
   if (!emailQueue) {
-    const connection = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      maxRetriesPerRequest: null,
-    })
+    // Use REDIS_URL if available (from AWS Secrets Manager), otherwise fall back to host/port
+    const redisUrl = process.env.REDIS_URL
+    const connection = redisUrl
+      ? new Redis(redisUrl, { maxRetriesPerRequest: null })
+      : new Redis({
+          host: process.env.REDIS_HOST || 'localhost',
+          port: parseInt(process.env.REDIS_PORT || '6379'),
+          maxRetriesPerRequest: null,
+        })
     emailQueue = new Queue('emails', { connection })
   }
   return emailQueue
