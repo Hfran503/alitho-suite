@@ -687,13 +687,21 @@ export interface EmailCredentials {
  * @returns The email credentials
  */
 export async function getEmailCredentials(tenantId: string): Promise<EmailCredentials> {
-  const secretName = `calitho-suite/integrations/email/${tenantId}`
+  const tenantSecretName = `calitho-suite/integrations/email/${tenantId}`
 
   try {
-    const secret = await getSecret(secretName, true)
+    // Try tenant-specific credentials first
+    const secret = await getSecret(tenantSecretName, true)
     return secret as EmailCredentials
   } catch (error) {
-    throw new Error(`Email credentials not found for tenant ${tenantId}`)
+    // Fall back to global email credentials if tenant-specific ones don't exist
+    try {
+      console.log(`Tenant-specific email credentials not found for ${tenantId}, falling back to global credentials`)
+      const globalSecret = await getSecret('calitho-suite/email', true)
+      return globalSecret as EmailCredentials
+    } catch (globalError) {
+      throw new Error(`Email credentials not found for tenant ${tenantId} (and no global fallback configured)`)
+    }
   }
 }
 
