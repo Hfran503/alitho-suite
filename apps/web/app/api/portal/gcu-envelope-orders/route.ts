@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { s3Client, getPublicUrl } from '@/lib/s3'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { isCustomerRole } from '@/lib/roles'
 import { getEmailQueue } from '@/lib/queue'
+import { writeFile, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { existsSync } from 'fs'
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 
@@ -270,41 +271,34 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Upload PRINT PDF to S3 with formatted filename
+    // Save PRINT PDF to local filesystem with formatted filename
+    const publicDir = join(process.cwd(), 'public')
+    const gcuPdfsDir = join(publicDir, 'gcu-envelope-pdfs')
+
+    // Create directory if it doesn't exist
+    if (!existsSync(gcuPdfsDir)) {
+      await mkdir(gcuPdfsDir, { recursive: true })
+    }
+
     const printBuffer = Buffer.from(await printPdf.arrayBuffer())
     const printFileName = `${orderId} - ${quantity} - print.pdf`
-    const printS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/${printFileName}`
+    const printFilePath = join(gcuPdfsDir, printFileName)
 
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET!,
-        Key: printS3Key,
-        Body: printBuffer,
-        ContentType: 'application/pdf',
-      })
-    )
+    await writeFile(printFilePath, printBuffer)
 
-    const printPdfUrl = getPublicUrl(printS3Key)
+    const printPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(printFileName)}`
 
-    // Upload PROOF PDF to S3 (optional) with formatted filename
-    let proofS3Key: string | null = null
+    // Save PROOF PDF to local filesystem (optional) with formatted filename
     let proofPdfUrl: string | null = null
 
     if (proofPdf) {
       const proofBuffer = Buffer.from(await proofPdf.arrayBuffer())
       const proofFileName = `${orderId} - ${quantity} - proof.pdf`
-      proofS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/${proofFileName}`
+      const proofFilePath = join(gcuPdfsDir, proofFileName)
 
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET!,
-          Key: proofS3Key,
-          Body: proofBuffer,
-          ContentType: 'application/pdf',
-        })
-      )
+      await writeFile(proofFilePath, proofBuffer)
 
-      proofPdfUrl = getPublicUrl(proofS3Key)
+      proofPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(proofFileName)}`
     }
 
     // Create order in database
@@ -316,11 +310,11 @@ export async function POST(req: NextRequest) {
         position,
         address,
         notes: notes || null,
-        printPdfBucket: process.env.S3_BUCKET!,
-        printPdfKey: printS3Key,
+        printPdfBucket: null, // Not using S3 anymore
+        printPdfKey: null, // Not using S3 anymore
         printPdfUrl,
-        proofPdfBucket: proofS3Key ? process.env.S3_BUCKET! : null,
-        proofPdfKey: proofS3Key,
+        proofPdfBucket: null, // Not using S3 anymore
+        proofPdfKey: null, // Not using S3 anymore
         proofPdfUrl,
         isApproved: true,
         approvedAt: new Date(),
