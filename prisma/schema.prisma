@@ -35,6 +35,7 @@ model Tenant {
   JobSchedule              JobSchedule[]
   memberships            Membership[]
   menuConfigurations     MenuConfiguration[]
+  portalPageConfigurations PortalPageConfiguration[]
   estimateSettings       EstimateSettings?
   netsuiteIntegration    NetSuiteIntegration?
   orders                 Order[]
@@ -42,6 +43,7 @@ model Tenant {
   shippingLabels         ShippingLabel[]
   switchPdfUploads       SwitchPdfUpload[]
   warehouses             Warehouse[]
+  gcuEnvelopeOrders      GcuEnvelopeOrder[]
 
   @@index([slug])
   @@index([status])
@@ -721,6 +723,30 @@ model MenuConfiguration {
   @@index([order])
 }
 
+model PortalPageConfiguration {
+  id                     String   @id @default(cuid())
+  pageKey                String
+  label                  String
+  href                   String
+  icon                   String?
+  order                  Int      @default(0)
+  isActive               Boolean  @default(true)
+  description            String?
+  visibilityMode         String   @default("all") // "all", "pace_ids", "user_ids", "user_emails"
+  allowedPaceCustomerIds String[] @default([])
+  allowedUserIds         String[] @default([])
+  allowedUserEmails      String[] @default([])
+  tenantId               String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, pageKey])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([order])
+}
+
 model EstimateSettings {
   id                        String   @id @default(cuid())
   allowedJobProductTypeIds  String[] // Array of Job Product Type IDs allowed in estimates (deprecated, use allowedJobProductTypes)
@@ -866,6 +892,50 @@ model SwitchPdfUpload {
   @@index([status])
   @@index([createdAt])
   @@index([uploadedBy])
+}
+
+model GcuEnvelopeOrder {
+  id              String    @id @default(cuid())
+  orderNumber     String    @unique // Auto-generated order number
+  orderId         String    // User-provided order/reference ID
+  quantity        Int
+  position        String    // 'center back flap' or 'front'
+  address         String    @db.Text
+
+  // PDF Storage
+  printPdfBucket  String?   // S3 bucket for PRINT PDF
+  printPdfKey     String?   // S3 key for PRINT PDF
+  printPdfUrl     String?   // Public URL for PRINT PDF
+  proofPdfBucket  String?   // S3 bucket for PROOF PDF (optional, for reference)
+  proofPdfKey     String?   // S3 key for PROOF PDF
+  proofPdfUrl     String?   // Public URL for PROOF PDF
+
+  // Approval & Status
+  isApproved      Boolean   @default(false)
+  approvedAt      DateTime?
+  status          String    @default("draft") // draft, pending, approved, processing, completed, cancelled
+
+  // User & Tenant
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy       String    // User ID who created the order
+  createdByEmail  String    // Email of user who created the order
+
+  // Metadata
+  notes           String?   @db.Text
+  metadata        Json?     // Additional order metadata
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  submittedAt     DateTime? // When order was submitted/approved
+
+  @@index([tenantId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdByEmail])
+  @@index([createdAt])
 }
 
 enum BatchImportStatus {

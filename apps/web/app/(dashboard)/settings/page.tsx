@@ -6,11 +6,12 @@ import { ActiveSessionsSettings } from '@/components/settings/ActiveSessionsSett
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings'
 import { ShipmentTypesSettings } from '@/components/settings/ShipmentTypesSettings'
 import { MenuConfigurationSettings } from '@/components/settings/MenuConfigurationSettings'
+import { PortalPagesSettings } from '@/components/settings/PortalPagesSettings'
 import { DepartmentsSettings } from '@/components/settings/DepartmentsSettings'
 import { EstimateSettings } from '@/components/settings/EstimateSettings'
 import { SecuritySettings } from '@/components/settings/SecuritySettings'
 
-type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'departments' | 'estimates' | 'teams' | 'billing' | 'security'
+type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'portal-pages' | 'departments' | 'estimates' | 'teams' | 'billing' | 'security'
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('users')
@@ -21,6 +22,7 @@ export default function SettingsPage() {
     { id: 'integrations' as Tab, name: 'Integrations', icon: '🔌' },
     { id: 'shipment-types' as Tab, name: 'Shipment Settings', icon: '📦' },
     { id: 'menu-config' as Tab, name: 'Navigation Menu', icon: '📋' },
+    { id: 'portal-pages' as Tab, name: 'Portal Pages', icon: '🌐' },
     { id: 'departments' as Tab, name: 'Departments', icon: '🏭' },
     { id: 'estimates' as Tab, name: 'Estimates', icon: '📝' },
     { id: 'security' as Tab, name: 'Security', icon: '🔒' },
@@ -73,6 +75,7 @@ export default function SettingsPage() {
         {activeTab === 'integrations' && <IntegrationsSettings />}
         {activeTab === 'shipment-types' && <ShipmentTypesSettings />}
         {activeTab === 'menu-config' && <MenuConfigurationSettings />}
+        {activeTab === 'portal-pages' && <PortalPagesSettings />}
         {activeTab === 'departments' && <DepartmentsSettings />}
         {activeTab === 'estimates' && <EstimateSettings />}
         {activeTab === 'security' && <SecuritySettings />}

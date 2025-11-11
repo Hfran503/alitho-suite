@@ -1,0 +1,336 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { db } from '@repo/database'
+import { s3Client, getPublicUrl } from '@/lib/s3'
+import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { nanoid } from 'nanoid'
+import { isCustomerRole } from '@/lib/roles'
+import { getEmailQueue } from '@/lib/queue'
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+
+// Generate unique order number (e.g., GCU-2025-001234)
+function generateOrderNumber(): string {
+  const year = new Date().getFullYear()
+  const random = Math.floor(Math.random() * 1000000)
+    .toString()
+    .padStart(6, '0')
+  return `GCU-${year}-${random}`
+}
+
+// Generate email HTML for order notification
+function generateOrderEmailHTML(order: {
+  orderNumber: string
+  orderId: string
+  quantity: number
+  position: string
+  address: string
+  notes: string | null
+  printPdfUrl: string | null
+  proofPdfUrl: string | null
+  createdByEmail: string
+  submittedAt: Date
+}): string {
+  const formattedDate = new Date(order.submittedAt).toLocaleString('en-US', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+  })
+
+  return `
+    <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #1f2937; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 20px; border: 1px solid #e5e7eb; }
+          .detail-row { display: flex; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
+          .detail-label { font-weight: 600; width: 150px; color: #6b7280; }
+          .detail-value { flex: 1; }
+          .download-section { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; border-radius: 4px; }
+          .download-button { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 8px 8px 8px 0; font-weight: 600; }
+          .download-button:hover { background: #2563eb; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
+          .alert { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0; border-radius: 4px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0; font-size: 24px;">New GCU Custom Envelope Order</h1>
+            <p style="margin: 8px 0 0 0; opacity: 0.9;">Order #${order.orderNumber}</p>
+          </div>
+
+          <div class="content">
+            <p style="font-size: 16px; margin-top: 0;">A new custom envelope order has been placed.</p>
+
+            <div style="margin: 24px 0;">
+              <div class="detail-row">
+                <div class="detail-label">Order Number:</div>
+                <div class="detail-value"><strong>${order.orderNumber}</strong></div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-label">Reference ID:</div>
+                <div class="detail-value">${order.orderId}</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-label">Quantity:</div>
+                <div class="detail-value">${order.quantity.toLocaleString()}</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-label">Position:</div>
+                <div class="detail-value">${order.position === 'center_back_flap' ? 'Center Back Flap' : 'Front'}</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-label">Address:</div>
+                <div class="detail-value" style="white-space: pre-wrap;">${order.address}</div>
+              </div>
+              ${order.notes ? `
+              <div class="detail-row">
+                <div class="detail-label">Notes:</div>
+                <div class="detail-value" style="white-space: pre-wrap;">${order.notes}</div>
+              </div>
+              ` : ''}
+              <div class="detail-row">
+                <div class="detail-label">Submitted By:</div>
+                <div class="detail-value">${order.createdByEmail}</div>
+              </div>
+              <div class="detail-row" style="border-bottom: none;">
+                <div class="detail-label">Submitted At:</div>
+                <div class="detail-value">${formattedDate}</div>
+              </div>
+            </div>
+
+            <div class="download-section">
+              <p style="margin: 0 0 12px 0; font-weight: 600; color: #1e40af;">Download Files:</p>
+              ${order.printPdfUrl ? `
+                <a href="${order.printPdfUrl}" class="download-button" target="_blank">
+                  📄 Download Print PDF
+                </a>
+              ` : ''}
+              ${order.proofPdfUrl ? `
+                <a href="${order.proofPdfUrl}" class="download-button" target="_blank">
+                  📋 Download Proof PDF
+                </a>
+              ` : ''}
+            </div>
+
+            <div class="alert">
+              <p style="margin: 0; font-weight: 600; color: #92400e;">Action Required:</p>
+              <p style="margin: 8px 0 0 0; color: #92400e;">Please review this order and begin processing.</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated notification from Calitho Suite</p>
+            <p>Order Management System</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Verify customer role
+    const userRole = (session.user as any).role
+    if (!isCustomerRole(userRole)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Get user's tenant
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: true,
+      },
+    })
+
+    if (!user || !user.memberships[0]) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 404 })
+    }
+
+    const tenantId = user.memberships[0].tenantId
+
+    // Parse multipart form data
+    const formData = await req.formData()
+    const orderId = formData.get('orderId') as string
+    const quantity = parseInt(formData.get('quantity') as string)
+    const position = formData.get('position') as string
+    const address = formData.get('address') as string
+    const notes = formData.get('notes') as string
+    const printPdf = formData.get('printPdf') as File | null
+    const proofPdf = formData.get('proofPdf') as File | null
+
+    // Validate required fields
+    if (!orderId || !quantity || !position || !address || !printPdf) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Validate PDF files
+    if (printPdf.type !== 'application/pdf') {
+      return NextResponse.json(
+        { error: 'Print file must be a PDF' },
+        { status: 400 }
+      )
+    }
+
+    if (printPdf.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` },
+        { status: 400 }
+      )
+    }
+
+    if (proofPdf && proofPdf.type !== 'application/pdf') {
+      return NextResponse.json(
+        { error: 'Proof file must be a PDF' },
+        { status: 400 }
+      )
+    }
+
+    if (proofPdf && proofPdf.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` },
+        { status: 400 }
+      )
+    }
+
+    // Generate unique order number
+    let orderNumber = generateOrderNumber()
+    let attempts = 0
+    while (attempts < 10) {
+      const existing = await db.gcuEnvelopeOrder.findUnique({
+        where: { orderNumber },
+      })
+      if (!existing) break
+      orderNumber = generateOrderNumber()
+      attempts++
+    }
+
+    if (attempts >= 10) {
+      return NextResponse.json(
+        { error: 'Failed to generate unique order number' },
+        { status: 500 }
+      )
+    }
+
+    const timestamp = Date.now()
+    const uniqueId = nanoid(10)
+
+    // Upload PRINT PDF to S3
+    const printBuffer = Buffer.from(await printPdf.arrayBuffer())
+    const printS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/print-${timestamp}-${uniqueId}.pdf`
+
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET!,
+        Key: printS3Key,
+        Body: printBuffer,
+        ContentType: 'application/pdf',
+      })
+    )
+
+    const printPdfUrl = getPublicUrl(printS3Key)
+
+    // Upload PROOF PDF to S3 (optional)
+    let proofS3Key: string | null = null
+    let proofPdfUrl: string | null = null
+
+    if (proofPdf) {
+      const proofBuffer = Buffer.from(await proofPdf.arrayBuffer())
+      proofS3Key = `gcu-envelope-orders/${tenantId}/${orderNumber}/proof-${timestamp}-${uniqueId}.pdf`
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET!,
+          Key: proofS3Key,
+          Body: proofBuffer,
+          ContentType: 'application/pdf',
+        })
+      )
+
+      proofPdfUrl = getPublicUrl(proofS3Key)
+    }
+
+    // Create order in database
+    const order = await db.gcuEnvelopeOrder.create({
+      data: {
+        orderNumber,
+        orderId,
+        quantity,
+        position,
+        address,
+        notes: notes || null,
+        printPdfBucket: process.env.S3_BUCKET!,
+        printPdfKey: printS3Key,
+        printPdfUrl,
+        proofPdfBucket: proofS3Key ? process.env.S3_BUCKET! : null,
+        proofPdfKey: proofS3Key,
+        proofPdfUrl,
+        isApproved: true,
+        approvedAt: new Date(),
+        status: 'pending',
+        tenantId,
+        createdBy: user.id,
+        createdByEmail: user.email,
+        submittedAt: new Date(),
+      },
+    })
+
+    // Send email notification
+    try {
+      const emailQueue = await getEmailQueue()
+      const emailHTML = generateOrderEmailHTML({
+        orderNumber: order.orderNumber,
+        orderId: order.orderId,
+        quantity: order.quantity,
+        position: order.position,
+        address: order.address,
+        notes: order.notes,
+        printPdfUrl: order.printPdfUrl,
+        proofPdfUrl: order.proofPdfUrl,
+        createdByEmail: order.createdByEmail,
+        submittedAt: order.submittedAt!,
+      })
+
+      await emailQueue.add('send-email', {
+        to: 'hector.franco@calitho.com',
+        subject: `New GCU Envelope Order - ${order.orderNumber}`,
+        html: emailHTML,
+        text: `New GCU custom envelope order ${order.orderNumber} has been placed. Please view this email in HTML format for full details.`,
+        tenantId,
+      })
+
+      console.log(`✓ Queued email notification for order ${order.orderNumber}`)
+    } catch (emailError) {
+      // Log error but don't fail the order creation
+      console.error('Failed to queue email notification:', emailError)
+    }
+
+    return NextResponse.json({
+      success: true,
+      orderNumber: order.orderNumber,
+      orderId: order.id,
+      status: order.status,
+      message: 'Order placed successfully',
+    })
+  } catch (error) {
+    console.error('Error creating GCU envelope order:', error)
+    return NextResponse.json(
+      { error: 'Failed to create order' },
+      { status: 500 }
+    )
+  }
+}
