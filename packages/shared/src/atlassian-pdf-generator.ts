@@ -37,7 +37,7 @@ export async function generateAtlassianWelcomePDF(
     // Paths
     const publicDir = join(process.cwd(), '../../apps/web/public');
     const templatePath = join(publicDir, 'templates', 'Atlassian_Welcome_Kit.pdf');
-    const fontPath = join(publicDir, 'fonts', 'CharlieDisplay-Regular.otf');
+    const fontPath = join(publicDir, 'fonts', 'CharlieDisplay-Bold.otf');
     const outputDir = join(publicDir, 'atlassian-pdfs');
 
     // Create output directory if it doesn't exist
@@ -70,7 +70,7 @@ export async function generateAtlassianWelcomePDF(
     const text = `${printName}!`;
 
     // Calculate font size (auto-scale for longer names)
-    const baseSize = 45;
+    const baseSize = 40;
     const maxWidth = 456 * 0.95; // 95% of rectangle width (456 pts from calibration)
     const estimatedWidth = text.length * (baseSize * 0.6);
     const fontSize = estimatedWidth > maxWidth
