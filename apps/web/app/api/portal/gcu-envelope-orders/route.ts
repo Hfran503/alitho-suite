@@ -331,7 +331,7 @@ export async function POST(req: NextRequest) {
         proofPdfUrl,
         isApproved: true,
         approvedAt: new Date(),
-        status: 'pending',
+        status: 'ordered',
         tenantId,
         createdBy: user.id,
         createdByEmail: user.email,
@@ -357,7 +357,7 @@ export async function POST(req: NextRequest) {
       }, baseUrl)
 
       await emailQueue.add('send-email', {
-        to: 'hector.franco@calitho.com',
+        to: ['david.curiel@calitho.com', 'dhara@calitho.com', 'hector.franco@calitho.com'],
         subject: `New GCU Envelope Order - ${order.orderNumber}`,
         html: emailHTML,
         text: `New GCU custom envelope order ${order.orderNumber} has been placed. Please view this email in HTML format for full details.`,

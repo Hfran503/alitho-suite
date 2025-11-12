@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { db as prisma } from '@repo/database'
 
 // GET - Fetch all menu configurations for tenant
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -34,10 +34,46 @@ export async function GET(_req: NextRequest) {
       orderBy: { order: 'asc' }
     })
 
-    // Filter menu items by user role
-    const visibleMenuConfigs = menuConfigs.filter(
-      (config: typeof menuConfigs[number]) => config.isActive && config.visibleToRoles.includes(userRole)
-    )
+    // Check if this is an admin viewing the settings page (for configuration)
+    const isAdmin = userRole === 'full_admin' || userRole === 'admin'
+    const { searchParams } = new URL(req.url)
+    const forConfiguration = searchParams.get('forConfiguration') === 'true'
+
+    // If admin is viewing for configuration, return all menu items unfiltered
+    if (isAdmin && forConfiguration) {
+      return NextResponse.json(
+        { menuConfigs },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        }
+      )
+    }
+
+    // Otherwise, filter menu items based on visibility mode
+    const visibleMenuConfigs = menuConfigs.filter((config: typeof menuConfigs[number]) => {
+      if (!config.isActive) return false
+
+      switch (config.visibilityMode) {
+        case 'all':
+          // Visible to all users
+          return true
+        case 'specific_users':
+        case 'user_ids': // Backward compatibility
+          // Only specific user IDs
+          return config.allowedUserIds.includes(user.id)
+        case 'user_emails': // Backward compatibility
+          // Only specific user emails
+          return config.allowedUserEmails.includes(user.email)
+        case 'role':
+        default:
+          // Role-based (default behavior)
+          return config.visibleToRoles.includes(userRole)
+      }
+    })
 
     // Return with no-cache headers to ensure fresh data
     return NextResponse.json(
@@ -90,10 +126,22 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { menuKey, label, href, icon, parentKey, order, visibleToRoles, isActive } = body
+    const {
+      menuKey,
+      label,
+      href,
+      icon,
+      parentKey,
+      order,
+      visibleToRoles,
+      isActive,
+      visibilityMode,
+      allowedUserIds,
+      allowedUserEmails
+    } = body
 
     // Validate required fields
-    if (!menuKey || !label || !href || !visibleToRoles) {
+    if (!menuKey || !label || !href) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -109,8 +157,11 @@ export async function POST(req: NextRequest) {
         icon,
         parentKey,
         order: order || 0,
-        visibleToRoles,
-        isActive: isActive !== undefined ? isActive : true
+        visibleToRoles: visibleToRoles || [],
+        isActive: isActive !== undefined ? isActive : true,
+        visibilityMode: visibilityMode || 'role',
+        allowedUserIds: allowedUserIds || [],
+        allowedUserEmails: allowedUserEmails || []
       }
     })
 
@@ -181,7 +232,10 @@ export async function PUT(req: NextRequest) {
             parentKey: config.parentKey,
             order: config.order,
             visibleToRoles: config.visibleToRoles,
-            isActive: config.isActive
+            isActive: config.isActive,
+            visibilityMode: config.visibilityMode || 'role',
+            allowedUserIds: config.allowedUserIds || [],
+            allowedUserEmails: config.allowedUserEmails || []
           }
         })
       )

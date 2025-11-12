@@ -235,7 +235,10 @@ export async function POST(req: NextRequest) {
             parentKey: page.parentKey || null,
             order: nextOrder++,
             visibleToRoles: page.visibleToRoles || ['full_admin', 'admin'],
-            isActive: true
+            isActive: true,
+            visibilityMode: page.visibilityMode || 'role',
+            allowedUserIds: page.allowedUserIds || [],
+            allowedUserEmails: page.allowedUserEmails || []
           }
         })
       )

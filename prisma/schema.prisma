@@ -703,19 +703,22 @@ model AtlassianOrder {
 }
 
 model MenuConfiguration {
-  id             String   @id @default(cuid())
-  menuKey        String
-  label          String
-  href           String
-  icon           String?
-  parentKey      String?
-  order          Int      @default(0)
-  visibleToRoles String[]
-  isActive       Boolean  @default(true)
-  tenantId       String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  menuKey           String
+  label             String
+  href              String
+  icon              String?
+  parentKey         String?
+  order             Int      @default(0)
+  visibleToRoles    String[]
+  isActive          Boolean  @default(true)
+  visibilityMode    String   @default("role") // "role", "user_ids", "user_emails", "all"
+  allowedUserIds    String[] @default([])
+  allowedUserEmails String[] @default([])
+  tenantId          String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, menuKey])
   @@index([tenantId])
