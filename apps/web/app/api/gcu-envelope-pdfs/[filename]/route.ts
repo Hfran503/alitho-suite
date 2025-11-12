@@ -15,7 +15,10 @@ export async function GET(
 ) {
   try {
     // In Next.js 15, params is async
-    const { filename } = await params
+    const { filename: rawFilename } = await params
+
+    // Decode URL-encoded filename (e.g., %20 -> space)
+    const filename = decodeURIComponent(rawFilename)
 
     // Validate filename (prevent directory traversal)
     if (!filename || filename.includes('..') || filename.includes('/')) {

@@ -298,6 +298,7 @@ export async function POST(req: NextRequest) {
     const printFilePath = join(gcuPdfsDir, printFileName)
 
     await writeFile(printFilePath, printBuffer)
+    console.log(`✓ Saved print PDF: ${printFilePath} (${printBuffer.length} bytes)`)
 
     const printPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(printFileName)}`
 
@@ -310,8 +311,11 @@ export async function POST(req: NextRequest) {
       const proofFilePath = join(gcuPdfsDir, proofFileName)
 
       await writeFile(proofFilePath, proofBuffer)
+      console.log(`✓ Saved proof PDF: ${proofFilePath} (${proofBuffer.length} bytes)`)
 
       proofPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(proofFileName)}`
+    } else {
+      console.log('ℹ No proof PDF provided with this order')
     }
 
     // Create order in database
