@@ -39,24 +39,25 @@ export function AtlassianWelcome() {
   const generateWithOverlay = async (personName: string) => {
     // Calculate font size (simple auto-scaling)
     const baseSize = 45
-    const maxWidth = 468 * 0.95 // 95% of rectangle width
+    const maxWidth = 456 * 0.95 // 95% of rectangle width (456 pts from calibration)
     const estimatedWidth = personName.length * (baseSize * 0.6) // Rough estimate
     const fontSize = estimatedWidth > maxWidth ? Math.floor((maxWidth / estimatedWidth) * baseSize) : baseSize
 
-    // Use calibrated position from adjust-pdf page
+    // Use calibrated position from adjust-pdf tool
+    // Rectangle: X=6, Y=120, Width=456, Height=83
     const response = await fetch('/api/pdf/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateUrl: '/templates/Atlassian_Template_v1.pdf',
+        templateUrl: '/templates/Atlassian_Welcome_Kit.pdf',
         method: 'overlay',
         fontUrl: '/fonts/CharlieDisplay-Regular.otf',
         data: {},
         overlays: [
           {
             text: personName,
-            x: 470, // Center X (236 + 468/2)
-            y: 325, // Center Y (260 + 130/2)
+            x: 234, // Center X from calibration
+            y: 162, // Center Y from calibration
             fontSize: fontSize,
             color: { c: 0, m: 0, y: 0, k: 1 }, // CMYK black
             align: 'center',
@@ -91,7 +92,7 @@ export function AtlassianWelcome() {
     try {
       // Calculate font size (simple auto-scaling)
       const baseSize = 45
-      const maxWidth = 468 * 0.95
+      const maxWidth = 456 * 0.95 // 95% of rectangle width (456 pts from calibration)
       const estimatedWidth = name.length * (baseSize * 0.6)
       const fontSize = estimatedWidth > maxWidth ? Math.floor((maxWidth / estimatedWidth) * baseSize) : baseSize
 
@@ -99,15 +100,15 @@ export function AtlassianWelcome() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateUrl: '/templates/Atlassian_Template_v1.pdf',
+          templateUrl: '/templates/Atlassian_Welcome_Kit.pdf',
           method: 'overlay',
           fontUrl: '/fonts/CharlieDisplay-Regular.otf',
           data: {},
           overlays: [
             {
               text: name,
-              x: 470,
-              y: 325,
+              x: 234, // Center X from calibration
+              y: 162, // Center Y from calibration
               fontSize: fontSize,
               color: { c: 0, m: 0, y: 0, k: 1 }, // CMYK black
               align: 'center',
@@ -153,7 +154,7 @@ export function AtlassianWelcome() {
             disabled={loading}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Name will be centered on the certificate at 45px CharlieDisplay font
+            Name will be centered at (234, 162) with 45px CharlieDisplay font
             (auto-scales if too long)
           </p>
         </div>
@@ -192,8 +193,8 @@ export function AtlassianWelcome() {
           <p className="font-semibold mb-1">Settings:</p>
           <ul className="text-gray-700 space-y-1 text-xs">
             <li>• Font: CharlieDisplay Regular (45px base)</li>
-            <li>• Position: Centered at (470, 325)</li>
-            <li>• Rectangle: 468 × 130 pts</li>
+            <li>• Position: Centered at (234, 162)</li>
+            <li>• Rectangle: 456 × 83 pts</li>
             <li>• Auto-scales for longer names</li>
           </ul>
         </div>
@@ -213,7 +214,7 @@ export function QuickAtlassianWelcome() {
 
     // Calculate font size (simple auto-scaling)
     const baseSize = 45
-    const maxWidth = 468 * 0.95
+    const maxWidth = 456 * 0.95 // 95% of rectangle width (456 pts from calibration)
     const estimatedWidth = name.length * (baseSize * 0.6)
     const fontSize = estimatedWidth > maxWidth ? Math.floor((maxWidth / estimatedWidth) * baseSize) : baseSize
 
@@ -221,15 +222,15 @@ export function QuickAtlassianWelcome() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateUrl: '/templates/Atlassian_Template_v1.pdf',
+        templateUrl: '/templates/Atlassian_Welcome_Kit.pdf',
         method: 'overlay',
         fontUrl: '/fonts/CharlieDisplay-Regular.otf',
         data: {},
         overlays: [
           {
             text: name,
-            x: 470,
-            y: 325,
+            x: 234, // Center X from calibration
+            y: 162, // Center Y from calibration
             fontSize: fontSize,
             color: { c: 0, m: 0, y: 0, k: 1 }, // CMYK black
             align: 'center',

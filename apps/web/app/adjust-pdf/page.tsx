@@ -16,13 +16,14 @@ export default function AdjustPdfPage() {
   const [showDebug, setShowDebug] = useState(true)
   const [offsetX, setOffsetX] = useState(0)
   const [offsetY, setOffsetY] = useState(0)
+  const [currentPage, setCurrentPage] = useState(0) // Track which page we're working on
 
   // Rectangle boundary in PDF points (easier to work with)
   const [rectPdfPoints, setRectPdfPoints] = useState({
-    x: 236, // Calibrated position for name placement
-    y: 260, // Calibrated bottom position in PDF coordinates
-    width: 468, // 50% of 936
-    height: 130 // 20% of 648
+    x: 118, // Calibrated position for name placement (centered horizontally)
+    y: 130, // Calibrated bottom position in PDF coordinates
+    width: 234, // 50% of 468
+    height: 65 // 20% of 324
   })
 
   const [isDragging, setIsDragging] = useState(false)
@@ -34,9 +35,9 @@ export default function AdjustPdfPage() {
   const textRef = useRef<HTMLDivElement>(null)
   const rectRef = useRef<HTMLDivElement>(null)
 
-  // Actual PDF dimensions (checked from Atlassian_Template_v1.pdf)
-  const PDF_WIDTH = 936
-  const PDF_HEIGHT = 648
+  // Actual PDF dimensions (6.5" × 4.5" template)
+  const PDF_WIDTH = 468  // 6.5 inches * 72 points/inch
+  const PDF_HEIGHT = 324  // 4.5 inches * 72 points/inch
 
   // Convert PDF points to percentage for display
   const getRectPercentage = () => {
@@ -225,7 +226,7 @@ export default function AdjustPdfPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateUrl: '/templates/Atlassian_Template_v1.pdf',
+        templateUrl: '/templates/Atlassian_Welcome_Kit.pdf',
         method: 'overlay',
         data: {},
         fontUrl: useCustomFont ? '/fonts/CharlieDisplay-Regular.otf' : undefined,
@@ -237,6 +238,7 @@ export default function AdjustPdfPage() {
             fontSize: calculatedFontSize,
             color: { c, m, y, k },
             align: 'center',
+            page: currentPage, // Specify which page to modify
           },
         ],
       }),
@@ -396,6 +398,34 @@ export default function AdjustPdfPage() {
                       <span className="text-sm font-medium">Show Debug Crosshair</span>
                     </label>
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Current Page
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setCurrentPage(0)}
+                        className={`flex-1 px-3 py-2 rounded-lg font-medium transition ${
+                          currentPage === 0
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        Page 1
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        className={`flex-1 px-3 py-2 rounded-lg font-medium transition ${
+                          currentPage === 1
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        Page 2
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -513,7 +543,7 @@ export default function AdjustPdfPage() {
                     <span className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></span>
                     Drag rectangle to move • Drag corners to resize
                   </div>
-                  <div className="text-sm text-gray-500">{PDF_WIDTH} × {PDF_HEIGHT} pts</div>
+                  <div className="text-sm text-gray-500">{PDF_WIDTH} × {PDF_HEIGHT} pts (6.5" × 4.5") - Page {currentPage + 1}</div>
                 </div>
 
                 {/* Canvas Container */}
@@ -526,23 +556,18 @@ export default function AdjustPdfPage() {
                     cursor: isDragging || isResizing ? 'grabbing' : 'default',
                   }}
                 >
-                  {/* PDF Background */}
-                  <object
-                    data="/templates/Atlassian_Template_v1.pdf#view=FitH"
-                    type="application/pdf"
-                    className="absolute inset-0 w-full h-full pointer-events-none"
-                    style={{ border: 'none' }}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400">
-                      <div className="text-center">
-                        <div className="text-6xl mb-2">📄</div>
-                        <div>Atlassian Template v1</div>
-                      </div>
-                    </div>
-                  </object>
+                  {/* PDF Background as Image */}
+                  <div className="absolute inset-0 bg-white">
+                    <img
+                      key={currentPage}
+                      src={`/templates/pages/Atlassian_Welcome_Kit_page_${currentPage + 1}.png`}
+                      alt={`PDF Page ${currentPage + 1}`}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
 
                   {/* Grid Overlay */}
-                  <div className="absolute inset-0 pointer-events-none opacity-30">
+                  <div className="absolute inset-0 pointer-events-none opacity-30 z-10">
                     <div className="absolute left-1/2 top-0 bottom-0 w-px bg-blue-300"></div>
                     <div className="absolute top-1/2 left-0 right-0 h-px bg-blue-300"></div>
                   </div>
@@ -551,7 +576,7 @@ export default function AdjustPdfPage() {
                   <div
                     ref={rectRef}
                     onMouseDown={handleRectMouseDown}
-                    className="absolute select-none"
+                    className="absolute select-none z-20"
                     style={{
                       left: `${rectPercentage.x}%`,
                       top: `${rectPercentage.y}%`,
@@ -632,7 +657,7 @@ export default function AdjustPdfPage() {
 
                 {/* PDF Info */}
                 <div className="mt-4 text-xs text-gray-500 text-center">
-                  PDF Template: 936 × 648 pts (16:9 aspect ratio)
+                  PDF Template: 468 × 324 pts (6.5" × 4.5" @ 72 DPI) - {currentPage === 0 ? 'Page 1' : 'Page 2'}
                 </div>
               </div>
             </div>

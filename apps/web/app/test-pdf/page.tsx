@@ -60,7 +60,7 @@ const response = await fetch('/api/pdf/generate', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    templateUrl: '/templates/Atlassian_Template_v1.pdf',
+    templateUrl: '/templates/Atlassian_Welcome_Kit.pdf',
     method: 'overlay',
     fontUrl: '/fonts/CharlieDisplay-Regular.otf',
     overlays: [{

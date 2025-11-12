@@ -60,6 +60,15 @@ export async function GET(request: NextRequest) {
         emailFrom: true,
         emailDate: true,
         status: true,
+        duplicateOfOrderId: true,
+        duplicateOfOrder: {
+          select: {
+            id: true,
+            orderNumber: true,
+            fullName: true,
+            createdAt: true,
+          },
+        },
         firstName: true,
         lastName: true,
         fullName: true,

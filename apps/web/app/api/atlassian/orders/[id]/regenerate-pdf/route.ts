@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@repo/database';
+import { uploadToSFTP, isSftpConfigured, getSFTPPublicURL } from '@/lib/sftp';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 /**
  * POST /api/atlassian/orders/[id]/regenerate-pdf
@@ -45,13 +48,45 @@ export async function POST(
       countryCategory
     );
 
-    // Update the order with the new PDF path
+    // Upload to SFTP if configured (only for USA and International US)
+    let sftpUrl: string | null = null;
+    const shouldUploadToSFTP =
+      countryCategory === 'United States of America' ||
+      countryCategory === 'International US';
+
+    if (isSftpConfigured() && shouldUploadToSFTP) {
+      try {
+        // Convert API path to local file path
+        // PDF path is in format: /api/atlassian-pdfs/filename.pdf
+        const filename = pdfPath.split('/').pop();
+        if (filename) {
+          const decodedFilename = decodeURIComponent(filename);
+          const publicDir = join(process.cwd(), 'public');
+          const localFilePath = join(publicDir, 'atlassian-pdfs', decodedFilename);
+
+          if (existsSync(localFilePath)) {
+            console.log(`Uploading ${decodedFilename} to SFTP (atlassian folder) - ${countryCategory}...`);
+            await uploadToSFTP(localFilePath, decodedFilename, 'atlassian');
+            sftpUrl = getSFTPPublicURL(decodedFilename, 'atlassian');
+            console.log(`✓ PDF uploaded to SFTP: ${sftpUrl}`);
+          } else {
+            console.warn(`Local PDF file not found: ${localFilePath}`);
+          }
+        }
+      } catch (sftpError) {
+        console.error(`Failed to upload PDF to SFTP for order ${id}:`, sftpError);
+        // Don't fail the entire regeneration if SFTP upload fails
+      }
+    } else if (!shouldUploadToSFTP) {
+      console.log(`Skipping SFTP upload for ${countryCategory} (only USA/International go to SFTP)`);
+    }
+
+    // Update the order with the new PDF path and SFTP URL
     const updatedOrder = await db.atlassianOrder.update({
       where: { id },
       data: {
         pdfPath,
-        // Clear SFTP URL since we have a new local PDF
-        sftpUrl: null,
+        sftpUrl,
       },
     });
 
@@ -63,6 +98,7 @@ export async function POST(
         id: updatedOrder.id,
         orderNumber: updatedOrder.orderNumber,
         pdfPath: updatedOrder.pdfPath,
+        sftpUrl: updatedOrder.sftpUrl,
         printName: updatedOrder.printName,
       },
       message: 'PDF regenerated successfully',

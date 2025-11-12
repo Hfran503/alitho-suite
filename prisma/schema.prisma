@@ -651,7 +651,12 @@ model AtlassianOrder {
   emailFrom         String?
   emailDate         DateTime?
   emailBodyHtml     String?   @db.Text // Original HTML email body
-  status            String    @default("pending") // pending, processing, completed, failed, missing_address
+  status            String    @default("pending") // pending, processing, completed, failed, missing_address, potential_duplicate
+
+  // Duplicate detection
+  duplicateOfOrderId String?  // Reference to potential duplicate order
+  duplicateOfOrder   AtlassianOrder? @relation("DuplicateOrders", fields: [duplicateOfOrderId], references: [id], onDelete: SetNull)
+  duplicates         AtlassianOrder[] @relation("DuplicateOrders")
 
   // Extracted employee data
   firstName         String?
@@ -700,6 +705,8 @@ model AtlassianOrder {
   @@index([countryCategory])
   @@index([createdAt])
   @@index([status, retryCount])
+  @@index([fullName])
+  @@index([duplicateOfOrderId])
 }
 
 model MenuConfiguration {

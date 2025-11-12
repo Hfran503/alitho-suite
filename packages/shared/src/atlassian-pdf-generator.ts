@@ -36,7 +36,7 @@ export async function generateAtlassianWelcomePDF(
 
     // Paths
     const publicDir = join(process.cwd(), '../../apps/web/public');
-    const templatePath = join(publicDir, 'templates', 'Atlassian_Template_v1.pdf');
+    const templatePath = join(publicDir, 'templates', 'Atlassian_Welcome_Kit.pdf');
     const fontPath = join(publicDir, 'fonts', 'CharlieDisplay-Regular.otf');
     const outputDir = join(publicDir, 'atlassian-pdfs');
 
@@ -71,15 +71,16 @@ export async function generateAtlassianWelcomePDF(
 
     // Calculate font size (auto-scale for longer names)
     const baseSize = 45;
-    const maxWidth = 468 * 0.95; // 95% of rectangle width
+    const maxWidth = 456 * 0.95; // 95% of rectangle width (456 pts from calibration)
     const estimatedWidth = text.length * (baseSize * 0.6);
     const fontSize = estimatedWidth > maxWidth
       ? Math.floor((maxWidth / estimatedWidth) * baseSize)
       : baseSize;
 
-    // Position (center of the rectangle)
-    const centerX = 470;
-    const centerY = 325;
+    // Position (center of the rectangle) - calibrated from adjust-pdf tool
+    // Rectangle: X=6, Y=120, Width=456, Height=83
+    const centerX = 234; // Center X from calibration
+    const centerY = 162; // Center Y from calibration
 
     // CMYK black color
     const color = cmyk(0, 0, 0, 1);

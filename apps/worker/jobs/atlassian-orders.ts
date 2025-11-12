@@ -50,8 +50,33 @@ async function processEmail(
 
     const parsed = parseAtlassianEmail(htmlBody, email.subject);
 
-    // Determine status based on address availability
-    const status = parsed.employeeData.isAddressMissing ? 'missing_address' : 'completed';
+    // Check for potential duplicates based on full name
+    let duplicateOfOrderId: string | null = null;
+    let status = parsed.employeeData.isAddressMissing ? 'missing_address' : 'completed';
+
+    if (parsed.employeeData.fullName) {
+      const existingOrder = await db.atlassianOrder.findFirst({
+        where: {
+          tenantId,
+          fullName: parsed.employeeData.fullName,
+        },
+        orderBy: {
+          createdAt: 'desc', // Get the most recent matching order
+        },
+        select: {
+          id: true,
+          orderNumber: true,
+          fullName: true,
+          createdAt: true,
+        },
+      });
+
+      if (existingOrder) {
+        console.log(`⚠️  Potential duplicate detected: "${parsed.employeeData.fullName}" matches order ${existingOrder.orderNumber} (${existingOrder.id})`);
+        duplicateOfOrderId = existingOrder.id;
+        status = 'potential_duplicate';
+      }
+    }
 
     // Generate unique order number
     const orderNumber = await generateUniqueOrderNumber(tenantId);
@@ -67,6 +92,7 @@ async function processEmail(
         emailDate: email.date || null,
         emailBodyHtml: htmlBody,
         status,
+        duplicateOfOrderId,
 
         // Employee data
         firstName: parsed.employeeData.firstName || null,
@@ -109,9 +135,13 @@ async function processEmail(
 
         console.log(`✓ Generated PDF for ${parsed.employeeData.printName} (${orderNumber}): ${pdfPath}`);
 
-        // Upload to SFTP if configured
+        // Upload to SFTP if configured (only for USA and International US)
         let sftpUrl: string | null = null;
-        if (isSFTPConfigured()) {
+        const shouldUploadToSFTP =
+          parsed.employeeData.countryCategory === 'United States of America' ||
+          parsed.employeeData.countryCategory === 'International US';
+
+        if (isSFTPConfigured() && shouldUploadToSFTP) {
           try {
             // Convert API path to local file path
             // PDF path is in format: /api/atlassian-pdfs/filename.pdf
@@ -122,7 +152,7 @@ async function processEmail(
               const localFilePath = join(publicDir, 'atlassian-pdfs', decodedFilename);
 
               if (existsSync(localFilePath)) {
-                console.log(`Uploading ${decodedFilename} to SFTP (atlassian folder)...`);
+                console.log(`Uploading ${decodedFilename} to SFTP (atlassian folder) - ${parsed.employeeData.countryCategory}...`);
                 await uploadToSFTP(localFilePath, decodedFilename, 'atlassian');
                 sftpUrl = getSFTPPublicURL(decodedFilename, 'atlassian');
                 console.log(`✓ PDF uploaded to SFTP: ${sftpUrl}`);
@@ -134,6 +164,8 @@ async function processEmail(
             console.error(`Failed to upload PDF to SFTP for order ${order.id}:`, sftpError);
             // Don't fail the entire processing if SFTP upload fails
           }
+        } else if (!shouldUploadToSFTP) {
+          console.log(`Skipping SFTP upload for ${parsed.employeeData.countryCategory} (only USA/International go to SFTP)`);
         }
 
         // Update order with PDF path and SFTP URL

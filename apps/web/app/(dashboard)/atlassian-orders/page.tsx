@@ -15,6 +15,13 @@ interface AtlassianOrder {
   emailFrom: string;
   emailDate: string;
   status: string;
+  duplicateOfOrderId?: string;
+  duplicateOfOrder?: {
+    id: string;
+    orderNumber: string;
+    fullName: string;
+    createdAt: string;
+  };
   firstName: string;
   lastName: string;
   printName: string;
@@ -61,6 +68,11 @@ export default function AtlassianOrdersPage() {
   const [regeneratingPdf, setRegeneratingPdf] = useState(false);
   const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [batchRegeneratingPdfs, setBatchRegeneratingPdfs] = useState(false);
+  const [batchPdfSuccess, setBatchPdfSuccess] = useState<string | null>(null);
+  const [batchPdfError, setBatchPdfError] = useState<string | null>(null);
+  const [isSelectMode, setIsSelectMode] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -137,6 +149,8 @@ export default function AtlassianOrdersPage() {
         return 'bg-blue-100 text-blue-800';
       case 'missing_address':
         return 'bg-orange-100 text-orange-800';
+      case 'potential_duplicate':
+        return 'bg-purple-100 text-purple-800';
       case 'failed':
         return 'bg-red-100 text-red-800';
       default:
@@ -196,11 +210,23 @@ export default function AtlassianOrdersPage() {
       );
     }
 
+    const allSelected = ordersList.length > 0 && ordersList.every(o => selectedOrderIds.has(o.id));
+
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              {isSelectMode && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => handleSelectAllOrders(ordersList)}
+                    className="w-4 h-4 text-purple-600 rounded cursor-pointer"
+                  />
+                </th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Order #
               </th>
@@ -237,17 +263,32 @@ export default function AtlassianOrdersPage() {
             {ordersList.map((order) => (
               <tr
                 key={order.id}
-                onClick={() => setSelectedOrder(order)}
-                className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                className={`hover:bg-gray-50 transition-colors ${
                   selectedOrder?.id === order.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
-                }`}
+                } ${isSelectMode && selectedOrderIds.has(order.id) ? 'bg-purple-50' : ''}`}
               >
-                <td className="px-4 py-3 whitespace-nowrap">
+                {isSelectMode && (
+                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedOrderIds.has(order.id)}
+                      onChange={() => handleToggleOrderSelection(order.id)}
+                      className="w-4 h-4 text-purple-600 rounded cursor-pointer"
+                    />
+                  </td>
+                )}
+                <td
+                  className="px-4 py-3 whitespace-nowrap cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   <div className="text-sm font-semibold text-blue-600">
                     {order.orderNumber || '-'}
                   </div>
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td
+                  className="px-4 py-3 whitespace-nowrap cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   {order.paceJobNumber ? (
                     <div className="text-sm font-semibold text-green-600">
                       {order.paceJobNumber}
@@ -256,21 +297,41 @@ export default function AtlassianOrdersPage() {
                     <span className="text-xs text-gray-400">-</span>
                   )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {order.fullName || `${order.firstName} ${order.lastName}`}
+                <td
+                  className="px-4 py-3 whitespace-nowrap cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {order.fullName || `${order.firstName} ${order.lastName}`}
+                      </div>
+                      {order.printName && (
+                        <div className="text-xs text-gray-500">Print: {order.printName}</div>
+                      )}
+                    </div>
+                    {order.status === 'potential_duplicate' && order.duplicateOfOrder && (
+                      <div className="flex-shrink-0">
+                        <Badge className="bg-purple-100 text-purple-800 text-xs">
+                          ⚠️ Duplicate
+                        </Badge>
+                      </div>
+                    )}
                   </div>
-                  {order.printName && (
-                    <div className="text-xs text-gray-500">Print: {order.printName}</div>
-                  )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td
+                  className="px-4 py-3 whitespace-nowrap cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   <div className="text-sm text-gray-900">{order.personalEmail || order.workEmail}</div>
                   {order.phoneNumber && (
                     <div className="text-xs text-gray-500">{order.phoneNumber}</div>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td
+                  className="px-4 py-3 cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   <div className="text-sm text-gray-900">
                     {order.address1 || <span className="text-red-500 font-semibold">Missing</span>}
                   </div>
@@ -281,13 +342,22 @@ export default function AtlassianOrdersPage() {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                <td
+                  className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   {order.country}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                <td
+                  className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   {order.startDate || '-'}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td
+                  className="px-4 py-3 whitespace-nowrap cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   <Badge className={getStatusBadgeColor(order.status)}>
                     {order.status.replace('_', ' ')}
                   </Badge>
@@ -307,7 +377,10 @@ export default function AtlassianOrdersPage() {
                     <span className="text-xs text-gray-400">-</span>
                   )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                <td
+                  className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   {formatDate(order.processedAt || order.createdAt)}
                 </td>
               </tr>
@@ -546,6 +619,94 @@ export default function AtlassianOrdersPage() {
     }
   };
 
+  const handleBatchRegeneratePdfs = async () => {
+    if (selectedOrderIds.size === 0) return;
+
+    setBatchRegeneratingPdfs(true);
+    setBatchPdfSuccess(null);
+    setBatchPdfError(null);
+
+    try {
+      const orderIds = Array.from(selectedOrderIds);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const orderId of orderIds) {
+        try {
+          const response = await fetch(`/api/atlassian/orders/${orderId}/regenerate-pdf`, {
+            method: 'POST',
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          failCount++;
+          console.error(`Failed to regenerate PDF for order ${orderId}:`, err);
+        }
+      }
+
+      if (failCount === 0) {
+        setBatchPdfSuccess(`Successfully regenerated ${successCount} PDF(s)!`);
+      } else if (successCount > 0) {
+        setBatchPdfSuccess(`Regenerated ${successCount} PDF(s). ${failCount} failed.`);
+      } else {
+        throw new Error(`Failed to regenerate all ${failCount} PDF(s)`);
+      }
+
+      // Clear selection, exit select mode, and refresh
+      setSelectedOrderIds(new Set());
+      setIsSelectMode(false);
+      setTimeout(() => {
+        fetchOrders();
+        setBatchPdfSuccess(null);
+      }, 3000);
+    } catch (err) {
+      setBatchPdfError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setBatchRegeneratingPdfs(false);
+    }
+  };
+
+  const handleToggleOrderSelection = (orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllOrders = (ordersList: AtlassianOrder[]) => {
+    if (selectedOrderIds.size === ordersList.length) {
+      // Deselect all
+      setSelectedOrderIds(new Set());
+    } else {
+      // Select all
+      setSelectedOrderIds(new Set(ordersList.map(o => o.id)));
+    }
+  };
+
+  const handleToggleSelectMode = () => {
+    if (!isSelectMode) {
+      // Enter select mode
+      setIsSelectMode(true);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    // Exit select mode and clear selections
+    setSelectedOrderIds(new Set());
+    setIsSelectMode(false);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -560,6 +721,33 @@ export default function AtlassianOrdersPage() {
             <Download className="mr-2 h-4 w-4" />
             Export JSON
           </Button>
+          {!isSelectMode ? (
+            <Button onClick={handleToggleSelectMode} variant="secondary" disabled={orders.length === 0}>
+              Generate New PDF
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handleBatchRegeneratePdfs}
+                disabled={batchRegeneratingPdfs || selectedOrderIds.size === 0}
+                variant="secondary"
+              >
+                {batchRegeneratingPdfs ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating PDFs...
+                  </>
+                ) : selectedOrderIds.size > 0 ? (
+                  `Generate ${selectedOrderIds.size} PDF${selectedOrderIds.size > 1 ? 's' : ''} Now`
+                ) : (
+                  'Select Orders to Generate'
+                )}
+              </Button>
+              <Button onClick={handleCancelSelection} variant="outline">
+                Cancel
+              </Button>
+            </>
+          )}
           <Button
             onClick={handleSendAllToPace}
             disabled={sendingAllToPace || counts.readyToSend === 0}
@@ -605,6 +793,18 @@ export default function AtlassianOrdersPage() {
       {batchPaceError && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
           {batchPaceError}
+        </div>
+      )}
+
+      {batchPdfSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
+          {batchPdfSuccess}
+        </div>
+      )}
+
+      {batchPdfError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
+          {batchPdfError}
         </div>
       )}
 
@@ -723,6 +923,41 @@ export default function AtlassianOrdersPage() {
                 ×
               </button>
             </div>
+
+            {/* Duplicate Warning */}
+            {selectedOrder.status === 'potential_duplicate' && selectedOrder.duplicateOfOrder && (
+              <div className="bg-purple-50 border-l-4 border-purple-500 p-4 mb-6">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-purple-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-purple-800">
+                      Potential Duplicate Detected
+                    </h3>
+                    <div className="mt-2 text-sm text-purple-700">
+                      <p>
+                        This order appears to be a duplicate of order{' '}
+                        <span className="font-semibold">
+                          {selectedOrder.duplicateOfOrder.orderNumber}
+                        </span>{' '}
+                        for{' '}
+                        <span className="font-semibold">
+                          {selectedOrder.duplicateOfOrder.fullName}
+                        </span>
+                        , created on{' '}
+                        {new Date(selectedOrder.duplicateOfOrder.createdAt).toLocaleDateString()}.
+                      </p>
+                      <p className="mt-1 text-xs">
+                        Review both orders to verify if this is a legitimate duplicate or a different person with the same name.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* PACE Success Message */}
             {paceSuccess && (

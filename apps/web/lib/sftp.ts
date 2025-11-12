@@ -6,6 +6,7 @@ export interface SftpConfig {
   username: string
   password?: string
   privateKey?: string
+  remoteDir: string
 }
 
 // Get SFTP configuration from environment variables
@@ -15,6 +16,7 @@ export function getSftpConfig(): SftpConfig | null {
   const username = process.env.SFTP_USERNAME
   const password = process.env.SFTP_PASSWORD
   const privateKey = process.env.SFTP_PRIVATE_KEY
+  const remoteDir = process.env.SFTP_REMOTE_DIR || '/upload'
 
   if (!host || !username) {
     return null
@@ -24,6 +26,7 @@ export function getSftpConfig(): SftpConfig | null {
     host,
     port,
     username,
+    remoteDir,
     ...(password && { password }),
     ...(privateKey && { privateKey }),
   }
@@ -82,4 +85,96 @@ export async function testSftpConnection(): Promise<boolean> {
     console.error('SFTP connection test failed:', error)
     return false
   }
+}
+
+/**
+ * Upload a file from local path to SFTP server
+ * @param localFilePath - Path to the local file
+ * @param remoteFileName - Name of the file on the remote server
+ * @param subfolder - Optional subfolder within the base remote directory (e.g., 'atlassian')
+ * @returns The remote file path
+ */
+export async function uploadToSFTP(
+  localFilePath: string,
+  remoteFileName: string,
+  subfolder?: string
+): Promise<string> {
+  const config = getSftpConfig()
+
+  if (!config) {
+    throw new Error('SFTP configuration not found. Please set SFTP_HOST, SFTP_USERNAME, and SFTP_PASSWORD.')
+  }
+
+  const sftp = new SftpClient()
+
+  try {
+    // Connect to SFTP server
+    await sftp.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      privateKey: config.privateKey,
+    })
+
+    console.log(`Connected to SFTP server: ${config.host}:${config.port}`)
+
+    // Build remote directory path with optional subfolder
+    const remoteDir = subfolder
+      ? `${config.remoteDir}/${subfolder}`
+      : config.remoteDir
+
+    // Ensure remote directory exists
+    try {
+      await sftp.mkdir(remoteDir, true)
+    } catch (error) {
+      // Directory might already exist, ignore error
+      console.log(`Remote directory ${remoteDir} already exists or created`)
+    }
+
+    // Build remote file path
+    const remoteFilePath = `${remoteDir}/${remoteFileName}`
+
+    // Upload the file
+    console.log(`Uploading ${localFilePath} to ${remoteFilePath}...`)
+    await sftp.put(localFilePath, remoteFilePath)
+    console.log(`✓ File uploaded successfully to ${remoteFilePath}`)
+
+    return remoteFilePath
+  } catch (error) {
+    console.error('Error uploading file to SFTP:', error)
+    throw new Error(`Failed to upload to SFTP: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  } finally {
+    // Always disconnect
+    await sftp.end()
+  }
+}
+
+/**
+ * Get the public URL for an SFTP file
+ * @param remoteFileName - The remote file name (e.g., 'filename.pdf')
+ * @param subfolder - Optional subfolder within the base remote directory (e.g., 'atlassian')
+ * @returns The public URL to access the file
+ */
+export function getSFTPPublicURL(remoteFileName: string, subfolder?: string): string {
+  const config = getSftpConfig()
+
+  if (!config) {
+    throw new Error('SFTP configuration not found')
+  }
+
+  const publicBaseUrl = process.env.SFTP_PUBLIC_URL || `sftp://${config.host}:${config.port}`
+
+  // Build the full path with optional subfolder
+  const remoteDir = subfolder
+    ? `${config.remoteDir}/${subfolder}`
+    : config.remoteDir
+
+  // If remoteFileName already includes the full path, use it as is
+  // Otherwise, prepend the remote directory
+  const fullPath = remoteFileName.startsWith('/')
+    ? remoteFileName
+    : `${remoteDir}/${remoteFileName}`
+
+  return `${publicBaseUrl}${fullPath}`
 }
