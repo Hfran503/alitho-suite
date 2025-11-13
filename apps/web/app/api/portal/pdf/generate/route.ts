@@ -102,7 +102,8 @@ export async function POST(request: Request) {
     const pdfBuffer = await generateGcuEnvelopePdf(orderId, position, address, version)
 
     // Return PDF with appropriate headers
-    return new NextResponse(pdfBuffer, {
+    // Convert Buffer to Uint8Array for Next.js compatibility
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
