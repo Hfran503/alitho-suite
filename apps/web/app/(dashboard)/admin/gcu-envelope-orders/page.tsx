@@ -27,6 +27,8 @@ export default function AdminGcuEnvelopeOrdersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [isRegenerating, setIsRegenerating] = useState(false)
+  const [regenerateMessage, setRegenerateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     fetchOrders()
@@ -73,6 +75,48 @@ export default function AdminGcuEnvelopeOrdersPage() {
       dateStyle: 'medium',
       timeStyle: 'short',
     })
+  }
+
+  const handleRegeneratePdfs = async (orderId: string) => {
+    if (!confirm('Are you sure you want to regenerate the PDFs for this order? This will overwrite the existing files.')) {
+      return
+    }
+
+    setIsRegenerating(true)
+    setRegenerateMessage(null)
+
+    try {
+      const response = await fetch(`/api/admin/gcu-envelope-orders/${orderId}/regenerate-pdfs`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to regenerate PDFs')
+      }
+
+      setRegenerateMessage({ type: 'success', text: 'PDFs regenerated successfully!' })
+
+      // Refresh the orders list
+      await fetchOrders()
+
+      // Update selected order if it's the one we regenerated
+      if (selectedOrder?.id === orderId) {
+        const updatedOrder = orders.find(o => o.id === orderId)
+        if (updatedOrder) {
+          setSelectedOrder(updatedOrder)
+        }
+      }
+    } catch (err) {
+      setRegenerateMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to regenerate PDFs'
+      })
+      console.error('Error regenerating PDFs:', err)
+    } finally {
+      setIsRegenerating(false)
+    }
   }
 
   if (isLoading) {
@@ -219,7 +263,10 @@ export default function AdminGcuEnvelopeOrdersPage() {
                   <p className="text-gray-600 mt-1">{selectedOrder.orderNumber}</p>
                 </div>
                 <button
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={() => {
+                    setSelectedOrder(null)
+                    setRegenerateMessage(null)
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <svg
@@ -296,7 +343,18 @@ export default function AdminGcuEnvelopeOrdersPage() {
 
                 <div className="border-b pb-4">
                   <h3 className="font-semibold text-gray-700 mb-2">Files</h3>
-                  <div className="flex gap-3">
+
+                  {regenerateMessage && (
+                    <div className={`mb-3 p-3 rounded-lg text-sm ${
+                      regenerateMessage.type === 'success'
+                        ? 'bg-green-50 text-green-800 border border-green-200'
+                        : 'bg-red-50 text-red-800 border border-red-200'
+                    }`}>
+                      {regenerateMessage.text}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 flex-wrap">
                     {selectedOrder.printPdfUrl && (
                       <a
                         href={selectedOrder.printPdfUrl}
@@ -317,6 +375,28 @@ export default function AdminGcuEnvelopeOrdersPage() {
                         Download Proof PDF
                       </a>
                     )}
+                    <button
+                      onClick={() => handleRegeneratePdfs(selectedOrder.id)}
+                      disabled={isRegenerating}
+                      className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {isRegenerating ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Regenerate PDFs
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -339,7 +419,10 @@ export default function AdminGcuEnvelopeOrdersPage() {
 
               <div className="mt-6 flex justify-end">
                 <button
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={() => {
+                    setSelectedOrder(null)
+                    setRegenerateMessage(null)
+                  }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Close
