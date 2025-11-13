@@ -97,7 +97,7 @@ export function PdfGeneratorForm() {
         <div className="space-y-4">
           {/* Order ID */}
           <div>
-            <Label htmlFor="orderId">Order ID</Label>
+            <Label htmlFor="orderId">PAGI Order ID</Label>
             <Input
               id="orderId"
               name="orderId"
