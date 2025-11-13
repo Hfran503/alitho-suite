@@ -60,15 +60,16 @@ export async function POST(_request: NextRequest) {
     // Process each country category
     for (const [countryCategory, orders] of Object.entries(ordersByCountry)) {
       try {
-        console.log(`Processing ${orders.length} orders for ${countryCategory}`);
+        const orderList = orders as typeof eligibleOrders
+        console.log(`Processing ${orderList.length} orders for ${countryCategory}`);
 
         // Build job description listing all orders
-        const orderNumbers = orders.map((o) => o.orderNumber).join(', ');
+        const orderNumbers = orderList.map((o) => o.orderNumber).join(', ');
         // Use generic short description (≤50 chars) for description field
         const description = `Calitho Suite - ${countryCategory}`;
         // Place detailed info in description2 field
         const description2 = `Orders: ${orderNumbers}`;
-        const totalAmount = orders.length * 25;
+        const totalAmount = orderList.length * 25;
 
         // Step 1: Create Job in PACE
         const jobData = {
@@ -93,8 +94,8 @@ export async function POST(_request: NextRequest) {
 
         // Step 2: Process each order as a separate JobPart
         const partResults = [];
-        for (let i = 0; i < orders.length; i++) {
-          const order = orders[i];
+        for (let i = 0; i < orderList.length; i++) {
+          const order = orderList[i];
           const partNumber = String(i + 1).padStart(2, '0'); // 01, 02, 03, etc.
           const printName = order.printName || order.firstName || 'Unknown';
           const partDescription = `Calitho Suite Order # ${order.orderNumber} - ${printName}`;
@@ -186,7 +187,7 @@ export async function POST(_request: NextRequest) {
 
         results[countryCategory] = {
           jobNumber: paceJobNumber,
-          ordersCount: orders.length,
+          ordersCount: orderList.length,
           totalAmount,
           parts: partResults,
         };
@@ -195,10 +196,11 @@ export async function POST(_request: NextRequest) {
         console.log(`✓ Completed processing ${countryCategory}: Job ${paceJobNumber}`);
       } catch (error) {
         console.error(`Error processing country ${countryCategory}:`, error);
+        const orderList = orders as typeof eligibleOrders
         results[countryCategory] = {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
-          ordersCount: orders.length,
+          ordersCount: orderList.length,
         };
       }
     }
