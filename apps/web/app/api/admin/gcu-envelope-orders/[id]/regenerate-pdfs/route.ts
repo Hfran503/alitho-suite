@@ -65,9 +65,10 @@ export async function POST(
     console.log(`  - Print: ${printPath} (${printPdf.length} bytes)`)
     console.log(`  - Proof: ${proofPath} (${proofPdf.length} bytes)`)
 
-    // Update URLs in database
-    const printPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(printFilename)}`
-    const proofPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(proofFilename)}`
+    // Update URLs in database with cache-busting timestamp
+    const timestamp = Date.now()
+    const printPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(printFilename)}?t=${timestamp}`
+    const proofPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(proofFilename)}?t=${timestamp}`
 
     await prisma.gcuEnvelopeOrder.update({
       where: { id: orderId },

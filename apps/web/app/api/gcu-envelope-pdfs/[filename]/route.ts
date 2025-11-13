@@ -46,12 +46,24 @@ export async function GET(
 
     // Return PDF with proper headers
     // Convert Buffer to Uint8Array for Next.js compatibility
+
+    // Check if this is a regenerated PDF (has timestamp query param)
+    const url = new URL(_request.url)
+    const hasTimestamp = url.searchParams.has('t')
+
+    // Use different cache strategy for regenerated PDFs vs original uploads
+    const cacheControl = hasTimestamp
+      ? 'no-cache, no-store, must-revalidate' // Force fresh fetch for regenerated PDFs
+      : 'public, max-age=31536000, immutable'  // Long cache for original uploads
+
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': cacheControl,
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
     })
   } catch (error) {

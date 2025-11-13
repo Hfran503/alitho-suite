@@ -71,6 +71,16 @@ export default function GcuEnvelopeOrdersPage() {
     })
   }
 
+  const formatPosition = (position: string) => {
+    const normalized = position.toLowerCase().replace(/_/g, ' ').trim()
+    if (normalized === 'center back flap') {
+      return 'Center Back Flap'
+    } else if (normalized === 'front') {
+      return 'Front'
+    }
+    return position // Fallback to original if unknown
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-6">
@@ -169,7 +179,7 @@ export default function GcuEnvelopeOrdersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {order.position === 'center_back_flap' ? 'Center Back Flap' : 'Front'}
+                        {formatPosition(order.position)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

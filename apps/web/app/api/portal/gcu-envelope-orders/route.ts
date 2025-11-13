@@ -300,7 +300,9 @@ export async function POST(req: NextRequest) {
     await writeFile(printFilePath, printBuffer)
     console.log(`✓ Saved print PDF: ${printFilePath} (${printBuffer.length} bytes)`)
 
-    const printPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(printFileName)}`
+    // Add cache-busting timestamp to URLs
+    const timestamp = Date.now()
+    const printPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(printFileName)}?t=${timestamp}`
 
     // Save PROOF PDF to local filesystem (optional) with formatted filename
     let proofPdfUrl: string | null = null
@@ -313,7 +315,7 @@ export async function POST(req: NextRequest) {
       await writeFile(proofFilePath, proofBuffer)
       console.log(`✓ Saved proof PDF: ${proofFilePath} (${proofBuffer.length} bytes)`)
 
-      proofPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(proofFileName)}`
+      proofPdfUrl = `/api/gcu-envelope-pdfs/${encodeURIComponent(proofFileName)}?t=${timestamp}`
     } else {
       console.log('ℹ No proof PDF provided with this order')
     }

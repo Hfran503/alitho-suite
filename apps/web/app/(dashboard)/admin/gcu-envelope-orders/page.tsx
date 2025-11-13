@@ -77,6 +77,16 @@ export default function AdminGcuEnvelopeOrdersPage() {
     })
   }
 
+  const formatPosition = (position: string) => {
+    const normalized = position.toLowerCase().replace(/_/g, ' ').trim()
+    if (normalized === 'center back flap') {
+      return 'Center Back Flap'
+    } else if (normalized === 'front') {
+      return 'Front'
+    }
+    return position // Fallback to original if unknown
+  }
+
   const handleRegeneratePdfs = async (orderId: string) => {
     if (!confirm('Are you sure you want to regenerate the PDFs for this order? This will overwrite the existing files.')) {
       return
@@ -213,7 +223,7 @@ export default function AdminGcuEnvelopeOrdersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {order.position === 'center_back_flap' ? 'Center Back Flap' : 'Front'}
+                          {formatPosition(order.position)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -304,9 +314,7 @@ export default function AdminGcuEnvelopeOrdersPage() {
                     <div>
                       <span className="text-gray-600">Position:</span>
                       <p className="font-medium">
-                        {selectedOrder.position === 'center_back_flap'
-                          ? 'Center Back Flap'
-                          : 'Front'}
+                        {formatPosition(selectedOrder.position)}
                       </p>
                     </div>
                     <div>

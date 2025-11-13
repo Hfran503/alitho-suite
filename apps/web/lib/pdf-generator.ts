@@ -89,6 +89,75 @@ function drawPrintArea(page: any) {
 }
 
 /**
+ * Draw envelope flap visualization (for back flap position only)
+ * Flap is 2.50 inches tall, shown as a rectangular area at the top
+ */
+function drawEnvelopeFlap(page: any) {
+  const FLAP_HEIGHT = 2.50 * 72 // 2.50 inches = 180 points
+  const FOLD_MARGIN = 0.12 * 72 // 0.12 inch margin on each side of fold line
+
+  const printX = CROP_MARK_MARGIN
+  const printY = CROP_MARK_MARGIN
+  const printWidth = PAGE_WIDTH - 2 * CROP_MARK_MARGIN
+  const printHeight = PAGE_HEIGHT - 2 * CROP_MARK_MARGIN
+
+  // Top of the envelope (where flap edge is)
+  const envelopeTop = printY + printHeight
+
+  // Flap fold line (where it folds down)
+  const flapFoldY = envelopeTop - FLAP_HEIGHT
+
+  // Draw rectangular flap outline with solid red lines
+  // Left side
+  page.drawLine({
+    start: { x: printX, y: flapFoldY },
+    end: { x: printX, y: envelopeTop },
+    thickness: 1,
+    color: rgb(1, 0, 0), // Red color to match print area
+  })
+
+  // Right side
+  page.drawLine({
+    start: { x: printX + printWidth, y: flapFoldY },
+    end: { x: printX + printWidth, y: envelopeTop },
+    thickness: 1,
+    color: rgb(1, 0, 0),
+  })
+
+  // Top edge
+  page.drawLine({
+    start: { x: printX, y: envelopeTop },
+    end: { x: printX + printWidth, y: envelopeTop },
+    thickness: 1,
+    color: rgb(1, 0, 0),
+  })
+
+  // Fold line (base of the flap) with 0.12" margins on each side
+  page.drawLine({
+    start: { x: printX + FOLD_MARGIN, y: flapFoldY },
+    end: { x: printX + printWidth - FOLD_MARGIN, y: flapFoldY },
+    thickness: 1,
+    color: rgb(1, 0, 0),
+  })
+
+  // Diagonal connector from left side top to fold line start (left slant)
+  page.drawLine({
+    start: { x: printX, y: envelopeTop },
+    end: { x: printX + FOLD_MARGIN, y: flapFoldY },
+    thickness: 1,
+    color: rgb(1, 0, 0),
+  })
+
+  // Diagonal connector from right side top to fold line end (right slant)
+  page.drawLine({
+    start: { x: printX + printWidth, y: envelopeTop },
+    end: { x: printX + printWidth - FOLD_MARGIN, y: flapFoldY },
+    thickness: 1,
+    color: rgb(1, 0, 0),
+  })
+}
+
+/**
  * Add centered address text (for back flap)
  */
 function addCenteredAddress(
@@ -176,18 +245,31 @@ export async function generateGcuEnvelopePdf(
   const page = pdfDoc.addPage([pageWidth, pageHeight])
   const font = await pdfDoc.embedFont(StandardFonts.TimesRoman)
 
-  // For proof version: draw crop marks and print area
+  // Normalize position early to use throughout
+  const normalizedPosition = position.toLowerCase().replace(/_/g, ' ').trim()
+  console.log(`PDF Generator - Position: "${position}" -> Normalized: "${normalizedPosition}"`)
+
+  // For proof version: draw crop marks, print area, and flap (if back flap)
   if (isProof) {
     drawPrintArea(page)
     drawCropMarks(page)
+
+    // Draw envelope flap visualization for back flap position only
+    if (normalizedPosition === 'center back flap') {
+      drawEnvelopeFlap(page)
+    }
   }
 
   // Add address based on position (handle both formats)
-  const normalizedPosition = position.replace('_', ' ')
   if (normalizedPosition === 'center back flap') {
+    console.log('Using centered address layout (back flap)')
     addCenteredAddress(page, font, address, pageWidth, pageHeight, isProof)
   } else if (normalizedPosition === 'front') {
+    console.log('Using front address layout')
     addFrontAddress(page, font, address, pageHeight, isProof)
+  } else {
+    console.warn(`Unknown position: "${normalizedPosition}" - defaulting to center back flap`)
+    addCenteredAddress(page, font, address, pageWidth, pageHeight, isProof)
   }
 
   // Generate PDF bytes
