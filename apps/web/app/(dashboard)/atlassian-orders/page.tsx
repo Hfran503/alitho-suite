@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -746,7 +746,7 @@ export default function AtlassianOrdersPage() {
     }
   };
 
-  const handleBatchRegeneratePdfs = async () => {
+  const handleBatchRegeneratePdfs = useCallback(async () => {
     if (selectedOrderIds.size === 0) return;
 
     setBatchRegeneratingPdfs(true);
@@ -797,7 +797,7 @@ export default function AtlassianOrdersPage() {
     } finally {
       setBatchRegeneratingPdfs(false);
     }
-  };
+  }, [selectedOrderIds, fetchOrders]);
 
   const handleToggleOrderSelection = (orderId: string) => {
     setSelectedOrderIds((prev) => {
@@ -833,10 +833,6 @@ export default function AtlassianOrdersPage() {
     setSelectedOrderIds(new Set());
     setIsSelectMode(false);
   };
-
-  // Keep reference to ensure TypeScript sees these handlers are used
-  const _handlers = { handleBatchRegeneratePdfs };
-  void _handlers; // Prevent unused variable warning
 
   const handleBulkDownload = async () => {
     if (selectedOrderIds.size === 0) return;
