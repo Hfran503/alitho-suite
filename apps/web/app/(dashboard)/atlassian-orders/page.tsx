@@ -75,6 +75,8 @@ export default function AtlassianOrdersPage() {
   const [batchPdfSuccess, setBatchPdfSuccess] = useState<string | null>(null);
   const [batchPdfError, setBatchPdfError] = useState<string | null>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const [downloadingBulk, setDownloadingBulk] = useState(false);
+  const [bulkDownloadError, setBulkDownloadError] = useState<string | null>(null);
 
   // Manual add order state
   const [showManualAddDialog, setShowManualAddDialog] = useState(false);
@@ -832,6 +834,53 @@ export default function AtlassianOrdersPage() {
     setIsSelectMode(false);
   };
 
+  const handleBulkDownload = async () => {
+    if (selectedOrderIds.size === 0) return;
+
+    setDownloadingBulk(true);
+    setBulkDownloadError(null);
+
+    try {
+      const orderIds = Array.from(selectedOrderIds);
+
+      const response = await fetch('/api/atlassian/orders/bulk-download', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to download orders');
+      }
+
+      // Get the blob from response
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `atlassian_orders_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Clear selection and exit select mode
+      setSelectedOrderIds(new Set());
+      setIsSelectMode(false);
+    } catch (err) {
+      setBulkDownloadError(err instanceof Error ? err.message : 'An error occurred');
+      // Clear error after 5 seconds
+      setTimeout(() => setBulkDownloadError(null), 5000);
+    } finally {
+      setDownloadingBulk(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -874,6 +923,25 @@ export default function AtlassianOrdersPage() {
                   `Generate ${selectedOrderIds.size} PDF${selectedOrderIds.size > 1 ? 's' : ''} Now`
                 ) : (
                   'Select Orders to Generate'
+                )}
+              </Button>
+              <Button
+                onClick={handleBulkDownload}
+                disabled={downloadingBulk || selectedOrderIds.size === 0}
+                variant="default"
+              >
+                {downloadingBulk ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Preparing Download...
+                  </>
+                ) : selectedOrderIds.size > 0 ? (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download {selectedOrderIds.size} Order{selectedOrderIds.size > 1 ? 's' : ''} (ZIP)
+                  </>
+                ) : (
+                  'Select Orders to Download'
                 )}
               </Button>
               <Button onClick={handleCancelSelection} variant="outline">
@@ -938,6 +1006,12 @@ export default function AtlassianOrdersPage() {
       {batchPdfError && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
           {batchPdfError}
+        </div>
+      )}
+
+      {bulkDownloadError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
+          {bulkDownloadError}
         </div>
       )}
 
