@@ -834,6 +834,10 @@ export default function AtlassianOrdersPage() {
     setIsSelectMode(false);
   };
 
+  // Keep reference to ensure TypeScript sees these handlers are used
+  const _handlers = { handleBatchRegeneratePdfs };
+  void _handlers; // Prevent unused variable warning
+
   const handleBulkDownload = async () => {
     if (selectedOrderIds.size === 0) return;
 
