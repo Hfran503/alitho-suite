@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Loader2, RefreshCw, Download, Plus, Upload, User, Mail, MapPin, FileText, X } from 'lucide-react';
+import { Loader2, RefreshCw, Download, Plus, Upload, User, Mail, MapPin, FileText, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AtlassianOrder {
   id: string;
@@ -78,6 +78,11 @@ export default function AtlassianOrdersPage() {
   const [downloadingBulk, setDownloadingBulk] = useState(false);
   const [bulkDownloadError, setBulkDownloadError] = useState<string | null>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  const [totalCount, setTotalCount] = useState(0);
+
   // Manual add order state
   const [showManualAddDialog, setShowManualAddDialog] = useState(false);
   const [manualOrderData, setManualOrderData] = useState<any>({});
@@ -93,12 +98,13 @@ export default function AtlassianOrdersPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (page: number = currentPage) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('/api/atlassian/orders');
+      const offset = (page - 1) * pageSize;
+      const response = await fetch(`/api/atlassian/orders?limit=${pageSize}&offset=${offset}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
@@ -108,6 +114,7 @@ export default function AtlassianOrdersPage() {
 
       if (data.success) {
         setOrders(data.data);
+        setTotalCount(data.totalCount || 0);
       } else {
         throw new Error('API returned unsuccessful response');
       }
@@ -120,8 +127,8 @@ export default function AtlassianOrdersPage() {
   };
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    fetchOrders(currentPage);
+  }, [currentPage, pageSize]);
 
   const handleTriggerCheck = async () => {
     setTriggeringCheck(true);
@@ -314,7 +321,7 @@ export default function AtlassianOrdersPage() {
   // Get count for each tab
   const getCounts = () => {
     return {
-      all: orders.length,
+      all: totalCount, // Use total count from API for all orders
       readyToSend: groupedOrders.readyToSend.length,
       sentToPace: groupedOrders.sentToPace.length,
       philippines: groupedOrders.philippines.length,
@@ -884,6 +891,32 @@ export default function AtlassianOrdersPage() {
     }
   };
 
+  // Pagination handlers
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
+  const handleGoToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -1066,6 +1099,121 @@ export default function AtlassianOrdersPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pagination Controls */}
+      {totalCount > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Left side - Page info and size selector */}
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-600">
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} orders
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="pageSize" className="text-sm text-gray-600">
+                    Per page:
+                  </label>
+                  <select
+                    id="pageSize"
+                    value={pageSize}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value={500}>500</option>
+                    <option value={10000}>All</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Right side - Page navigation */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="h-8"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {/* Show first page */}
+                  {currentPage > 3 && (
+                    <>
+                      <Button
+                        variant={currentPage === 1 ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleGoToPage(1)}
+                        className="h-8 w-8 p-0"
+                      >
+                        1
+                      </Button>
+                      {currentPage > 4 && (
+                        <span className="px-1 text-gray-500">...</span>
+                      )}
+                    </>
+                  )}
+
+                  {/* Show pages around current page */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => {
+                      return page === currentPage ||
+                             page === currentPage - 1 ||
+                             page === currentPage + 1 ||
+                             page === currentPage - 2 ||
+                             page === currentPage + 2;
+                    })
+                    .filter(page => page > 0 && page <= totalPages)
+                    .map(page => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleGoToPage(page)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    ))}
+
+                  {/* Show last page */}
+                  {currentPage < totalPages - 2 && (
+                    <>
+                      {currentPage < totalPages - 3 && (
+                        <span className="px-1 text-gray-500">...</span>
+                      )}
+                      <Button
+                        variant={currentPage === totalPages ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleGoToPage(totalPages)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {totalPages}
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="h-8"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs */}
       <Card>
