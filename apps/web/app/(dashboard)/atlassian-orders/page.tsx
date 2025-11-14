@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Loader2, RefreshCw, Download } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Loader2, RefreshCw, Download, Plus, Upload, User, Mail, MapPin, FileText, X } from 'lucide-react';
 
 interface AtlassianOrder {
   id: string;
@@ -74,6 +76,21 @@ export default function AtlassianOrdersPage() {
   const [batchPdfError, setBatchPdfError] = useState<string | null>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
 
+  // Manual add order state
+  const [showManualAddDialog, setShowManualAddDialog] = useState(false);
+  const [manualOrderData, setManualOrderData] = useState<any>({});
+  const [addingManualOrder, setAddingManualOrder] = useState(false);
+  const [manualAddSuccess, setManualAddSuccess] = useState<string | null>(null);
+  const [manualAddError, setManualAddError] = useState<string | null>(null);
+
+  // File upload state
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
   const fetchOrders = async () => {
     setLoading(true);
     setError(null);
@@ -137,6 +154,114 @@ export default function AtlassianOrdersPage() {
     } finally {
       setTriggeringCheck(false);
     }
+  };
+
+  const handleManualAddOrder = async () => {
+    setAddingManualOrder(true);
+    setManualAddSuccess(null);
+    setManualAddError(null);
+
+    try {
+      const response = await fetch('/api/atlassian/orders/manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...manualOrderData,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setManualAddSuccess(`Order created successfully! Order number: ${data.order.orderNumber}`);
+        setManualOrderData({});
+        setTimeout(() => {
+          fetchOrders();
+          setShowManualAddDialog(false);
+          setManualAddSuccess(null);
+        }, 2000);
+      } else {
+        throw new Error(data.error || 'Failed to create order');
+      }
+    } catch (err) {
+      setManualAddError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setAddingManualOrder(false);
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (selectedFiles.length === 0) {
+      setUploadError('Please select at least one file');
+      return;
+    }
+
+    setUploadingFiles(true);
+    setUploadSuccess(null);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      selectedFiles.forEach((file, index) => {
+        formData.append(`file${index}`, file);
+      });
+
+      const response = await fetch('/api/atlassian/orders/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const summary = data.summary;
+        setUploadSuccess(
+          `Successfully processed ${summary.successful}/${summary.total} files. ${summary.duplicates > 0 ? `${summary.duplicates} duplicates detected.` : ''}`
+        );
+        setSelectedFiles([]);
+        setTimeout(() => {
+          fetchOrders();
+          setShowUploadDialog(false);
+          setUploadSuccess(null);
+        }, 3000);
+      } else {
+        throw new Error(data.error || 'Failed to upload files');
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files).filter(
+      (file) => file.name.endsWith('.html') || file.name.endsWith('.htm')
+    );
+    if (files.length > 0) {
+      setSelectedFiles(files);
+      setUploadError(null);
+    } else {
+      setUploadError('Please drop only HTML files');
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -717,6 +842,14 @@ export default function AtlassianOrdersPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => setShowManualAddDialog(true)} variant="outline">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Order
+          </Button>
+          <Button onClick={() => setShowUploadDialog(true)} variant="outline">
+            <Upload className="mr-2 h-4 w-4" />
+            Upload HTML
+          </Button>
           <Button onClick={handleExportJSON} variant="outline" disabled={orders.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             Export JSON
@@ -1401,6 +1534,400 @@ export default function AtlassianOrdersPage() {
         </div>
         </>
       )}
+
+      {/* Manual Add Order Dialog */}
+      <Dialog open={showManualAddDialog} onOpenChange={setShowManualAddDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <User className="h-6 w-6 text-blue-600" />
+              Add New Order Manually
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Enter employee details below. The system will automatically check for duplicates and generate a PDF welcome packet.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Personal Information */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 border-b pb-2">
+                <User className="h-4 w-4 text-gray-600" />
+                <h3 className="font-semibold text-sm text-gray-700 uppercase">Personal Information</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstName" className="text-sm font-medium">First Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="firstName"
+                    value={manualOrderData.firstName || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, firstName: e.target.value })}
+                    placeholder="John"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lastName" className="text-sm font-medium">Last Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="lastName"
+                    value={manualOrderData.lastName || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, lastName: e.target.value })}
+                    placeholder="Doe"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="printName" className="text-sm font-medium">Print Name</Label>
+                  <Input
+                    id="printName"
+                    value={manualOrderData.printName || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, printName: e.target.value })}
+                    placeholder="Name for PDF label"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Used on PDF welcome packet</p>
+                </div>
+                <div>
+                  <Label htmlFor="fullName" className="text-sm font-medium">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    value={manualOrderData.fullName || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, fullName: e.target.value })}
+                    placeholder="Auto-filled from first + last"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 border-b pb-2">
+                <Mail className="h-4 w-4 text-gray-600" />
+                <h3 className="font-semibold text-sm text-gray-700 uppercase">Contact Information</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="personalEmail" className="text-sm font-medium">Personal Email</Label>
+                  <Input
+                    id="personalEmail"
+                    type="email"
+                    value={manualOrderData.personalEmail || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, personalEmail: e.target.value })}
+                    placeholder="john.doe@example.com"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phoneNumber" className="text-sm font-medium">Phone Number</Label>
+                  <Input
+                    id="phoneNumber"
+                    value={manualOrderData.phoneNumber || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, phoneNumber: e.target.value })}
+                    placeholder="+1 (555) 123-4567"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Shipping Address */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 border-b pb-2">
+                <MapPin className="h-4 w-4 text-gray-600" />
+                <h3 className="font-semibold text-sm text-gray-700 uppercase">Shipping Address</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Label htmlFor="address1" className="text-sm font-medium">Address Line 1 <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="address1"
+                    value={manualOrderData.address1 || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, address1: e.target.value })}
+                    placeholder="123 Main Street"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="city" className="text-sm font-medium">City</Label>
+                  <Input
+                    id="city"
+                    value={manualOrderData.city || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, city: e.target.value })}
+                    placeholder="San Francisco"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="state" className="text-sm font-medium">State/Province</Label>
+                  <Input
+                    id="state"
+                    value={manualOrderData.state || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, state: e.target.value })}
+                    placeholder="California"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="zipCode" className="text-sm font-medium">Zip/Postal Code</Label>
+                  <Input
+                    id="zipCode"
+                    value={manualOrderData.zipCode || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, zipCode: e.target.value })}
+                    placeholder="94102"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="country" className="text-sm font-medium">Country</Label>
+                  <Input
+                    id="country"
+                    value={manualOrderData.country || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, country: e.target.value })}
+                    placeholder="United States of America"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label htmlFor="countryCategory" className="text-sm font-medium">Country Category <span className="text-red-500">*</span></Label>
+                  <select
+                    id="countryCategory"
+                    value={manualOrderData.countryCategory || ''}
+                    onChange={(e) => setManualOrderData({ ...manualOrderData, countryCategory: e.target.value })}
+                    className="w-full mt-1 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select region...</option>
+                    <option value="Philippines">🇵🇭 Philippines</option>
+                    <option value="Australia">🇦🇺 Australia</option>
+                    <option value="India">🇮🇳 India</option>
+                    <option value="United States of America">🇺🇸 United States of America</option>
+                    <option value="International US">🌍 International US</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Determines shipping method and PDF upload destination</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {manualAddSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 flex items-start gap-2">
+              <svg className="h-5 w-5 text-green-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-medium">Success!</p>
+                <p className="text-sm">{manualAddSuccess}</p>
+              </div>
+            </div>
+          )}
+
+          {manualAddError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 flex items-start gap-2">
+              <svg className="h-5 w-5 text-red-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-medium">Error</p>
+                <p className="text-sm">{manualAddError}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => {
+              setShowManualAddDialog(false);
+              setManualOrderData({});
+              setManualAddError(null);
+              setManualAddSuccess(null);
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleManualAddOrder}
+              disabled={addingManualOrder || !manualOrderData.firstName || !manualOrderData.lastName}
+              className="min-w-[120px]"
+            >
+              {addingManualOrder ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Order
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Upload Dialog */}
+      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <Upload className="h-6 w-6 text-blue-600" />
+              Upload HTML Files
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Upload HTML files from Atlassian welcome packet emails. The system will automatically parse employee data and create orders.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Drag and Drop Zone */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`
+                border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer
+                ${isDragging
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100'
+                }
+              `}
+              onClick={() => document.getElementById('file-input')?.click()}
+            >
+              <div className="flex flex-col items-center gap-3">
+                <div className={`p-3 rounded-full ${isDragging ? 'bg-blue-100' : 'bg-gray-200'}`}>
+                  <FileText className={`h-8 w-8 ${isDragging ? 'text-blue-600' : 'text-gray-600'}`} />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-gray-700">
+                    {isDragging ? 'Drop files here' : 'Drag & drop HTML files here'}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    or click to browse from your computer
+                  </p>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Accepts .html and .htm files only
+                </p>
+              </div>
+              <Input
+                id="file-input"
+                type="file"
+                accept=".html,.htm"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setSelectedFiles(files);
+                  setUploadError(null);
+                }}
+                className="hidden"
+              />
+            </div>
+
+            {/* Selected Files List */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                  </h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedFiles([])}
+                    className="h-7 text-xs"
+                  >
+                    Clear all
+                  </Button>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-3 bg-white">
+                  {selectedFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between gap-2 p-2 rounded bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        <span className="text-sm truncate">{file.name}</span>
+                        <span className="text-xs text-gray-500 flex-shrink-0">
+                          ({(file.size / 1024).toFixed(1)} KB)
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                        title="Remove file"
+                      >
+                        <X className="h-4 w-4 text-gray-600" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Info box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-800">
+              <p className="font-medium mb-1">📋 What happens next:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>Each HTML file will be parsed to extract employee information</li>
+                <li>System automatically checks for duplicate orders</li>
+                <li>PDF welcome packets are generated for valid orders</li>
+                <li>Orders are ready for PACE integration immediately</li>
+              </ul>
+            </div>
+          </div>
+
+          {uploadSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 flex items-start gap-2">
+              <svg className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-medium">Upload Complete!</p>
+                <p className="text-sm mt-1">{uploadSuccess}</p>
+              </div>
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 flex items-start gap-2">
+              <svg className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-medium">Error</p>
+                <p className="text-sm mt-1">{uploadError}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => {
+              setShowUploadDialog(false);
+              setSelectedFiles([]);
+              setUploadError(null);
+              setUploadSuccess(null);
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFileUpload}
+              disabled={uploadingFiles || selectedFiles.length === 0}
+              className="min-w-[140px]"
+            >
+              {uploadingFiles ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload {selectedFiles.length > 0 && `${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''}`}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
