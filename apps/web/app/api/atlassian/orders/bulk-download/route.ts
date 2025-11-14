@@ -77,9 +77,6 @@ export async function POST(req: NextRequest) {
         .filter(Boolean)
         .join(', ') || 'N/A',
       'Country': order.country || 'N/A',
-      'Start Date': order.startDate || 'N/A',
-      'Status': order.status,
-      'PACE Job #': order.paceJobNumber || 'N/A',
     }));
 
     // Create workbook and worksheet
@@ -94,9 +91,6 @@ export async function POST(req: NextRequest) {
       { wch: 18 }, // Phone
       { wch: 50 }, // Address
       { wch: 25 }, // Country
-      { wch: 15 }, // Start Date
-      { wch: 15 }, // Status
-      { wch: 15 }, // PACE Job #
     ];
     worksheet['!cols'] = columnWidths;
 
@@ -132,32 +126,53 @@ export async function POST(req: NextRequest) {
     archive.append(excelBuffer, { name: `orders_${new Date().toISOString().slice(0, 10)}.xlsx` });
 
     // Add PDF files to archive
-    const publicPath = path.join(process.cwd(), 'public');
+    const pdfDirectory = path.join(process.cwd(), 'public', 'atlassian-pdfs');
     let pdfCount = 0;
+    const pdfErrors: string[] = [];
 
     for (const order of orders) {
       if (order.pdfPath) {
         try {
-          // Remove leading slash and 'public' from path if present
-          const relativePath = order.pdfPath.replace(/^\//, '');
-          const fullPath = path.join(publicPath, relativePath);
+          // Extract filename from pdfPath
+          // pdfPath might be like "/api/atlassian-pdfs/Pooja - CS523 - Australia.pdf"
+          // or "/atlassian-pdfs/Pooja - CS523 - Australia.pdf"
+          // We just need the filename part
+          const filename = path.basename(order.pdfPath);
+          const fullPath = path.join(pdfDirectory, filename);
+
+          console.log(`Checking PDF for order ${order.orderNumber}:`, {
+            pdfPath: order.pdfPath,
+            filename,
+            fullPath,
+            exists: fs.existsSync(fullPath)
+          });
 
           // Check if file exists
           if (fs.existsSync(fullPath)) {
             const fileBuffer = fs.readFileSync(fullPath);
-            const fileName = `${order.orderNumber || order.id}_${path.basename(order.pdfPath)}`;
+            const fileName = `${order.orderNumber || order.id}_${filename}`;
             archive.append(fileBuffer, { name: `pdfs/${fileName}` });
             pdfCount++;
+            console.log(`Added PDF: ${fileName}`);
+          } else {
+            pdfErrors.push(`PDF not found for order ${order.orderNumber}: ${fullPath}`);
           }
         } catch (error) {
-          console.error(`Error adding PDF for order ${order.orderNumber}:`, error);
+          const errorMsg = `Error adding PDF for order ${order.orderNumber}: ${error}`;
+          console.error(errorMsg);
+          pdfErrors.push(errorMsg);
           // Continue with other files even if one fails
         }
       }
     }
 
-    // Finalize the archive
-    await archive.finalize();
+    console.log(`Total PDFs added to archive: ${pdfCount}`);
+    if (pdfErrors.length > 0) {
+      console.error('PDF errors:', pdfErrors);
+    }
+
+    // Finalize the archive (this must be called after all append operations)
+    archive.finalize();
 
     // Wait for archive to complete
     const zipBuffer = await archivePromise;

@@ -905,24 +905,27 @@ export default function AtlassianOrdersPage() {
           </Button>
           {!isSelectMode ? (
             <Button onClick={handleToggleSelectMode} variant="secondary" disabled={orders.length === 0}>
-              Generate New PDF
+              Select Orders
             </Button>
           ) : (
             <>
+              <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-md">
+                <span className="text-sm font-medium text-purple-900">
+                  {selectedOrderIds.size} order{selectedOrderIds.size !== 1 ? 's' : ''} selected
+                </span>
+              </div>
               <Button
-                onClick={handleBatchRegeneratePdfs}
+                onClick={handleBulkRegeneratePdfs}
                 disabled={batchRegeneratingPdfs || selectedOrderIds.size === 0}
-                variant="secondary"
+                variant="outline"
               >
                 {batchRegeneratingPdfs ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating PDFs...
+                    Generating...
                   </>
-                ) : selectedOrderIds.size > 0 ? (
-                  `Generate ${selectedOrderIds.size} PDF${selectedOrderIds.size > 1 ? 's' : ''} Now`
                 ) : (
-                  'Select Orders to Generate'
+                  'Generate PDFs'
                 )}
               </Button>
               <Button
@@ -933,15 +936,13 @@ export default function AtlassianOrdersPage() {
                 {downloadingBulk ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Preparing Download...
-                  </>
-                ) : selectedOrderIds.size > 0 ? (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download {selectedOrderIds.size} Order{selectedOrderIds.size > 1 ? 's' : ''} (ZIP)
+                    Preparing...
                   </>
                 ) : (
-                  'Select Orders to Download'
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download ZIP
+                  </>
                 )}
               </Button>
               <Button onClick={handleCancelSelection} variant="outline">
