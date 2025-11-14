@@ -134,10 +134,11 @@ export async function POST(req: NextRequest) {
       if (order.pdfPath) {
         try {
           // Extract filename from pdfPath
-          // pdfPath might be like "/api/atlassian-pdfs/Pooja - CS523 - Australia.pdf"
+          // pdfPath might be like "/api/atlassian-pdfs/Pooja%20-%20CS523%20-%20Australia.pdf"
           // or "/atlassian-pdfs/Pooja - CS523 - Australia.pdf"
-          // We just need the filename part
-          const filename = path.basename(order.pdfPath);
+          // We need to decode the URL-encoded filename
+          const encodedFilename = path.basename(order.pdfPath);
+          const filename = decodeURIComponent(encodedFilename);
           const fullPath = path.join(pdfDirectory, filename);
 
           console.log(`Checking PDF for order ${order.orderNumber}:`, {
