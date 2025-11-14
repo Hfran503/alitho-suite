@@ -168,7 +168,13 @@ export function ProcessShipmentShipStationModal({
   const [selectedRate, setSelectedRate] = useState<Rate | null>(null)
 
   // Step 4 data - Ship Date and Return Label Options
-  const [shipDate, setShipDate] = useState<string>(new Date().toISOString().split('T')[0])
+  // Get current date in Pacific Time to avoid timezone issues
+  const getPacificDate = () => {
+    const now = new Date()
+    const pacificDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
+    return pacificDate.toISOString().split('T')[0]
+  }
+  const [shipDate, setShipDate] = useState<string>(getPacificDate())
   const [isReturnLabel, setIsReturnLabel] = useState(false)
   const [returnServiceCode, setReturnServiceCode] = useState<string>('')
   const [rmaNumber, setRmaNumber] = useState('')
@@ -1812,7 +1818,7 @@ export function ProcessShipmentShipStationModal({
                             </div>
                           </div>
                         )}
-                        <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                        <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : carriers.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
                         {carriers.map((carrier) => (
                           <div key={carrier} className="space-y-2">
                             <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0">{carrier}</h4>
@@ -2859,8 +2865,14 @@ function Step2AddressesShipStation({
           const hasWarnings = validationResult.messages && validationResult.messages.length > 0
           const hasErrors = validationResult.messages && validationResult.messages.some((m: any) => m.type === 'error')
 
-          // Determine effective status (warnings override verified status)
+          // Check if "Address not found" message exists - treat as unverified
+          const hasAddressNotFound = validationResult.messages && validationResult.messages.some((m: any) =>
+            m.message && m.message.toLowerCase().includes('address not found')
+          )
+
+          // Determine effective status - treat "address not found" as unverified
           const effectiveStatus = hasErrors ? 'error' :
+                                 (validationResult.status === 'unverified' || hasAddressNotFound) ? 'unverified' :
                                  hasWarnings ? 'warning' :
                                  validationResult.status
 

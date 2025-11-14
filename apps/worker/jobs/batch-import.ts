@@ -660,19 +660,29 @@ async function createShippingLabels(
         labelMessages.reference3 = row.reference3
       }
 
-      return {
+      const packageData: any = {
         weight: {
           value: row.weight,
           unit: 'pound' as const,
         },
-        dimensions: row.length && row.width && row.height ? {
+        label_messages: labelMessages,
+      }
+
+      // Use carrier package code if configured, otherwise use custom dimensions
+      if (batch.useCarrierPackage && batch.carrierPackageCode) {
+        packageData.package_code = batch.carrierPackageCode
+        console.log(`[batch-import] 📦 Using carrier package: ${batch.carrierPackageName || batch.carrierPackageCode}`)
+      } else if (row.length && row.width && row.height) {
+        packageData.dimensions = {
           length: row.length,
           width: row.width,
           height: row.height,
           unit: 'inch' as const,
-        } : undefined,
-        label_messages: labelMessages,
+        }
+        console.log(`[batch-import] 📦 Using custom dimensions: ${row.length}x${row.width}x${row.height}`)
       }
+
+      return packageData
     })
 
     // Parse fromAddress from batch and convert to ShipStation format

@@ -143,6 +143,7 @@ export default function BatchImportPage() {
           <Step3ShippingConfig
             onComplete={handleShippingConfigComplete}
             onBack={handleBack}
+            columnMapping={columnMapping}
           />
         )}
         {currentStep === 4 && (
