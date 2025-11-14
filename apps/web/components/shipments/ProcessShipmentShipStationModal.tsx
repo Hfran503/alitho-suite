@@ -133,6 +133,7 @@ export function ProcessShipmentShipStationModal({
   // Step 2 data - Address validation
   const [validationResult, setValidationResult] = useState<any>(null)
   const [hasValidated, setHasValidated] = useState(false)
+  const [overrideValidation, setOverrideValidation] = useState(false)
 
   const [fromAddress, setFromAddress] = useState<AddressData>({
     name: 'Calitho',
@@ -458,9 +459,9 @@ export function ProcessShipmentShipStationModal({
         return
       }
 
-      // Check if there are validation errors
-      if (validationResult.status === 'error' || validationResult.status === 'unverified') {
-        setError('Address validation failed. Please correct the address or use the "Undo Corrections" button if the suggested address is incorrect.')
+      // Check if there are validation errors (allow override if user acknowledges)
+      if ((validationResult.status === 'error' || validationResult.status === 'unverified') && !overrideValidation) {
+        setError('Address validation failed. Please check the "Proceed Anyway" option below to override this warning, or correct the address.')
         return
       }
 
@@ -1749,6 +1750,8 @@ export function ProcessShipmentShipStationModal({
                 setValidationResult={setValidationResult}
                 hasValidated={hasValidated}
                 setHasValidated={setHasValidated}
+                overrideValidation={overrideValidation}
+                setOverrideValidation={setOverrideValidation}
               />
             )}
 
@@ -2550,6 +2553,8 @@ function Step2AddressesShipStation({
   setValidationResult,
   hasValidated,
   setHasValidated,
+  overrideValidation,
+  setOverrideValidation,
 }: {
   fromAddress: AddressData
   toAddress: AddressData
@@ -2560,6 +2565,8 @@ function Step2AddressesShipStation({
   setValidationResult: (result: any) => void
   hasValidated: boolean
   setHasValidated: (validated: boolean) => void
+  overrideValidation: boolean
+  setOverrideValidation: (override: boolean) => void
 }) {
   const [isFromAddressExpanded, setIsFromAddressExpanded] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -2610,6 +2617,7 @@ function Step2AddressesShipStation({
       if (data.success) {
         setValidationResult(data.data)
         setHasValidated(true)
+        setOverrideValidation(false) // Reset override when new validation completes
 
         // Auto-apply corrections if we have a matched address with differences
         if (data.data.matched_address) {
@@ -2691,10 +2699,12 @@ function Step2AddressesShipStation({
         }
       } else {
         setValidationResult({ status: 'error', messages: [{ message: data.error, type: 'error' }] })
+        setOverrideValidation(false) // Reset override on validation error
         setHasValidated(true)
       }
     } catch (error: any) {
       setValidationResult({ status: 'error', messages: [{ message: error.message, type: 'error' }] })
+      setOverrideValidation(false) // Reset override on validation error
       setHasValidated(true)
     } finally {
       setValidating(false)
@@ -2865,15 +2875,11 @@ function Step2AddressesShipStation({
           const hasWarnings = validationResult.messages && validationResult.messages.length > 0
           const hasErrors = validationResult.messages && validationResult.messages.some((m: any) => m.type === 'error')
 
-          // Check if "Address not found" message exists - treat as unverified
-          const hasAddressNotFound = validationResult.messages && validationResult.messages.some((m: any) =>
-            m.message && m.message.toLowerCase().includes('address not found')
-          )
-
-          // Determine effective status - treat "address not found" as unverified
+          // Determine effective status - only show "warning" if underlying status is actually "verified"
+          // This prevents showing "verified with warnings" when address is unverified
           const effectiveStatus = hasErrors ? 'error' :
-                                 (validationResult.status === 'unverified' || hasAddressNotFound) ? 'unverified' :
-                                 hasWarnings ? 'warning' :
+                                 validationResult.status === 'unverified' ? 'unverified' :
+                                 validationResult.status === 'verified' && hasWarnings ? 'warning' :
                                  validationResult.status
 
           return (
@@ -3017,6 +3023,30 @@ function Step2AddressesShipStation({
           </div>
           )
         })()}
+
+        {/* Override option for failed validation */}
+        {validationResult && (validationResult.status === 'error' || validationResult.status === 'unverified') && (
+          <div className="mb-3 p-3 bg-orange-50 border-2 border-orange-300 rounded-lg">
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={overrideValidation}
+                onChange={(e) => setOverrideValidation(e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500"
+              />
+              <div className="flex-1">
+                <span className="text-sm font-bold text-orange-900 group-hover:text-orange-700">
+                  ⚠️ Proceed Anyway (Override Validation)
+                </span>
+                <p className="text-xs text-orange-700 mt-1">
+                  I acknowledge that the address validation failed, but I want to proceed with creating the label anyway.
+                  The shipping carrier may reject or delay shipments with invalid addresses.
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
