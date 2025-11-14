@@ -918,7 +918,7 @@ export default function AtlassianOrdersPage() {
                 </span>
               </div>
               <Button
-                onClick={handleBulkRegeneratePdfs}
+                onClick={handleBatchRegeneratePdfs}
                 disabled={batchRegeneratingPdfs || selectedOrderIds.size === 0}
                 variant="outline"
               >
