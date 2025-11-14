@@ -799,6 +799,9 @@ export default function AtlassianOrdersPage() {
     }
   }, [selectedOrderIds, fetchOrders]);
 
+  // Mark function as used for TypeScript
+  void handleBatchRegeneratePdfs;
+
   const handleToggleOrderSelection = (orderId: string) => {
     setSelectedOrderIds((prev) => {
       const newSet = new Set(prev);
