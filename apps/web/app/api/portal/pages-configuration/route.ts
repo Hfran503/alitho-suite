@@ -57,7 +57,7 @@ export async function GET(_req: NextRequest) {
     })
 
     // Filter pages based on visibility mode
-    const visiblePages = allPages.filter((page) => {
+    const visiblePages = allPages.filter((page: (typeof allPages)[number]) => {
       switch (page.visibilityMode) {
         case 'all':
           // Everyone can see this page
