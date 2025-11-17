@@ -346,6 +346,48 @@ async function createPaceCartonContent(
 }
 
 /**
+ * Create PACE Carton Content with retry logic
+ */
+async function createPaceCartonContentWithRetry(
+  cartonId: string,
+  jobProductId: string,
+  quantity: number,
+  maxRetries: number = 3
+): Promise<{ success: boolean; error?: string; attempts: number }> {
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[PACE] 🔄 Attempt ${attempt}/${maxRetries} to add content to Carton ${cartonId}`)
+
+    const result = await createPaceCartonContent(cartonId, jobProductId, quantity)
+
+    if (result.success) {
+      if (attempt > 1) {
+        console.log(`[PACE] ✅ Successfully added content after ${attempt} attempts`)
+      }
+      return { success: true, attempts: attempt }
+    }
+
+    lastError = result.error || 'Unknown error'
+
+    // If it's the last attempt, don't wait
+    if (attempt < maxRetries) {
+      // Exponential backoff: 1s, 2s, 4s
+      const waitTime = Math.pow(2, attempt - 1) * 1000
+      console.log(`[PACE] ⏳ Waiting ${waitTime}ms before retry...`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+
+  console.error(`[PACE] ❌ Failed to add content after ${maxRetries} attempts: ${lastError}`)
+  return {
+    success: false,
+    error: lastError,
+    attempts: maxRetries,
+  }
+}
+
+/**
  * Create PACE Carton with content
  */
 async function createPaceCarton(
@@ -363,7 +405,14 @@ async function createPaceCarton(
     reference3?: string | null
     cost?: number | null
   }
-): Promise<{ success: boolean; cartonId?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  cartonId?: string;
+  error?: string;
+  contentAdded?: boolean;
+  contentWarning?: string;
+  retryAttempts?: number;
+}> {
   try {
     console.log(`[PACE] 📦 Creating Carton for shipment ${shipmentId}, tracking: ${cartonData.trackingNumber}`)
 
@@ -427,21 +476,40 @@ async function createPaceCarton(
     console.log(`[PACE] ✅ Successfully created Carton - ID: ${cartonId}`)
 
     // Add carton content if JobProduct ID is provided
+    let contentAdded = false
+    let contentWarning: string | undefined
+    let retryAttempts = 0
+
     if (cartonId && cartonData.jobProductId && cartonData.itemQuantity) {
-      const contentResult = await createPaceCartonContent(
+      const contentResult = await createPaceCartonContentWithRetry(
         cartonId.toString(),
         cartonData.jobProductId,
-        cartonData.itemQuantity
+        cartonData.itemQuantity,
+        3 // Max 3 retry attempts
       )
+
+      retryAttempts = contentResult.attempts
+
       if (!contentResult.success) {
-        console.warn(`[PACE] ⚠️  Failed to add carton content: ${contentResult.error}`)
-        // Don't fail the carton creation, just log warning
+        contentWarning = `Failed to add product after ${contentResult.attempts} attempts: ${contentResult.error}`
+        console.warn(`[PACE] ⚠️  ${contentWarning}`)
+      } else {
+        contentAdded = true
+        if (contentResult.attempts > 1) {
+          console.log(`[PACE] ✅ Product added successfully after ${contentResult.attempts} attempts`)
+        }
       }
+    } else if (cartonId && !cartonData.jobProductId) {
+      contentWarning = 'No itemNumber provided - carton created without product'
+      console.warn(`[PACE] ⚠️  ${contentWarning}`)
     }
 
     return {
       success: true,
       cartonId: cartonId?.toString(),
+      contentAdded,
+      contentWarning,
+      retryAttempts,
     }
   } catch (error) {
     console.error('[PACE] ❌ Exception creating PACE Carton:', error)
@@ -1055,6 +1123,7 @@ async function processShipmentGroup(
     // Step 3: Create PACE Cartons for each label
     console.log(`[batch-import] 📦 Step 3: Creating PACE Cartons...`)
     const cartonIds = new Map<string, string>() // Map rowId to cartonId
+    const cartonResults = new Map<string, { cartonId?: string; contentAdded?: boolean; contentWarning?: string; retryAttempts?: number }>() // Store full results
 
     for (const label of labelsResult.labels) {
       if (!paceResult.shipmentId) continue
@@ -1080,7 +1149,22 @@ async function processShipmentGroup(
 
       if (cartonResult.success && cartonResult.cartonId) {
         cartonIds.set(label.rowId, cartonResult.cartonId)
+        cartonResults.set(label.rowId, {
+          cartonId: cartonResult.cartonId,
+          contentAdded: cartonResult.contentAdded,
+          contentWarning: cartonResult.contentWarning,
+          retryAttempts: cartonResult.retryAttempts,
+        })
         console.log(`[batch-import]    - Created carton ${cartonResult.cartonId} for row ${row.rowNumber}`)
+
+        // Log content status
+        if (cartonResult.contentAdded) {
+          if (cartonResult.retryAttempts && cartonResult.retryAttempts > 1) {
+            console.log(`[batch-import]    - ✅ Product added after ${cartonResult.retryAttempts} attempts`)
+          }
+        } else if (cartonResult.contentWarning) {
+          console.warn(`[batch-import]    - ⚠️  ${cartonResult.contentWarning}`)
+        }
       } else {
         console.warn(`[batch-import] ⚠️  Failed to create carton for row ${row.rowNumber}: ${cartonResult.error}`)
         // Don't fail the whole batch - just log warning
@@ -1108,11 +1192,21 @@ async function processShipmentGroup(
         const paceCartonId = cartonIdStr ? parseInt(cartonIdStr) : null
         const paceShipmentId = paceResult.shipmentId ? parseInt(paceResult.shipmentId) : null
 
-        // Build notes field with address corrections
-        let notes = null
+        // Build notes field with address corrections and content warnings
+        const notesParts: string[] = []
         if (addressCorrectionNotes.length > 0) {
-          notes = addressCorrectionNotes.join('; ')
+          notesParts.push(...addressCorrectionNotes)
         }
+
+        // Add content warning if product was not added to carton
+        const cartonResult = cartonResults.get(label.rowId)
+        if (cartonResult?.contentWarning) {
+          notesParts.push(`⚠️ ${cartonResult.contentWarning}`)
+        } else if (cartonResult?.contentAdded && cartonResult?.retryAttempts && cartonResult.retryAttempts > 1) {
+          notesParts.push(`✅ Product added after ${cartonResult.retryAttempts} retry attempts`)
+        }
+
+        const notes = notesParts.length > 0 ? notesParts.join('; ') : null
 
         await db.batchImportRow.update({
           where: { id: label.rowId },
