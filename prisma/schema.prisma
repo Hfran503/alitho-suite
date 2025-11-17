@@ -37,6 +37,7 @@ model Tenant {
   menuConfigurations     MenuConfiguration[]
   portalPageConfigurations PortalPageConfiguration[]
   estimateSettings       EstimateSettings?
+  shipmentSettings       ShipmentSettings?
   netsuiteIntegration    NetSuiteIntegration?
   orders                 Order[]
   shipmentTypeMappings   ShipmentTypeMapping[]
@@ -765,6 +766,17 @@ model EstimateSettings {
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
   tenant                    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model ShipmentSettings {
+  id                      String   @id @default(cuid())
+  enforcePoValidation     Boolean  @default(true) // Whether to enforce PO validation before processing shipments
+  tenantId                String   @unique
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }

@@ -109,6 +109,72 @@ export async function GET(
 
     const shipment: JobShipment = await response.json()
 
+    // Fetch shipment settings to check if PO validation is enforced
+    const shipmentSettings = await db.shipmentSettings.findUnique({
+      where: { tenantId: membership.tenantId },
+    })
+    ;(shipment as any).enforcePoValidation = shipmentSettings?.enforcePoValidation ?? true
+
+    // Fetch customer PO requirement and job PO numbers if job exists
+    if (shipment.job) {
+      try {
+        // Fetch Job details to get customer and poNum
+        const jobUrl = `${paceApiUrl}/ReadObject/readJob?primaryKey=${encodeURIComponent(shipment.job)}`
+        const jobResponse = await fetch(jobUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': authHeader,
+          },
+          body: '',
+        })
+
+        if (jobResponse.ok) {
+          const jobData = await jobResponse.json()
+          ;(shipment as any).jobPoNum = jobData.poNum || null
+
+          // Fetch customer's enterInvoicePORequired setting
+          if (jobData.customer) {
+            const customerUrl = `${paceApiUrl}/ReadObject/readCustomer?primaryKey=${encodeURIComponent(jobData.customer)}`
+            const customerResponse = await fetch(customerUrl, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': authHeader,
+              },
+              body: '',
+            })
+
+            if (customerResponse.ok) {
+              const customerData = await customerResponse.json()
+              ;(shipment as any).customerPORequired = customerData.enterInvoicePORequired || null
+            }
+          }
+
+          // Fetch Proposal PO if proposal number exists
+          if (jobData.u_proposal_number) {
+            const proposalUrl = `${paceApiUrl}/ReadObject/readUDO_proposal?primaryKey=${encodeURIComponent(jobData.u_proposal_number)}`
+            const proposalResponse = await fetch(proposalUrl, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': authHeader,
+              },
+              body: '',
+            })
+
+            if (proposalResponse.ok) {
+              const proposalData = await proposalResponse.json()
+              ;(shipment as any).proposalPO = proposalData.po || null
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching job PO data:', err)
+        // Continue without PO data if fetch fails
+      }
+    }
+
     // Normalize the date/time field and fix timezone issue
     const rawDate = shipment.dateTime ?? (shipment as any).date ?? (shipment as any).shipDate
 

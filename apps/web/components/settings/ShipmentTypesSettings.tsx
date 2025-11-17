@@ -23,6 +23,10 @@ interface CarrierServiceMapping {
 }
 
 export function ShipmentTypesSettings() {
+  // PO Validation Settings state
+  const [enforcePoValidation, setEnforcePoValidation] = useState(true)
+  const [savingPoSettings, setSavingPoSettings] = useState(false)
+
   // Shipment Type Mappings state
   const [mappings, setMappings] = useState<ShipmentTypeMapping[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
@@ -63,6 +67,13 @@ export function ShipmentTypesSettings() {
       setLoading(true)
       setError('')
 
+      // Load PO validation settings
+      const poSettingsRes = await fetch('/api/settings/shipment')
+      if (poSettingsRes.ok) {
+        const poSettingsData = await poSettingsRes.json()
+        setEnforcePoValidation(poSettingsData.data?.enforcePoValidation ?? true)
+      }
+
       // Load existing shipment type mappings
       const mappingsRes = await fetch('/api/settings/shipment-types')
       if (!mappingsRes.ok) throw new Error('Failed to load shipment type mappings')
@@ -88,6 +99,33 @@ export function ShipmentTypesSettings() {
     }
   }
 
+  const handleTogglePoValidation = async (enabled: boolean) => {
+    try {
+      setSavingPoSettings(true)
+      setError('')
+      setSuccess('')
+
+      const res = await fetch('/api/settings/shipment', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enforcePoValidation: enabled }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update PO validation setting')
+      }
+
+      setEnforcePoValidation(enabled)
+      setSuccess('PO validation setting updated successfully')
+    } catch (err: any) {
+      setError(err.message)
+      // Revert the toggle on error
+      setEnforcePoValidation(!enabled)
+    } finally {
+      setSavingPoSettings(false)
+    }
+  }
 
   const handleAddMapping = async () => {
     if (
@@ -249,8 +287,56 @@ export function ShipmentTypesSettings() {
 
   return (
     <div className="space-y-8">
-      {/* Section 1: Shipment Type Mappings */}
+      {/* Section 0: PO Validation Settings */}
       <div className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">PO Validation</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Control whether to enforce PO validation before processing shipments. When enabled, shipments cannot be processed if the customer requires a PO and it's missing or mismatched.
+          </p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">{error}</div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md text-sm">
+            {success}
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-gray-900">Enforce PO Validation for Shipments</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                When enabled, users cannot process shipments if a customer requires a PO number and it's missing or doesn't match between the job and proposal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleTogglePoValidation(!enforcePoValidation)}
+              disabled={savingPoSettings}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                enforcePoValidation ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+              role="switch"
+              aria-checked={enforcePoValidation}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  enforcePoValidation ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 1: Shipment Type Mappings */}
+      <div className="space-y-6 pt-8 border-t border-gray-300">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Shipment Type Mappings</h2>
           <p className="text-sm text-gray-600 mt-1">
@@ -258,16 +344,6 @@ export function ShipmentTypesSettings() {
             its completed counterpart when labels are created, and vice versa when labels are cancelled.
           </p>
         </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">{error}</div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md text-sm">
-          {success}
-        </div>
-      )}
 
       {/* Existing Mappings */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">

@@ -234,6 +234,56 @@ export default function ShipmentDetailsPage() {
     }
   }
 
+  // Helper function to check if PO validation passes
+  const isPOValid = (): boolean => {
+    if (!shipment) return true // If no shipment loaded yet, don't block
+
+    // Check if PO validation enforcement is enabled in settings
+    const enforcePoValidation = (shipment as any).enforcePoValidation
+    if (enforcePoValidation === false) return true // Validation disabled in settings
+
+    const customerPORequired = (shipment as any).customerPORequired
+    const jobPO = (shipment as any).jobPoNum?.trim()
+    const proposalPO = (shipment as any).proposalPO?.trim()
+
+    // If customer doesn't require PO, validation passes
+    if (customerPORequired !== '1') return true
+
+    // If both POs are empty, validation fails
+    if (!jobPO && !proposalPO) return false
+
+    // If both have values but don't match, validation fails
+    if (jobPO && proposalPO && jobPO !== proposalPO) return false
+
+    // Otherwise, validation passes
+    return true
+  }
+
+  // Get PO validation error message
+  const getPOErrorMessage = (): string | null => {
+    if (!shipment) return null
+
+    // Check if PO validation enforcement is enabled
+    const enforcePoValidation = (shipment as any).enforcePoValidation
+    if (enforcePoValidation === false) return null // Validation disabled in settings
+
+    const customerPORequired = (shipment as any).customerPORequired
+    const jobPO = (shipment as any).jobPoNum?.trim()
+    const proposalPO = (shipment as any).proposalPO?.trim()
+
+    if (customerPORequired !== '1') return null
+
+    if (!jobPO && !proposalPO) {
+      return 'Cannot process shipment: Customer requires a PO number'
+    }
+
+    if (jobPO && proposalPO && jobPO !== proposalPO) {
+      return 'Cannot process shipment: PO numbers do not match'
+    }
+
+    return null
+  }
+
   const handleDeleteAllCartons = async () => {
     if (!cartons || cartons.length === 0) return
 
@@ -531,6 +581,61 @@ export default function ShipmentDetailsPage() {
       {/* Tab Content */}
       {activeTab === 'details' ? (
         <>
+        {/* PO Warning Banner - Show at top if there's an issue */}
+        {(() => {
+          // Check if PO validation enforcement is enabled in settings
+          const enforcePoValidation = (shipment as any).enforcePoValidation
+          if (enforcePoValidation === false) return null // Validation disabled in settings
+
+          const customerPORequired = (shipment as any).customerPORequired
+          const jobPO = (shipment as any).jobPoNum?.trim()
+          const proposalPO = (shipment as any).proposalPO?.trim()
+
+          // Only validate PO if customer requires it (1 = required)
+          if (customerPORequired !== '1') {
+            return null
+          }
+
+          // Both are empty - ISSUE
+          if (!jobPO && !proposalPO) {
+            return (
+              <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                <div className="flex items-start">
+                  <svg className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div className="ml-3">
+                    <h3 className="text-base font-semibold text-red-800">Missing PO Number (Required)</h3>
+                    <p className="text-sm text-red-700 mt-1">This customer requires a PO number. Please add a PO number to the job or proposal before processing this shipment.</p>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          // Both have values but don't match - ISSUE
+          if (jobPO && proposalPO && jobPO !== proposalPO) {
+            return (
+              <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                <div className="flex items-start">
+                  <svg className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div className="ml-3">
+                    <h3 className="text-base font-semibold text-red-800">PO Number Mismatch</h3>
+                    <p className="text-sm text-red-700 mt-1">
+                      The PO numbers don't match: <strong>Job PO: {jobPO}</strong> ≠ <strong>Proposal PO: {proposalPO}</strong>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          // One has value, other is empty - OK, no issue shown
+          return null
+        })()}
+
         {/* Top Section - Job & Shipping Info */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
 
@@ -566,7 +671,7 @@ export default function ShipmentDetailsPage() {
               )}
 
               {/* Customer and Salesperson */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-2 gap-3 text-sm pt-1 pb-2">
                 {(jobCustomerName || jobCustomer) && (
                   <div>
                     <div className="text-xs text-gray-500 mb-0.5">Customer</div>
@@ -732,7 +837,9 @@ export default function ShipmentDetailsPage() {
                 <div className="flex items-center justify-center gap-4">
                   <button
                     onClick={() => setShowProcessModal(true)}
-                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    disabled={!isPOValid()}
+                    title={getPOErrorMessage() || undefined}
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -741,7 +848,8 @@ export default function ShipmentDetailsPage() {
                   </button>
                   <button
                     onClick={handleProcessParcelClick}
-                    disabled={integrationLoading}
+                    disabled={integrationLoading || !isPOValid()}
+                    title={getPOErrorMessage() || undefined}
                     className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -750,6 +858,11 @@ export default function ShipmentDetailsPage() {
                     {integrationLoading ? 'Checking Integration...' : 'Process Shipment for Parcel'}
                   </button>
                 </div>
+                {!isPOValid() && (
+                  <div className="mt-4 text-center text-sm text-red-600 font-medium">
+                    {getPOErrorMessage()}
+                  </div>
+                )}
               </div>
             ) : (
               <div>
@@ -765,7 +878,9 @@ export default function ShipmentDetailsPage() {
                           <>
                             <button
                               onClick={() => setShowProcessModal(true)}
-                              className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                              disabled={!isPOValid()}
+                              title={getPOErrorMessage() || undefined}
+                              className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
                             >
                               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -775,8 +890,9 @@ export default function ShipmentDetailsPage() {
 
                             <button
                               onClick={handleProcessParcelClick}
-                              disabled={integrationLoading}
-                              className="inline-flex items-center px-4 py-2 border border-green-600 text-sm font-medium rounded-md text-green-600 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={integrationLoading || !isPOValid()}
+                              title={getPOErrorMessage() || undefined}
+                              className="inline-flex items-center px-4 py-2 border border-green-600 text-sm font-medium rounded-md text-green-600 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
                             >
                               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -828,6 +944,12 @@ export default function ShipmentDetailsPage() {
                     </div>
                   )
                 })()}
+
+                {!isPOValid() && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    <strong>⚠️ {getPOErrorMessage()}</strong>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
