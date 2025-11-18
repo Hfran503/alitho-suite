@@ -169,7 +169,7 @@ function addCenteredAddress(
   includeCropOffset: boolean
 ) {
   const lines = addressText.split('\n').filter((line) => line.trim())
-  const fontSize = 12
+  const fontSize = 14
   const lineHeight = fontSize * 1.5
 
   const cropOffset = includeCropOffset ? CROP_MARK_MARGIN : 0
