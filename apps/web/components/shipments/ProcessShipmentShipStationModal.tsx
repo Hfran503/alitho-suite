@@ -132,6 +132,7 @@ export function ProcessShipmentShipStationModal({
 
   // Shipment type tracking for conditional rendering
   const [shipmentTypeDescription, setShipmentTypeDescription] = useState<string | null>(null)
+  const [showOtherItemTypes, setShowOtherItemTypes] = useState(false)
 
   // Step 2 data - Address validation
   const [validationResult, setValidationResult] = useState<any>(null)
@@ -1258,7 +1259,32 @@ export function ProcessShipmentShipStationModal({
 
                                       {/* Items grouped by type */}
                                       <div className="py-1 overflow-y-auto max-h-[calc(85vh-4rem)]">
-                                        {!isStorefrontShipment() && itemGroups.job.length > 0 && (
+                                        {isStorefrontShipment() && (
+                                          <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
+                                            <button
+                                              type="button"
+                                              onClick={() => setShowOtherItemTypes(!showOtherItemTypes)}
+                                              className="text-xs text-blue-700 hover:text-blue-900 font-medium flex items-center gap-1"
+                                            >
+                                              {showOtherItemTypes ? (
+                                                <>
+                                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                  </svg>
+                                                  Hide Job/Products/Parts
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                  Show Job/Products/Parts
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        )}
+                                        {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.job.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>JOB</span>
@@ -1296,7 +1322,7 @@ export function ProcessShipmentShipStationModal({
                                           </div>
                                         )}
 
-                                        {!isStorefrontShipment() && itemGroups.components.length > 0 && (
+                                        {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.components.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>COMPONENTS</span>
@@ -1334,7 +1360,7 @@ export function ProcessShipmentShipStationModal({
                                           </div>
                                         )}
 
-                                        {!isStorefrontShipment() && itemGroups.products.length > 0 && (
+                                        {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.products.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>PRODUCTS</span>
@@ -1372,7 +1398,7 @@ export function ProcessShipmentShipStationModal({
                                           </div>
                                         )}
 
-                                        {!isStorefrontShipment() && itemGroups.parts.length > 0 && (
+                                        {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.parts.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>PARTS</span>
@@ -1452,6 +1478,33 @@ export function ProcessShipmentShipStationModal({
                                     </>
                                   )}
                                 </div>
+
+                                {/* Toggle button for Storefront shipments */}
+                                {isStorefrontShipment() && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowOtherItemTypes(!showOtherItemTypes)}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                                    title={showOtherItemTypes ? "Hide Job/Products/Parts options" : "Show Job/Products/Parts options"}
+                                  >
+                                    {showOtherItemTypes ? (
+                                      <>
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                        </svg>
+                                        Hide Other
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        Show Other
+                                      </>
+                                    )}
+                                  </button>
+                                )}
                               </div>
                               {cartons.length > 1 && (
                                 <button
@@ -1621,12 +1674,12 @@ export function ProcessShipmentShipStationModal({
                               updateContent(cartonIndex, contentIndex, 'itemId', selectedValue)
 
                               // Auto-populate quantity based on selected item
-                              // Search across all groups (excluding certain groups for Storefront shipments)
+                              // Search across all groups (excluding certain groups for Storefront shipments unless expanded)
                               const allItemsFlat = [
-                                ...(isStorefrontShipment() ? [] : itemGroups.job),
-                                ...(isStorefrontShipment() ? [] : itemGroups.components),
-                                ...(isStorefrontShipment() ? [] : itemGroups.products),
-                                ...(isStorefrontShipment() ? [] : itemGroups.parts),
+                                ...((isStorefrontShipment() && !showOtherItemTypes) ? [] : itemGroups.job),
+                                ...((isStorefrontShipment() && !showOtherItemTypes) ? [] : itemGroups.components),
+                                ...((isStorefrontShipment() && !showOtherItemTypes) ? [] : itemGroups.products),
+                                ...((isStorefrontShipment() && !showOtherItemTypes) ? [] : itemGroups.parts),
                                 ...itemGroups.materials,
                               ]
                               const selectedItem = allItemsFlat.find(item => item.value === selectedValue)
@@ -1642,7 +1695,13 @@ export function ProcessShipmentShipStationModal({
                           >
                             <option value="">Select item to ship...</option>
 
-                            {!isStorefrontShipment() && itemGroups.job.length > 0 && (
+                            {isStorefrontShipment() && !showOtherItemTypes && (
+                              <option value="" disabled className="text-blue-600">
+                                ⓘ Click "Show Job/Products/Parts" above for more options
+                              </option>
+                            )}
+
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.job.length > 0 && (
                               <optgroup label="━━━ JOB ━━━">
                                 {itemGroups.job.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -1652,7 +1711,7 @@ export function ProcessShipmentShipStationModal({
                               </optgroup>
                             )}
 
-                            {!isStorefrontShipment() && itemGroups.components.length > 0 && (
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.components.length > 0 && (
                               <optgroup label="━━━ COMPONENTS ━━━">
                                 {itemGroups.components.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -1662,7 +1721,7 @@ export function ProcessShipmentShipStationModal({
                               </optgroup>
                             )}
 
-                            {!isStorefrontShipment() && itemGroups.products.length > 0 && (
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.products.length > 0 && (
                               <optgroup label="━━━ PRODUCTS ━━━">
                                 {itemGroups.products.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -1672,7 +1731,7 @@ export function ProcessShipmentShipStationModal({
                               </optgroup>
                             )}
 
-                            {!isStorefrontShipment() && itemGroups.parts.length > 0 && (
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.parts.length > 0 && (
                               <optgroup label="━━━ PARTS ━━━">
                                 {itemGroups.parts.map((item) => (
                                   <option key={item.value} value={item.value}>
