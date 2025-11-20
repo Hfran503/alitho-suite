@@ -643,21 +643,21 @@ export default function ShipmentDetailsPage() {
         <div className="lg:col-span-2 space-y-3 flex flex-col">
 
           {/* Job Information Card */}
-          <div className="bg-white rounded border border-gray-200 overflow-hidden flex-1">
+          <div className="bg-white rounded border border-gray-200 flex-1">
             <div className="border-b border-gray-200 px-4 py-2 bg-gray-50">
               <h2 className="text-xs font-semibold text-gray-700 uppercase">Job Information</h2>
             </div>
             <div className="p-4 space-y-3">
               {/* Job Number */}
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-start justify-between border-b border-gray-100 pb-3 gap-3">
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Job Number</div>
                   <div className="text-2xl font-bold text-gray-900">{shipment.job || 'N/A'}</div>
                 </div>
                 {shipmentTypeDescription && (
-                  <div className="flex flex-wrap gap-1.5 justify-end">
+                  <div className="flex flex-wrap gap-1.5 justify-end max-w-md">
                     {shipmentTypeDescription.split('|').map((type, idx) => (
-                      <span key={idx} className="px-2 py-0.5 rounded text-xs text-gray-600 bg-gray-100 border border-gray-200">
+                      <span key={idx} className="px-2 py-0.5 rounded text-xs text-gray-600 bg-gray-100 border border-gray-200 whitespace-normal">
                         {type.trim()}
                       </span>
                     ))}
@@ -671,17 +671,21 @@ export default function ShipmentDetailsPage() {
               )}
 
               {/* Customer and Salesperson */}
-              <div className="grid grid-cols-2 gap-3 text-sm pt-1 pb-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm pt-1 pb-2">
                 {(jobCustomerName || jobCustomer) && (
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 mb-0.5">Customer</div>
-                    <div className="font-semibold text-gray-900">{jobCustomerName || jobCustomer}</div>
+                    <div className="font-semibold text-gray-900 break-words">
+                      {jobCustomerName || jobCustomer}
+                    </div>
                   </div>
                 )}
                 {jobSalesperson && (
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 mb-0.5">Salesperson</div>
-                    <div className="font-semibold text-gray-900">{jobSalesperson}</div>
+                    <div className="font-semibold text-gray-900 break-words">
+                      {jobSalesperson}
+                    </div>
                   </div>
                 )}
               </div>
@@ -689,7 +693,7 @@ export default function ShipmentDetailsPage() {
           </div>
 
           {/* Shipping & Destination Card */}
-          <div className="bg-white rounded border border-gray-200 overflow-hidden flex-1">
+          <div className="bg-white rounded border border-gray-200 flex-1">
             <div className="border-b border-gray-200 px-4 py-2 bg-gray-50">
               <h2 className="text-xs font-semibold text-gray-700 uppercase">Shipping & Destination</h2>
             </div>

@@ -960,6 +960,32 @@ model GcuEnvelopeOrder {
   @@index([createdAt])
 }
 
+model HolidayGiftOrder {
+  id           String   @id @default(cuid())
+  giftId       String   // 'chill-out', 'game-night', 'get-moving', 'mystery'
+  giftName     String
+  firstName    String
+  lastName     String
+  email        String
+  phone        String
+  address      String
+  city         String
+  state        String
+  zipCode      String
+  country      String
+  status       String   @default("pending") // pending, processing, shipped, delivered, cancelled
+  metadata     Json?    // Any additional data
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@index([giftId])
+}
+
 enum BatchImportStatus {
   PENDING
   PROCESSING

@@ -130,6 +130,9 @@ export function ProcessShipmentShipStationModal({
   } | null>(null)
   const [loadingItems, setLoadingItems] = useState(false)
 
+  // Shipment type tracking for conditional rendering
+  const [shipmentTypeDescription, setShipmentTypeDescription] = useState<string | null>(null)
+
   // Step 2 data - Address validation
   const [validationResult, setValidationResult] = useState<any>(null)
   const [hasValidated, setHasValidated] = useState(false)
@@ -245,6 +248,20 @@ export function ProcessShipmentShipStationModal({
       }
     }
   }, [isOpen, shipment])
+
+  // Fetch shipment type description when modal opens
+  useEffect(() => {
+    if (isOpen && shipment?.shipmentType) {
+      fetch(`/api/pace/lookup/ShipmentType/${shipment.shipmentType}`)
+        .then(res => res.json())
+        .then(result => {
+          if (result.success) {
+            setShipmentTypeDescription(result.data.description)
+          }
+        })
+        .catch(err => console.error('Error fetching ShipmentType:', err))
+    }
+  }, [isOpen, shipment?.shipmentType])
 
   // Debug log whenever advancedOptions changes
   useEffect(() => {
@@ -898,6 +915,11 @@ export function ProcessShipmentShipStationModal({
     onSuccess()
   }
 
+  // Helper function to check if shipment is a Storefront shipment
+  const isStorefrontShipment = () => {
+    return shipmentTypeDescription?.split('|').some(label => label.trim().toLowerCase() === 'storefront')
+  }
+
   // Helper function to add a new carton configuration
   const addCarton = () => {
     setCartons([
@@ -1236,7 +1258,7 @@ export function ProcessShipmentShipStationModal({
 
                                       {/* Items grouped by type */}
                                       <div className="py-1 overflow-y-auto max-h-[calc(85vh-4rem)]">
-                                        {itemGroups.job.length > 0 && (
+                                        {!isStorefrontShipment() && itemGroups.job.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>JOB</span>
@@ -1274,7 +1296,7 @@ export function ProcessShipmentShipStationModal({
                                           </div>
                                         )}
 
-                                        {itemGroups.components.length > 0 && (
+                                        {!isStorefrontShipment() && itemGroups.components.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>COMPONENTS</span>
@@ -1312,7 +1334,7 @@ export function ProcessShipmentShipStationModal({
                                           </div>
                                         )}
 
-                                        {itemGroups.products.length > 0 && (
+                                        {!isStorefrontShipment() && itemGroups.products.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>PRODUCTS</span>
@@ -1350,7 +1372,7 @@ export function ProcessShipmentShipStationModal({
                                           </div>
                                         )}
 
-                                        {itemGroups.parts.length > 0 && (
+                                        {!isStorefrontShipment() && itemGroups.parts.length > 0 && (
                                           <div>
                                             <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50 flex items-center justify-between">
                                               <span>PARTS</span>
@@ -1599,12 +1621,12 @@ export function ProcessShipmentShipStationModal({
                               updateContent(cartonIndex, contentIndex, 'itemId', selectedValue)
 
                               // Auto-populate quantity based on selected item
-                              // Search across all groups
+                              // Search across all groups (excluding certain groups for Storefront shipments)
                               const allItemsFlat = [
-                                ...itemGroups.job,
-                                ...itemGroups.components,
-                                ...itemGroups.products,
-                                ...itemGroups.parts,
+                                ...(isStorefrontShipment() ? [] : itemGroups.job),
+                                ...(isStorefrontShipment() ? [] : itemGroups.components),
+                                ...(isStorefrontShipment() ? [] : itemGroups.products),
+                                ...(isStorefrontShipment() ? [] : itemGroups.parts),
                                 ...itemGroups.materials,
                               ]
                               const selectedItem = allItemsFlat.find(item => item.value === selectedValue)
@@ -1620,7 +1642,7 @@ export function ProcessShipmentShipStationModal({
                           >
                             <option value="">Select item to ship...</option>
 
-                            {itemGroups.job.length > 0 && (
+                            {!isStorefrontShipment() && itemGroups.job.length > 0 && (
                               <optgroup label="━━━ JOB ━━━">
                                 {itemGroups.job.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -1630,7 +1652,7 @@ export function ProcessShipmentShipStationModal({
                               </optgroup>
                             )}
 
-                            {itemGroups.components.length > 0 && (
+                            {!isStorefrontShipment() && itemGroups.components.length > 0 && (
                               <optgroup label="━━━ COMPONENTS ━━━">
                                 {itemGroups.components.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -1640,7 +1662,7 @@ export function ProcessShipmentShipStationModal({
                               </optgroup>
                             )}
 
-                            {itemGroups.products.length > 0 && (
+                            {!isStorefrontShipment() && itemGroups.products.length > 0 && (
                               <optgroup label="━━━ PRODUCTS ━━━">
                                 {itemGroups.products.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -1650,7 +1672,7 @@ export function ProcessShipmentShipStationModal({
                               </optgroup>
                             )}
 
-                            {itemGroups.parts.length > 0 && (
+                            {!isStorefrontShipment() && itemGroups.parts.length > 0 && (
                               <optgroup label="━━━ PARTS ━━━">
                                 {itemGroups.parts.map((item) => (
                                   <option key={item.value} value={item.value}>
