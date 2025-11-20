@@ -230,17 +230,37 @@ elif [ -f "/app/apps/web/server.js" ]; then
   cd /app
   node apps/web/server.js &
   WEB_PID=$!
+elif [ -f "/app/apps/web/.next/standalone/apps/web/server.js" ]; then
+  echo "Found server.js at /app/apps/web/.next/standalone/apps/web/server.js (Nixpacks build)"
+  cd /app/apps/web/.next/standalone
+  node apps/web/server.js &
+  WEB_PID=$!
 else
-  echo "ERROR: Cannot find server.js in /app or /app/apps/web"
+  echo "ERROR: Cannot find server.js in any expected location"
+  echo "Checked locations:"
+  echo "  - /app/server.js"
+  echo "  - /app/apps/web/server.js"
+  echo "  - /app/apps/web/.next/standalone/apps/web/server.js"
+  echo ""
+  echo "Directory structure:"
   echo "Contents of /app:"
-  ls -la /app
-  echo "Contents of /app/apps (if exists):"
-  ls -la /app/apps 2>/dev/null || echo "  /app/apps does not exist"
+  ls -la /app | head -20
+  echo ""
+  echo "Contents of /app/apps/web/.next:"
+  ls -la /app/apps/web/.next 2>/dev/null || echo "  Directory does not exist"
   exit 1
 fi
 
 # Start worker
+echo "Starting worker..."
 cd /app/apps/worker
+
+if [ ! -f "dist/index.js" ]; then
+  echo "ERROR: Worker dist/index.js not found at /app/apps/worker/dist/index.js"
+  ls -la /app/apps/worker
+  exit 1
+fi
+
 node dist/index.js &
 WORKER_PID=$!
 
