@@ -218,9 +218,26 @@ export PORT=3000
 export HOSTNAME="0.0.0.0"
 
 echo "Starting Next.js standalone server on 0.0.0.0:3000..."
-cd /app
-node apps/web/server.js &
-WEB_PID=$!
+
+# Find the server.js file (Next.js standalone places it in different locations depending on config)
+if [ -f "/app/server.js" ]; then
+  echo "Found server.js at /app/server.js"
+  cd /app
+  node server.js &
+  WEB_PID=$!
+elif [ -f "/app/apps/web/server.js" ]; then
+  echo "Found server.js at /app/apps/web/server.js"
+  cd /app
+  node apps/web/server.js &
+  WEB_PID=$!
+else
+  echo "ERROR: Cannot find server.js in /app or /app/apps/web"
+  echo "Contents of /app:"
+  ls -la /app
+  echo "Contents of /app/apps (if exists):"
+  ls -la /app/apps 2>/dev/null || echo "  /app/apps does not exist"
+  exit 1
+fi
 
 # Start worker
 cd /app/apps/worker
