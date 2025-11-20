@@ -647,24 +647,10 @@ async function createShippingLabels(
         console.log(`[batch-import]    Original: ${firstRow.shipToAddress1}, ${firstRow.shipToCity}, ${firstRow.shipToState} ${normalizedZip}`)
         console.log(`[batch-import]    Matched: ${matched.address_line1}, ${matched.city_locality}, ${matched.state_province} ${normalizeZip(matched.postal_code)}`)
 
-        // Helper: Check if address line changed (ignoring case and punctuation)
-        const normalizeAddressForComparison = (addr: string): string => {
-          return addr.toUpperCase()
-            .replace(/\./g, '')
-            .replace(/\s+/g, ' ')
-            .trim()
-        }
-
-        // Check for MAJOR address line changes (not just formatting)
-        const originalAddr1Normalized = normalizeAddressForComparison(originalAddress.address1)
-        const matchedAddr1Normalized = normalizeAddressForComparison(matched.address_line1)
-
-        if (originalAddr1Normalized !== matchedAddr1Normalized) {
-          // Major address change detected - FAIL the label
-          const errorMsg = `Address line mismatch detected. Original: "${originalAddress.address1}", ShipStation suggests: "${matched.address_line1}". Please verify and correct the address.`
-          console.error(`[batch-import] ❌ ${errorMsg}`)
-          throw new Error(errorMsg)
-        }
+        // STRATEGY: Trust customer's address lines (address1, address2), but always apply
+        // USPS corrections for City, State, and ZIP since USPS database is authoritative.
+        // This avoids false positives from abbreviations (Drive→DR) or suite number formatting.
+        // We keep the original address lines as-is and only correct City/State/ZIP.
 
         // Track meaningful corrections (City, State, ZIP)
         const correctedZip = normalizeZip(matched.postal_code)
