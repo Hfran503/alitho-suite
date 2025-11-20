@@ -29,37 +29,30 @@ else
 fi
 
 # Generate Prisma client (ensures it's available for migrations, seeding, and runtime)
+# IMPORTANT: Always regenerate in production to ensure pnpm symlinks are correct
 echo "Generating Prisma client..."
 
-# Check if Prisma client already exists and is valid
-if [ -f "/app/node_modules/.prisma/client/index.js" ] && [ -f "/app/node_modules/.prisma/client/index.d.ts" ]; then
-  echo "✓ Prisma client already exists, skipping generation"
-  echo "  (Client was generated during Docker build)"
-else
-  echo "Prisma client not found or incomplete, generating..."
+# Clear module resolution cache to ensure fresh imports
+echo "Clearing module cache..."
+rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
 
-  # Clear module resolution cache to ensure fresh imports
-  echo "Clearing module cache..."
-  rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
+# Generate Prisma client
+cd /app
+npx prisma generate --schema=./prisma/schema.prisma
 
-  # Generate Prisma client
-  cd /app
-  npx prisma generate --schema=./prisma/schema.prisma
+if [ $? -eq 0 ]; then
+  echo "✓ Prisma client generated successfully"
 
-  if [ $? -eq 0 ]; then
-    echo "✓ Prisma client generated successfully"
-
-    # Verify the client was generated
-    if [ -f "node_modules/.prisma/client/index.js" ]; then
-      echo "✓ Prisma client files verified"
-    else
-      echo "✗ Prisma client files not found!"
-      exit 1
-    fi
+  # Verify the client was generated
+  if [ -f "node_modules/.prisma/client/index.js" ]; then
+    echo "✓ Prisma client files verified"
   else
-    echo "✗ Failed to generate Prisma client"
+    echo "✗ Prisma client files not found!"
     exit 1
   fi
+else
+  echo "✗ Failed to generate Prisma client"
+  exit 1
 fi
 
 echo ""
@@ -219,15 +212,14 @@ echo "  PACE_API_URL: ${PACE_API_URL:+SET}"
 echo "  PACE_USERNAME: ${PACE_USERNAME:+SET}"
 echo "  PACE_PASSWORD: ${PACE_PASSWORD:+SET}"
 
-# Start web server using Next.js built-in server
-cd /app/apps/web
-
+# Start web server using standalone server
 # Set port and hostname for Docker/Dokploy
 export PORT=3000
 export HOSTNAME="0.0.0.0"
 
-echo "Starting Next.js server on 0.0.0.0:3000..."
-cd /app && pnpm --filter web start &
+echo "Starting Next.js standalone server on 0.0.0.0:3000..."
+cd /app
+node apps/web/server.js &
 WEB_PID=$!
 
 # Start worker
