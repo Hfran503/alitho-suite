@@ -7,6 +7,7 @@ export const USER_ROLES = {
   ACCOUNTING: 'accounting',
   ESTIMATORS: 'estimators',
   LOGISTICS: 'logistics',
+  WAREHOUSE: 'warehouse',
   CUSTOMER: 'customer',
 } as const
 
@@ -20,6 +21,7 @@ export const ROLE_LABELS: Record<string, string> = {
   [USER_ROLES.ACCOUNTING]: 'Accounting',
   [USER_ROLES.ESTIMATORS]: 'Estimators',
   [USER_ROLES.LOGISTICS]: 'Logistics',
+  [USER_ROLES.WAREHOUSE]: 'Warehouse',
   [USER_ROLES.CUSTOMER]: 'Customer',
 }
 
@@ -31,6 +33,7 @@ export const ROLE_DESCRIPTIONS: Record<string, string> = {
   [USER_ROLES.ACCOUNTING]: 'Manage invoices, payments, and financial data',
   [USER_ROLES.ESTIMATORS]: 'Create and manage project estimates',
   [USER_ROLES.LOGISTICS]: 'Manage shipping, inventory, and logistics',
+  [USER_ROLES.WAREHOUSE]: 'Manage warehouse operations, inventory, and fulfillment',
   [USER_ROLES.CUSTOMER]: 'View orders, shipments, and invoices',
 }
 
@@ -42,6 +45,7 @@ export const ROLE_COLORS: Record<string, string> = {
   [USER_ROLES.ACCOUNTING]: 'bg-yellow-100 text-yellow-800',
   [USER_ROLES.ESTIMATORS]: 'bg-orange-100 text-orange-800',
   [USER_ROLES.LOGISTICS]: 'bg-teal-100 text-teal-800',
+  [USER_ROLES.WAREHOUSE]: 'bg-amber-100 text-amber-800',
   [USER_ROLES.CUSTOMER]: 'bg-indigo-100 text-indigo-800',
 }
 
@@ -66,6 +70,7 @@ export const STAFF_ROLES = [
   USER_ROLES.ACCOUNTING,
   USER_ROLES.ESTIMATORS,
   USER_ROLES.LOGISTICS,
+  USER_ROLES.WAREHOUSE,
 ] as const
 
 // Customer roles (external users with access to portal)

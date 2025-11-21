@@ -235,6 +235,13 @@ export default function ShipmentDetailsPage() {
     }
   }
 
+  // Handler to open Edit Shipment modal - refreshes data from PACE first
+  const handleOpenEditShipmentModal = async () => {
+    await fetchShipment() // Force fresh fetch from PACE
+    await fetchCartons()  // Also refresh cartons
+    setShowProcessSkidsModal(true)
+  }
+
   // Group cartons by skid for professional display
   const groupedCartons = useMemo(() => {
     const groups: {
@@ -563,9 +570,56 @@ export default function ShipmentDetailsPage() {
       {/* Header with Status Badge */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-3xl font-bold">Shipment #{shipment.id}</h1>
-        <Link href="/shipments" className="text-sm text-blue-600 hover:text-blue-800">
-          ← Back to Shipments
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Print Shipping Instructions Button */}
+          <button
+            onClick={() => {
+              const today = new Date()
+              const dateParam = `Date(${today.getFullYear()},${today.getMonth() + 1},${today.getDate()})`
+              const reportUrl = `http://epace.calitho.com/reports/company:public/reportReader/view/Shipping+Instruction.pdf?init=pdf&prompt0=${shipment.id}&prompt1=${shipment.id}&prompt2=${encodeURIComponent(dateParam)}&prompt3=&prompt4=byCL&prompt5=&prompt6=&showlogo=false&version=22.10&schema=public&selectedLanguage=en&exportfilename=Shipping+Instruction.pdf&key=10044&baseObjectKey=${shipment.id}`
+              window.open(reportUrl, '_blank')
+            }}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print Shipping Instructions
+          </button>
+          {/* Print Packing Slip Button */}
+          <button
+            onClick={() => {
+              const today = new Date()
+              const dateParam = `Date(${today.getFullYear()},${today.getMonth() + 1},${today.getDate()})`
+              const reportUrl = `http://epace.calitho.com/reports/company:public/reportReader/view/Packing+Slip.pdf?init=pdf&prompt0=${shipment.id}&prompt1=${shipment.id}&prompt2=${encodeURIComponent(dateParam)}&prompt3=&prompt4=byCL&prompt5=&showlogo=false&version=22.10&schema=public&selectedLanguage=en&exportfilename=Packing+Slip.pdf&key=10091&baseObjectKey=${shipment.id}`
+              window.open(reportUrl, '_blank')
+            }}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Print Packing Slip
+          </button>
+          {/* Print COC Button */}
+          <button
+            onClick={() => {
+              const today = new Date()
+              const dateParam = `Date(${today.getFullYear()},${today.getMonth() + 1},${today.getDate()})`
+              const reportUrl = `http://epace.calitho.com/reports/company:public/reportReader/view/COC.pdf?init=pdf&prompt0=${shipment.id}&prompt1=${shipment.id}&prompt2=${encodeURIComponent(dateParam)}&prompt3=&prompt4=byCL&prompt5=&showlogo=false&version=22.10&schema=public&selectedLanguage=en&exportfilename=COC.pdf&key=10098&baseObjectKey=${shipment.id}`
+              window.open(reportUrl, '_blank')
+            }}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Print COC
+          </button>
+          <Link href="/shipments" className="text-sm text-blue-600 hover:text-blue-800">
+            ← Back to Shipments
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -871,7 +925,7 @@ export default function ShipmentDetailsPage() {
                 <p className="text-gray-500 mb-6">This shipment hasn't been processed yet.</p>
                 <div className="flex items-center justify-center gap-4 flex-wrap">
                   <button
-                    onClick={() => setShowProcessSkidsModal(true)}
+                    onClick={handleOpenEditShipmentModal}
                     disabled={!isPOValid()}
                     title={getPOErrorMessage() || undefined}
                     className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -914,7 +968,7 @@ export default function ShipmentDetailsPage() {
                             {groupedCartons.skids.size > 0 ? (
                               // Has skids - show Edit Skid Configuration
                               <button
-                                onClick={() => setShowProcessSkidsModal(true)}
+                                onClick={handleOpenEditShipmentModal}
                                 className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
                               >
                                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -925,7 +979,7 @@ export default function ShipmentDetailsPage() {
                             ) : groupedCartons.noSkid.length > 0 ? (
                               // Has loose cartons (Carton Mode) - show Edit Carton Configuration
                               <button
-                                onClick={() => setShowProcessSkidsModal(true)}
+                                onClick={handleOpenEditShipmentModal}
                                 className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                               >
                                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2361,9 +2415,9 @@ function ProcessSkidsForm({
   const duplicateCarton = (skidIndex: number, cartonIndex: number) => {
     const newSkids = [...skids]
     const originalCarton = newSkids[skidIndex].cartons[cartonIndex]
-    // Create a copy with quantity set to 1 for all contents
+    // Create a copy with count and quantity reset to 1
     const duplicatedCarton = {
-      count: originalCarton.count,
+      count: 1,  // Reset count to 1
       note: originalCarton.note || '',
       contents: originalCarton.contents.map(content => ({
         itemId: content.itemId,
@@ -2469,7 +2523,7 @@ function ProcessSkidsForm({
     const newCartons = [...cartons]
     const originalCarton = newCartons[cartonIndex]
     const duplicatedCarton = {
-      count: originalCarton.count,
+      count: 1,  // Reset count to 1
       note: originalCarton.note || '',
       contents: originalCarton.contents.map(content => ({
         itemId: content.itemId,
