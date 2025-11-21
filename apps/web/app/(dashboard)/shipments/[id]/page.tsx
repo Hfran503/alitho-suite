@@ -47,6 +47,11 @@ export default function ShipmentDetailsPage() {
   // Contact company name
   const [companyName, setCompanyName] = useState<string | null>(null)
 
+  // Modal-specific state for fresh data
+  const [modalShipment, setModalShipment] = useState<JobShipment | null>(null)
+  const [modalCartons, setModalCartons] = useState<Carton[] | null>(null)
+  const [modalLoading, setModalLoading] = useState(false)
+
   useEffect(() => {
     if (shipmentId) {
       fetchShipment()
@@ -54,6 +59,44 @@ export default function ShipmentDetailsPage() {
       fetchLabels()
     }
   }, [shipmentId])
+
+  // Fetch fresh data when Edit Shipment modal opens
+  useEffect(() => {
+    if (showProcessSkidsModal && shipmentId) {
+      const fetchModalData = async () => {
+        setModalLoading(true)
+        try {
+          const [shipmentRes, cartonsRes] = await Promise.all([
+            fetch(`/api/pace/shipments/${shipmentId}`),
+            fetch(`/api/pace/shipments/${shipmentId}/cartons`)
+          ])
+
+          if (shipmentRes.ok) {
+            const shipmentData = await shipmentRes.json()
+            if (shipmentData.success) {
+              setModalShipment(shipmentData.data)
+            }
+          }
+
+          if (cartonsRes.ok) {
+            const cartonsData = await cartonsRes.json()
+            if (cartonsData.success) {
+              setModalCartons(cartonsData.data || [])
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching modal data:', err)
+        } finally {
+          setModalLoading(false)
+        }
+      }
+      fetchModalData()
+    } else {
+      // Reset modal data when closed
+      setModalShipment(null)
+      setModalCartons(null)
+    }
+  }, [showProcessSkidsModal, shipmentId])
 
   const fetchShipment = async () => {
     setLoading(true)
@@ -235,10 +278,8 @@ export default function ShipmentDetailsPage() {
     }
   }
 
-  // Handler to open Edit Shipment modal - refreshes data from PACE first
-  const handleOpenEditShipmentModal = async () => {
-    await fetchShipment() // Force fresh fetch from PACE
-    await fetchCartons()  // Also refresh cartons
+  // Handler to open Edit Shipment modal - opens immediately, data fetches in background
+  const handleOpenEditShipmentModal = () => {
     setShowProcessSkidsModal(true)
   }
 
@@ -1783,18 +1824,30 @@ export default function ShipmentDetailsPage() {
             </div>
 
             <div className="flex-1 overflow-hidden">
-              <ProcessSkidsForm
-                shipmentId={shipment.id!}
-                shipment={shipment}
-                shipmentTypeDescription={shipmentTypeDescription}
-                existingCartons={cartons.length > 0 ? cartons : undefined}
-                initialMode={groupedCartons.skids.size > 0 ? 'skid' : (groupedCartons.noSkid.length > 0 ? 'carton' : 'skid')}
-                onSuccess={() => {
-                  setShowProcessSkidsModal(false)
-                  fetchCartons() // Refresh cartons
-                }}
-                onCancel={() => setShowProcessSkidsModal(false)}
-              />
+              {modalLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <svg className="animate-spin h-8 w-8 text-purple-600 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-gray-600">Loading fresh data from PACE...</p>
+                  </div>
+                </div>
+              ) : (
+                <ProcessSkidsForm
+                  shipmentId={shipment.id!}
+                  shipment={modalShipment || shipment}
+                  shipmentTypeDescription={shipmentTypeDescription}
+                  existingCartons={(modalCartons || cartons).length > 0 ? (modalCartons || cartons) : undefined}
+                  initialMode={groupedCartons.skids.size > 0 ? 'skid' : (groupedCartons.noSkid.length > 0 ? 'carton' : 'skid')}
+                  onSuccess={() => {
+                    setShowProcessSkidsModal(false)
+                    fetchCartons() // Refresh cartons on main page
+                  }}
+                  onCancel={() => setShowProcessSkidsModal(false)}
+                />
+              )}
             </div>
           </div>
         </div>
