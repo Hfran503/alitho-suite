@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { getPaceApiCredentials } from '@/lib/secrets'
+import { logPaceTransactionWithId, generatePaceTransactionId } from '@/lib/paceAudit'
 
 /**
  * POST /api/pace/shipments/[id]/update-tracking
@@ -375,6 +376,26 @@ export async function POST(
       totalBoxes: trackingNumbers.length,
       shipped: shipmentUpdateData.shipped,
       shipmentType: shipmentUpdateData.shipmentType,
+    })
+
+    // Audit log: shipment tracking updated via ShipStation flow
+    const txnId = generatePaceTransactionId()
+    await logPaceTransactionWithId(txnId, {
+      action: 'pace.shipment.process',
+      entityType: 'JobShipment',
+      entityId: shipmentId,
+      tenantId: membership.tenantId,
+      metadata: {
+        totalCost,
+        primaryTrackingNumber,
+        trackingNumbers,
+        totalBoxes: cartons.length,
+        shipped: shipmentUpdateData.shipped,
+        shipmentTypeChanged: shipmentUpdateData.shipmentType ? true : false,
+        newShipmentType: shipmentUpdateData.shipmentType,
+        addressUpdated: address ? true : false,
+      },
+      success: true,
     })
 
     return NextResponse.json({

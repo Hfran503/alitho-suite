@@ -196,28 +196,30 @@ model Attachment {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  action     String
-  entityType String
-  entityId   String?
-  userId     String?
-  actorName  String?
-  actorEmail String?
-  ipAddress  String?
-  userAgent  String?
-  metadata   Json?
-  tenantId   String
-  orderId    String?
-  createdAt  DateTime @default(now())
-  order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user       User?    @relation(fields: [userId], references: [id])
+  id                 String   @id @default(cuid())
+  action             String
+  entityType         String
+  entityId           String?
+  userId             String?
+  actorName          String?
+  actorEmail         String?
+  ipAddress          String?
+  userAgent          String?
+  paceTransactionId  String?  // UUID passed to PACE API for cross-referencing
+  metadata           Json?
+  tenantId           String
+  orderId            String?
+  createdAt          DateTime @default(now())
+  order              Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user               User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([userId])
   @@index([entityType, entityId])
   @@index([action])
   @@index([createdAt])
+  @@index([paceTransactionId])
 }
 
 model Integration {

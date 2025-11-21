@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getPaceApiCredentials } from '@/lib/secrets'
 import { db } from '@repo/database'
+import { logPaceTransactionWithId, generatePaceTransactionId } from '@/lib/paceAudit'
 
 /**
  * POST /api/pace/shipments/[id]/create-parcel-carton
@@ -13,6 +14,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const membership = await db.membership.findFirst({
+      where: { userId: session.user.id },
+    })
+
+    if (!membership) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 403 })
+    }
+
     const { id: shipmentId } = await params
     const body = await req.json()
 
@@ -130,6 +144,25 @@ export async function POST(
 
     console.log('Created carton in PACE:', cartonId)
 
+    // Audit log: carton created via ShipStation flow
+    const txnId = generatePaceTransactionId()
+    await logPaceTransactionWithId(txnId, {
+      action: 'pace.carton.create',
+      entityType: 'Carton',
+      entityId: cartonId.toString(),
+      tenantId: membership.tenantId,
+      metadata: {
+        shipmentId,
+        trackingNumber,
+        carrier,
+        service,
+        weight,
+        shippingCost,
+        provider: provider || 'shipstation',
+      },
+      success: true,
+    })
+
     // Create carton contents if provided
     const createdContents = []
     for (const content of contents) {
@@ -199,45 +232,36 @@ export async function POST(
     // Save shipping label to database if provider info is available
     if (provider && labelUrl && shipFrom && shipTo) {
       try {
-        const session = await getServerSession(authOptions)
-        if (session?.user) {
-          const membership = await db.membership.findFirst({
-            where: { userId: session.user.id },
-          })
-
-          if (membership) {
-            await db.shippingLabel.create({
-              data: {
-                tenantId: membership.tenantId,
-                paceShipmentId: parseInt(shipmentId),
-                paceCartonId: cartonId,
-                provider: provider,
-                providerShipmentId: provider === 'easypost' ? easypostShipmentId : shipstationShipmentId,
-                providerLabelId: provider === 'shipstation' ? shipstationLabelId : null,
-                trackingNumber: trackingNumber,
-                labelUrl: labelUrl,
-                labelFormat: 'pdf',
-                carrier: carrier || 'Unknown',
-                service: service || 'Unknown',
-                shipFrom: shipFrom,
-                shipTo: shipTo,
-                weight: weight ? parseFloat(weight.toString()) : null,
-                length: length ? parseFloat(length.toString()) : null,
-                width: width ? parseFloat(width.toString()) : null,
-                height: height ? parseFloat(height.toString()) : null,
-                cost: shippingCost ? parseFloat(shippingCost.toString()) : 0,
-                currency: 'USD',
-                status: 'active',
-                metadata: {
-                  reference1: reference1 || null,
-                  reference2: reference2 || null,
-                  reference3: reference3 || null,
-                },
-              },
-            })
-            console.log('Saved shipping label to database for carton:', cartonId)
-          }
-        }
+        await db.shippingLabel.create({
+          data: {
+            tenantId: membership.tenantId,
+            paceShipmentId: parseInt(shipmentId),
+            paceCartonId: cartonId,
+            provider: provider,
+            providerShipmentId: provider === 'easypost' ? easypostShipmentId : shipstationShipmentId,
+            providerLabelId: provider === 'shipstation' ? shipstationLabelId : null,
+            trackingNumber: trackingNumber,
+            labelUrl: labelUrl,
+            labelFormat: 'pdf',
+            carrier: carrier || 'Unknown',
+            service: service || 'Unknown',
+            shipFrom: shipFrom,
+            shipTo: shipTo,
+            weight: weight ? parseFloat(weight.toString()) : null,
+            length: length ? parseFloat(length.toString()) : null,
+            width: width ? parseFloat(width.toString()) : null,
+            height: height ? parseFloat(height.toString()) : null,
+            cost: shippingCost ? parseFloat(shippingCost.toString()) : 0,
+            currency: 'USD',
+            status: 'active',
+            metadata: {
+              reference1: reference1 || null,
+              reference2: reference2 || null,
+              reference3: reference3 || null,
+            },
+          },
+        })
+        console.log('Saved shipping label to database for carton:', cartonId)
       } catch (dbError) {
         console.error('Failed to save shipping label to database:', dbError)
         // Don't fail the request if database save fails

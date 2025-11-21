@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { getPaceApiCredentials } from '@/lib/secrets'
+import { generatePaceTransactionId, logPaceTransactionWithId } from '@/lib/paceAudit'
 
 // POST /api/pace/shipments/[id]/process-skids - Create skids with cartons and content for a shipment
 // Supports two modes:
@@ -102,6 +103,9 @@ export async function POST(
 
     // Prepare Basic Auth header
     const authHeader = `Basic ${Buffer.from(`${paceUsername}:${pacePassword}`).toString('base64')}`
+
+    // Generate transaction ID for PACE audit cross-referencing
+    const txnId = generatePaceTransactionId()
 
     // If deleteExisting is true, delete all existing cartons and skids for this shipment first
     if (deleteExisting) {
@@ -510,6 +514,23 @@ export async function POST(
         console.log('Shipment updated:', updatedShipment)
       }
     }
+
+    // Log the PACE transaction for audit trail
+    await logPaceTransactionWithId(txnId, {
+      action: mode === 'skid' ? 'pace.shipment.process_skids' : 'pace.shipment.process_cartons',
+      entityType: 'JobShipment',
+      entityId: shipmentId,
+      tenantId: membership.tenantId,
+      metadata: {
+        mode,
+        skidsCount: skids?.length || 0,
+        cartonsCount: cartons?.length || 0,
+        deleteExisting,
+        shipmentDetails: shipmentDetails ? true : false,
+      },
+      success: true,
+      paceResponse: result.data,
+    })
 
     return NextResponse.json({
       success: true,
