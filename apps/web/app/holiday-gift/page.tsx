@@ -197,7 +197,11 @@ export default function HolidayGiftPage() {
                       className={styles.giftCardIconImage}
                     />
                   ) : (
-                    <div className={styles.giftCardIcon}>🎁</div>
+                    <img
+                      src="/images/110710_Calitho_Get Movin_Influencer Kit_Face1.jpg"
+                      alt={gift.name}
+                      className={styles.giftCardIconImage}
+                    />
                   )}
                   <h3 className={styles.giftCardTitle}>{gift.name}</h3>
                   <p className={styles.giftCardDescription}>{gift.description}</p>

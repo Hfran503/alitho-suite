@@ -212,6 +212,7 @@ export const jobShipmentSchema = z.object({
   shipViaProvider: z.string().optional(), // Ship Provider lookup description
   shipViaNote: z.string().optional(),
   trackingNumber: z.string().optional(),
+  trackingNotes: z.string().optional(),
   trackingLink: z.string().optional(),
   description: z.string().optional(),
   weight: z.number().optional(),
@@ -279,6 +280,7 @@ export const cartonContentSchema = z.object({
   contentDescription: z.string().optional(),
   jobComponent: z.number().optional(),
   jobProduct: z.number().optional(),
+  jobMaterial: z.number().optional(),
   jobPartItem: z.number().optional(),
   u_contentitem: z.string().optional(),
   note: z.string().optional(),
@@ -286,9 +288,12 @@ export const cartonContentSchema = z.object({
   jobDescription: z.string().optional(),
   jobComponentDescription: z.string().optional(),
   jobProductDescription: z.string().optional(),
+  jobMaterialDescription: z.string().optional(),
   // JobComponent specific fields
   jobComponentItemNumber: z.string().optional(),
   jobComponentPO: z.string().optional(),
+  // JobMaterial specific fields
+  jobMaterialID: z.string().optional(),
 })
 
 export const cartonSchema = z.object({
@@ -304,6 +309,9 @@ export const cartonSchema = z.object({
   skid: z.number().optional(),
   skidCount: z.number().optional(),
   totalSkidQuantity: z.number().optional(),
+  // Skid lookup details (populated by API)
+  skidDescription: z.string().optional(),
+  skidWeight: z.number().optional(),
   actualDateTime: z.string().optional(),
   cost: z.union([z.number(), z.string()]).optional(), // Shipping cost for this carton
   u_easypost_shipment_id: z.string().optional(), // EasyPost shipment ID for refund/reprint

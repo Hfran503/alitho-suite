@@ -260,15 +260,15 @@
 .giftCardIcon {
   font-size: 4rem;
   animation: bounce 2s ease-in-out infinite;
-  height: 80px;
+  height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .giftCardIconImage {
-  width: 80px;
-  height: 80px;
+  width: 220px;
+  height: 220px;
   object-fit: contain;
   animation: bounce 2s ease-in-out infinite;
 }

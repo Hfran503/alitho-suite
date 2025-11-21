@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { JobShipment, Carton } from '@repo/types'
@@ -22,6 +22,7 @@ export default function ShipmentDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'details' | 'special' | 'other'>('details')
   const [showProcessModal, setShowProcessModal] = useState(false)
+  const [showProcessSkidsModal, setShowProcessSkidsModal] = useState(false)
   const [showProcessParcelModal, setShowProcessParcelModal] = useState(false)
   const [editingCarton, setEditingCarton] = useState<Carton | null>(null)
   const [cancelingLabels, setCancelingLabels] = useState(false)
@@ -233,6 +234,36 @@ export default function ShipmentDetailsPage() {
       setLoadingLabels(false)
     }
   }
+
+  // Group cartons by skid for professional display
+  const groupedCartons = useMemo(() => {
+    const groups: {
+      skids: Map<number, { skid: number; description?: string; weight?: number; count?: number; cartons: Carton[] }>
+      noSkid: Carton[]
+    } = {
+      skids: new Map(),
+      noSkid: [],
+    }
+
+    cartons.forEach((carton) => {
+      if (carton.skid) {
+        if (!groups.skids.has(carton.skid)) {
+          groups.skids.set(carton.skid, {
+            skid: carton.skid,
+            description: carton.skidDescription,
+            weight: carton.skidWeight,
+            count: carton.skidCount,
+            cartons: [],
+          })
+        }
+        groups.skids.get(carton.skid)!.cartons.push(carton)
+      } else {
+        groups.noSkid.push(carton)
+      }
+    })
+
+    return groups
+  }, [cartons])
 
   // Helper function to check if PO validation passes
   const isPOValid = (): boolean => {
@@ -821,9 +852,9 @@ export default function ShipmentDetailsPage() {
       <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">
-                Cartons {!loadingCartons && cartons.length > 0 && (
+                Configuration {!loadingCartons && cartons.length > 0 && (
                   <span className="text-sm font-normal text-gray-500 ml-2">
-                    ({cartons.length})
+                    ({cartons.length} carton{cartons.length !== 1 ? 's' : ''})
                   </span>
                 )}
               </h2>
@@ -831,22 +862,22 @@ export default function ShipmentDetailsPage() {
 
             {loadingCartons ? (
               <div className="text-center py-8 text-gray-500">
-                Loading cartons...
+                Loading configuration...
               </div>
             ) : cartons.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-6xl mb-4">📦</div>
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">No Cartons Found</h3>
+                <h3 className="text-xl font-semibold text-gray-600 mb-2">No Configuration Found</h3>
                 <p className="text-gray-500 mb-6">This shipment hasn't been processed yet.</p>
-                <div className="flex items-center justify-center gap-4">
+                <div className="flex items-center justify-center gap-4 flex-wrap">
                   <button
-                    onClick={() => setShowProcessModal(true)}
+                    onClick={() => setShowProcessSkidsModal(true)}
                     disabled={!isPOValid()}
                     title={getPOErrorMessage() || undefined}
-                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     Process Shipment
                   </button>
@@ -880,29 +911,56 @@ export default function ShipmentDetailsPage() {
                       <div className="flex gap-3">
                         {!hasLabels && (
                           <>
-                            <button
-                              onClick={() => setShowProcessModal(true)}
-                              disabled={!isPOValid()}
-                              title={getPOErrorMessage() || undefined}
-                              className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
-                            >
-                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                              Create More Cartons
-                            </button>
+                            {groupedCartons.skids.size > 0 ? (
+                              // Has skids - show Edit Skid Configuration
+                              <button
+                                onClick={() => setShowProcessSkidsModal(true)}
+                                className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                              >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit Skid Configuration
+                              </button>
+                            ) : groupedCartons.noSkid.length > 0 ? (
+                              // Has loose cartons (Carton Mode) - show Edit Carton Configuration
+                              <button
+                                onClick={() => setShowProcessSkidsModal(true)}
+                                className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                              >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit Carton Configuration
+                              </button>
+                            ) : (
+                              // No cartons yet - show Create More Cartons and Process Parcel
+                              <>
+                                <button
+                                  onClick={() => setShowProcessModal(true)}
+                                  disabled={!isPOValid()}
+                                  title={getPOErrorMessage() || undefined}
+                                  className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+                                >
+                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  Create More Cartons
+                                </button>
 
-                            <button
-                              onClick={handleProcessParcelClick}
-                              disabled={integrationLoading || !isPOValid()}
-                              title={getPOErrorMessage() || undefined}
-                              className="inline-flex items-center px-4 py-2 border border-green-600 text-sm font-medium rounded-md text-green-600 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
-                            >
-                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                              </svg>
-                              {integrationLoading ? 'Checking...' : 'Process Parcel'}
-                            </button>
+                                <button
+                                  onClick={handleProcessParcelClick}
+                                  disabled={integrationLoading || !isPOValid()}
+                                  title={getPOErrorMessage() || undefined}
+                                  className="inline-flex items-center px-4 py-2 border border-green-600 text-sm font-medium rounded-md text-green-600 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+                                >
+                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                  </svg>
+                                  {integrationLoading ? 'Checking...' : 'Process Parcel'}
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
@@ -963,6 +1021,9 @@ export default function ShipmentDetailsPage() {
                         Carton #
                       </th>
                       <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Note
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Contents
                       </th>
                       <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -985,17 +1046,59 @@ export default function ShipmentDetailsPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {cartons.map((carton, index) => (
-                      <tr key={carton.id || index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-900">#{carton.id}</span>
-                            {carton.count && carton.count > 1 && (
-                              <span className="text-xs text-gray-500">{carton.count} cartons</span>
-                            )}
-                          </div>
-                        </td>
+                  <tbody className="bg-white">
+                    {/* Render skid groups */}
+                    {Array.from(groupedCartons.skids.values()).map((skidGroup) => (
+                      <React.Fragment key={`skid-group-${skidGroup.skid}`}>
+                        {/* Skid header row */}
+                        <tr className="bg-blue-50 border-t-2 border-blue-200">
+                          <td colSpan={9} className="px-4 py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                  </svg>
+                                  <span className="text-sm font-semibold text-blue-900">Skid #{skidGroup.skid}</span>
+                                </div>
+                                {skidGroup.description && (
+                                  <span className="text-sm text-blue-700">{skidGroup.description}</span>
+                                )}
+                                {skidGroup.weight && (
+                                  <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                                    Weight: {skidGroup.weight} lbs
+                                  </span>
+                                )}
+                                {skidGroup.count && (
+                                  <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                                    Count: {skidGroup.count}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-blue-600">
+                                {skidGroup.cartons.length} carton{skidGroup.cartons.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* Cartons in this skid */}
+                        {skidGroup.cartons.map((carton, index) => (
+                          <tr key={carton.id || `skid-${skidGroup.skid}-carton-${index}`} className="hover:bg-gray-50 border-l-4 border-blue-200">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-gray-900">#{carton.id}</span>
+                                {carton.count && carton.count > 1 && (
+                                  <span className="text-xs text-gray-500">{carton.count} cartons</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {carton.note ? (
+                                <span className="text-sm text-gray-700">{carton.note}</span>
+                              ) : (
+                                <span className="text-sm text-gray-400">-</span>
+                              )}
+                            </td>
                         <td className="px-4 py-3">
                           {carton.contents && carton.contents.length > 0 ? (
                             <div className="space-y-1.5">
@@ -1003,6 +1106,7 @@ export default function ShipmentDetailsPage() {
                                 const primaryDescription =
                                   content.jobComponentDescription ||
                                   content.jobProductDescription ||
+                                  content.jobMaterialDescription ||
                                   content.jobDescription ||
                                   content.contentDescription
 
@@ -1014,6 +1118,9 @@ export default function ShipmentDetailsPage() {
                                 } else if (content.jobProduct) {
                                   contentType = 'Product'
                                   badgeColor = 'bg-green-100 text-green-700'
+                                } else if (content.jobMaterial) {
+                                  contentType = 'Material'
+                                  badgeColor = 'bg-yellow-100 text-yellow-700'
                                 } else if (content.job) {
                                   contentType = 'Job'
                                   badgeColor = 'bg-purple-100 text-purple-700'
@@ -1042,9 +1149,200 @@ export default function ShipmentDetailsPage() {
                                             <span className="font-medium">PO:</span> {content.jobComponentPO}
                                           </p>
                                         )}
-                                        {!content.jobComponentItemNumber && !content.jobComponentPO && (content.jobPart || content.job) && (
+                                        {content.jobMaterialID && (
+                                          <p className="text-xs text-gray-600">
+                                            <span className="font-medium">Material ID:</span> {content.jobMaterialID}
+                                          </p>
+                                        )}
+                                        {!content.jobComponentItemNumber && !content.jobComponentPO && !content.jobMaterialID && (content.jobPart || content.job || content.jobMaterial) && (
                                           <p className="text-xs text-gray-500 truncate">
-                                            {content.jobPart ? `Part: ${content.jobPart}` : content.job ? `Job: ${content.job}` : ''}
+                                            {content.jobPart ? `Part: ${content.jobPart}` : content.job ? `Job: ${content.job}` : content.jobMaterial ? `Material: ${content.jobMaterial}` : ''}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">No contents</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          {carton.contents && carton.contents.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {carton.contents.map((content, contentIndex) => (
+                                <div key={content.id || contentIndex} className="text-sm text-gray-900 h-[2.25rem] flex items-center justify-end">
+                                  {content.quantity || '-'}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          {carton.contents && carton.contents.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {carton.contents.map((content, contentIndex) => {
+                                const totalQty = content.quantity && carton.count
+                                  ? content.quantity * carton.count
+                                  : content.quantity || 0
+                                return (
+                                  <div key={content.id || contentIndex} className="text-sm font-semibold text-blue-600 h-[2.25rem] flex items-center justify-end">
+                                    {totalQty > 0 ? totalQty.toLocaleString() : '-'}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <span className="text-sm text-gray-900">
+                            {carton.weight ? `${carton.weight} lbs` : '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <span className="text-sm font-semibold text-green-600">
+                            {carton.cost ? `$${typeof carton.cost === 'string' ? parseFloat(carton.cost).toFixed(2) : carton.cost.toFixed(2)}` : '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {carton.trackingNumber ? (
+                            <span className="text-xs font-mono text-gray-900 block truncate max-w-xs" title={carton.trackingNumber}>
+                              {carton.trackingNumber}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {carton.trackingNumber ? (
+                              <>
+                                <span className="text-gray-400 text-sm font-medium cursor-not-allowed" title="Cannot edit cartons with labels">
+                                  Edit
+                                </span>
+                                <span className="text-gray-400 text-sm font-medium cursor-not-allowed" title="Cannot delete individual labeled cartons. Use 'Cancel All Labels' instead.">
+                                  Delete
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setEditingCarton(carton)}
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                  title="Edit carton"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`Delete carton #${carton.id}?`)) return
+                                    setLoadingCartons(true)
+                                    try {
+                                      await fetch(`/api/pace/cartons/${carton.id}`, { method: 'DELETE' })
+                                      await fetchCartons()
+                                      await fetchShipment()
+                                    } catch (err) {
+                                      alert('Failed to delete carton')
+                                    } finally {
+                                      setLoadingCartons(false)
+                                    }
+                                  }}
+                                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                  title="Delete carton"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+
+                    {/* Render cartons without skids */}
+                    {groupedCartons.noSkid.map((carton, index) => (
+                      <tr key={carton.id || `no-skid-${index}`} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-gray-900">#{carton.id}</span>
+                            {carton.count && carton.count > 1 && (
+                              <span className="text-xs text-gray-500">{carton.count} cartons</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {carton.note ? (
+                            <span className="text-sm text-gray-700">{carton.note}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {carton.contents && carton.contents.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {carton.contents.map((content, contentIndex) => {
+                                const primaryDescription =
+                                  content.jobComponentDescription ||
+                                  content.jobProductDescription ||
+                                  content.jobMaterialDescription ||
+                                  content.jobDescription ||
+                                  content.contentDescription
+
+                                let contentType = ''
+                                let badgeColor = 'bg-gray-100 text-gray-700'
+                                if (content.jobComponent) {
+                                  contentType = 'Component'
+                                  badgeColor = 'bg-blue-100 text-blue-700'
+                                } else if (content.jobProduct) {
+                                  contentType = 'Product'
+                                  badgeColor = 'bg-green-100 text-green-700'
+                                } else if (content.jobMaterial) {
+                                  contentType = 'Material'
+                                  badgeColor = 'bg-yellow-100 text-yellow-700'
+                                } else if (content.job) {
+                                  contentType = 'Job'
+                                  badgeColor = 'bg-purple-100 text-purple-700'
+                                } else if (content.jobPart) {
+                                  contentType = 'Part'
+                                  badgeColor = 'bg-orange-100 text-orange-700'
+                                }
+
+                                return (
+                                  <div key={content.id || contentIndex} className="flex items-start gap-2">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${badgeColor}`}>
+                                      {contentType}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm text-gray-900 truncate" title={primaryDescription || 'N/A'}>
+                                        {primaryDescription || 'N/A'}
+                                      </p>
+                                      <div className="flex gap-3 mt-0.5">
+                                        {content.jobComponentItemNumber && (
+                                          <p className="text-xs text-gray-600">
+                                            <span className="font-medium">Item:</span> {content.jobComponentItemNumber}
+                                          </p>
+                                        )}
+                                        {content.jobComponentPO && (
+                                          <p className="text-xs text-gray-600">
+                                            <span className="font-medium">PO:</span> {content.jobComponentPO}
+                                          </p>
+                                        )}
+                                        {content.jobMaterialID && (
+                                          <p className="text-xs text-gray-600">
+                                            <span className="font-medium">Material ID:</span> {content.jobMaterialID}
+                                          </p>
+                                        )}
+                                        {!content.jobComponentItemNumber && !content.jobComponentPO && !content.jobMaterialID && (content.jobPart || content.job || content.jobMaterial) && (
+                                          <p className="text-xs text-gray-500 truncate">
+                                            {content.jobPart ? `Part: ${content.jobPart}` : content.job ? `Job: ${content.job}` : content.jobMaterial ? `Material: ${content.jobMaterial}` : ''}
                                           </p>
                                         )}
                                       </div>
@@ -1408,6 +1706,42 @@ export default function ShipmentDetailsPage() {
               }}
               onCancel={() => setShowProcessModal(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Process Skids Modal */}
+      {showProcessSkidsModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full h-[95vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-white flex-shrink-0">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {groupedCartons.skids.size > 0 || cartons.length > 0 ? 'Edit' : 'Process'} Shipment #{shipment.id}
+              </h3>
+              <button
+                onClick={() => setShowProcessSkidsModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              <ProcessSkidsForm
+                shipmentId={shipment.id!}
+                shipment={shipment}
+                shipmentTypeDescription={shipmentTypeDescription}
+                existingCartons={cartons.length > 0 ? cartons : undefined}
+                initialMode={groupedCartons.skids.size > 0 ? 'skid' : (groupedCartons.noSkid.length > 0 ? 'carton' : 'skid')}
+                onSuccess={() => {
+                  setShowProcessSkidsModal(false)
+                  fetchCartons() // Refresh cartons
+                }}
+                onCancel={() => setShowProcessSkidsModal(false)}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1813,6 +2147,1483 @@ function ProcessShipmentForm({
   )
 }
 
+// Process Skids Form Component
+function ProcessSkidsForm({
+  shipmentId,
+  shipment,
+  shipmentTypeDescription,
+  existingCartons,
+  initialMode = 'skid',
+  onSuccess,
+  onCancel,
+}: {
+  shipmentId: number
+  shipment: JobShipment
+  shipmentTypeDescription: string | null
+  existingCartons?: Carton[]
+  initialMode?: 'skid' | 'carton'
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  // Mode: 'skid' for palletized shipments, 'carton' for loose cartons
+  const [mode, setMode] = useState<'skid' | 'carton'>(initialMode)
+
+  const [skids, setSkids] = useState<Array<{
+    count: number
+    description: string
+    weight: number
+    cartons: Array<{
+      count: number
+      note?: string
+      contents: Array<{
+        itemId?: string
+        quantity: number
+      }>
+    }>
+  }>>([{
+    count: 1,
+    description: '',
+    weight: 0,
+    cartons: [{ count: 1, note: '', contents: [{ itemId: '', quantity: 0 }] }]
+  }])
+
+  // For carton-only mode
+  const [cartons, setCartons] = useState<Array<{
+    count: number
+    note?: string
+    contents: Array<{
+      itemId?: string
+      quantity: number
+    }>
+  }>>([{ count: 1, note: '', contents: [{ itemId: '', quantity: 0 }] }])
+
+  const [processing, setProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [currentStep, setCurrentStep] = useState(1)
+
+  // Optional shipment fields (Step 2)
+  const [shipmentDetails, setShipmentDetails] = useState({
+    notes: '',
+    trackingNumber: '',
+    trackingNotes: '',
+    cost: '',
+  })
+
+  const [jobItems, setJobItems] = useState<{
+    components: Array<{ id: number; description: string; itemNumber?: string; qtyOrdered?: number; po?: string }>
+    products: Array<{ id: number; description: string; productID?: string }>
+    parts: Array<{ id: string; description: string; partName?: string }>
+    materials: Array<{ id: number; description: string; materialID?: string; jobPart?: string; qtyRequired?: number; plannedQuantity?: number }>
+  } | null>(null)
+  const [loadingItems, setLoadingItems] = useState(false)
+  const [showOtherItemTypes, setShowOtherItemTypes] = useState(false)
+
+  // Check if this is a storefront shipment
+  const isStorefrontShipment = () => {
+    return shipmentTypeDescription?.split('|').some(label => label.trim().toLowerCase() === 'storefront')
+  }
+
+  // Helper to convert carton content to form format
+  const convertContentToFormFormat = (content: any) => ({
+    itemId: content.jobMaterial ? `material:${content.jobMaterial}`
+           : content.jobComponent ? `component:${content.jobComponent}`
+           : content.jobProduct ? `product:${content.jobProduct}`
+           : content.jobPart ? `part:${content.job}:${content.jobPart}`
+           : content.job ? `job:${content.job}`
+           : '',
+    quantity: content.quantity || 0
+  })
+
+  // Pre-populate skids/cartons from existing cartons when editing
+  useEffect(() => {
+    if (existingCartons && existingCartons.length > 0) {
+      // Separate cartons with skids from loose cartons
+      const skidMap = new Map<number, typeof skids[0]>()
+      const looseCartons: typeof cartons = []
+
+      existingCartons.forEach(carton => {
+        if (carton.skid) {
+          // Carton belongs to a skid
+          if (!skidMap.has(carton.skid)) {
+            skidMap.set(carton.skid, {
+              count: carton.skidCount || 1,
+              description: carton.skidDescription || '',
+              weight: carton.skidWeight || 0,
+              cartons: []
+            })
+          }
+
+          const skidData = skidMap.get(carton.skid)!
+          skidData.cartons.push({
+            count: carton.count || 1,
+            note: carton.note || '',
+            contents: (carton.contents || []).map(convertContentToFormFormat)
+          })
+        } else {
+          // Loose carton (no skid)
+          looseCartons.push({
+            count: carton.count || 1,
+            note: carton.note || '',
+            contents: (carton.contents || []).map(convertContentToFormFormat)
+          })
+        }
+      })
+
+      // Populate the appropriate state based on what we found
+      if (skidMap.size > 0) {
+        setSkids(Array.from(skidMap.values()))
+      }
+
+      if (looseCartons.length > 0) {
+        setCartons(looseCartons)
+      }
+    }
+  }, [existingCartons])
+
+  // Pre-populate shipment details from existing shipment when editing
+  useEffect(() => {
+    if (shipment) {
+      setShipmentDetails({
+        notes: shipment.notes || '',
+        trackingNumber: shipment.trackingNumber || '',
+        trackingNotes: shipment.trackingNotes || '',
+        cost: shipment.cost ? String(shipment.cost) : '',
+      })
+    }
+  }, [shipment])
+
+  // Load job items on mount
+  useEffect(() => {
+    if (shipment.job) {
+      loadJobItems()
+    }
+  }, [shipment.job])
+
+  const loadJobItems = async () => {
+    if (!shipment.job) return
+
+    setLoadingItems(true)
+    try {
+      const response = await fetch(`/api/pace/jobs/${encodeURIComponent(shipment.job)}/items`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          console.log('Job items loaded:', data.data)
+          setJobItems(data.data)
+        }
+      } else {
+        console.error('Failed to fetch job items:', response.status, response.statusText)
+      }
+    } catch (err) {
+      console.error('Failed to load job items:', err)
+    } finally {
+      setLoadingItems(false)
+    }
+  }
+
+  const addSkid = () => {
+    setSkids([...skids, {
+      count: 1,
+      description: '',
+      weight: 0,
+      cartons: [{ count: 1, note: '', contents: [{ itemId: '', quantity: 0 }] }]
+    }])
+  }
+
+  const removeSkid = (index: number) => {
+    setSkids(skids.filter((_, i) => i !== index))
+  }
+
+  const updateSkid = (index: number, field: 'count' | 'description' | 'weight', value: any) => {
+    const newSkids = [...skids]
+    if (field === 'count') {
+      newSkids[index].count = value
+    } else if (field === 'description') {
+      newSkids[index].description = value
+    } else if (field === 'weight') {
+      newSkids[index].weight = value
+    }
+    setSkids(newSkids)
+  }
+
+  const addCartonToSkid = (skidIndex: number) => {
+    const newSkids = [...skids]
+    newSkids[skidIndex].cartons.push({ count: 1, note: '', contents: [{ itemId: '', quantity: 0 }] })
+    setSkids(newSkids)
+  }
+
+  const removeCartonFromSkid = (skidIndex: number, cartonIndex: number) => {
+    const newSkids = [...skids]
+    newSkids[skidIndex].cartons = newSkids[skidIndex].cartons.filter((_, i) => i !== cartonIndex)
+    setSkids(newSkids)
+  }
+
+  const duplicateCarton = (skidIndex: number, cartonIndex: number) => {
+    const newSkids = [...skids]
+    const originalCarton = newSkids[skidIndex].cartons[cartonIndex]
+    // Create a copy with quantity set to 1 for all contents
+    const duplicatedCarton = {
+      count: originalCarton.count,
+      note: originalCarton.note || '',
+      contents: originalCarton.contents.map(content => ({
+        itemId: content.itemId,
+        quantity: 1  // Reset quantity to 1
+      }))
+    }
+    // Insert the duplicated carton right after the original
+    newSkids[skidIndex].cartons.splice(cartonIndex + 1, 0, duplicatedCarton)
+    setSkids(newSkids)
+  }
+
+  const updateCarton = (skidIndex: number, cartonIndex: number, field: 'count' | 'note', value: number | string) => {
+    const newSkids = [...skids]
+    if (field === 'count') {
+      newSkids[skidIndex].cartons[cartonIndex].count = value as number
+    } else if (field === 'note') {
+      newSkids[skidIndex].cartons[cartonIndex].note = value as string
+    }
+    setSkids(newSkids)
+  }
+
+  const addContentToCarton = (skidIndex: number, cartonIndex: number) => {
+    const newSkids = [...skids]
+    newSkids[skidIndex].cartons[cartonIndex].contents.push({ itemId: '', quantity: 0 })
+    setSkids(newSkids)
+  }
+
+  const removeContentFromCarton = (skidIndex: number, cartonIndex: number, contentIndex: number) => {
+    const newSkids = [...skids]
+    newSkids[skidIndex].cartons[cartonIndex].contents = newSkids[skidIndex].cartons[cartonIndex].contents.filter((_, i) => i !== contentIndex)
+    setSkids(newSkids)
+  }
+
+  const updateContent = (
+    skidIndex: number,
+    cartonIndex: number,
+    contentIndex: number,
+    field: 'itemId' | 'quantity',
+    value: any
+  ) => {
+    const newSkids = [...skids]
+    const content = newSkids[skidIndex].cartons[cartonIndex].contents[contentIndex]
+
+    if (field === 'itemId') {
+      content.itemId = value
+    } else if (field === 'quantity') {
+      content.quantity = value
+    }
+
+    setSkids(newSkids)
+  }
+
+  // ============ Carton-Only Mode Helper Functions ============
+  const addCarton = () => {
+    setCartons([...cartons, { count: 1, note: '', contents: [{ itemId: '', quantity: 0 }] }])
+  }
+
+  const removeCarton = (index: number) => {
+    setCartons(cartons.filter((_, i) => i !== index))
+  }
+
+  const updateCartonDirect = (index: number, field: 'count' | 'note', value: number | string) => {
+    const newCartons = [...cartons]
+    if (field === 'count') {
+      newCartons[index].count = value as number
+    } else if (field === 'note') {
+      newCartons[index].note = value as string
+    }
+    setCartons(newCartons)
+  }
+
+  const addContentToCartonDirect = (cartonIndex: number) => {
+    const newCartons = [...cartons]
+    newCartons[cartonIndex].contents.push({ itemId: '', quantity: 0 })
+    setCartons(newCartons)
+  }
+
+  const removeContentFromCartonDirect = (cartonIndex: number, contentIndex: number) => {
+    const newCartons = [...cartons]
+    newCartons[cartonIndex].contents = newCartons[cartonIndex].contents.filter((_, i) => i !== contentIndex)
+    setCartons(newCartons)
+  }
+
+  const updateContentDirect = (
+    cartonIndex: number,
+    contentIndex: number,
+    field: 'itemId' | 'quantity',
+    value: any
+  ) => {
+    const newCartons = [...cartons]
+    const content = newCartons[cartonIndex].contents[contentIndex]
+
+    if (field === 'itemId') {
+      content.itemId = value
+    } else if (field === 'quantity') {
+      content.quantity = value
+    }
+
+    setCartons(newCartons)
+  }
+
+  const duplicateCartonDirect = (cartonIndex: number) => {
+    const newCartons = [...cartons]
+    const originalCarton = newCartons[cartonIndex]
+    const duplicatedCarton = {
+      count: originalCarton.count,
+      note: originalCarton.note || '',
+      contents: originalCarton.contents.map(content => ({
+        itemId: content.itemId,
+        quantity: 1  // Reset quantity to 1
+      }))
+    }
+    newCartons.splice(cartonIndex + 1, 0, duplicatedCarton)
+    setCartons(newCartons)
+  }
+
+  // Build item groups with formatted labels (similar to ShipStation modal)
+  const itemGroups: {
+    job: Array<{ value: string; label: string; orderedQty?: number }>
+    components: Array<{ value: string; label: string; orderedQty?: number }>
+    products: Array<{ value: string; label: string }>
+    parts: Array<{ value: string; label: string }>
+    materials: Array<{ value: string; label: string; plannedQty?: number }>
+  } = {
+    job: [],
+    components: [],
+    products: [],
+    parts: [],
+    materials: [],
+  }
+
+  if (jobItems) {
+    // Add job itself as an option
+    if (shipment?.job) {
+      itemGroups.job.push({
+        value: `job:${shipment.job}`,
+        label: `Job ${shipment.job}`,
+      })
+    }
+    // Add components with detailed labels
+    jobItems.components.forEach((comp) => {
+      // Build label: ItemNumber - Description | PO: XXX | Qty: YYY
+      let label = comp.itemNumber || comp.description
+      if (comp.itemNumber && comp.description) {
+        label += ` - ${comp.description}`
+      }
+      if (comp.po) {
+        label += ` | PO: ${comp.po}`
+      }
+      if (comp.qtyOrdered) {
+        label += ` | Qty: ${comp.qtyOrdered}`
+      }
+
+      itemGroups.components.push({
+        value: `component:${comp.id}`,
+        label,
+        orderedQty: comp.qtyOrdered,
+      })
+    })
+    // Add products
+    jobItems.products.forEach((prod) => {
+      itemGroups.products.push({
+        value: `product:${prod.id}`,
+        label: `${prod.productID || prod.description}`,
+      })
+    })
+    // Add parts
+    jobItems.parts.forEach((part) => {
+      itemGroups.parts.push({
+        value: part.id, // Already in format "part:jobId:partNum"
+        label: `${part.partName || part.description}`,
+      })
+    })
+    // Add materials
+    jobItems.materials?.forEach((material) => {
+      const qtyDisplay = material.plannedQuantity
+        ? `Planned: ${material.plannedQuantity}${material.qtyRequired ? ` / Required: ${material.qtyRequired}` : ''}`
+        : material.qtyRequired
+        ? `Required: ${material.qtyRequired}`
+        : ''
+
+      itemGroups.materials.push({
+        value: `material:${material.id}`,
+        label: `${material.materialID || material.description}${material.jobPart ? ` (Part ${material.jobPart})` : ''}${qtyDisplay ? ` - ${qtyDisplay}` : ''}`,
+        plannedQty: material.plannedQuantity,
+      })
+    })
+  }
+
+  // Helper function to get item name
+  const getItemName = (itemId: string) => {
+    if (itemId.startsWith('job:')) {
+      return `Job #${itemId.split(':')[1]}`
+    } else if (itemId.startsWith('component:')) {
+      const compId = parseInt(itemId.split(':')[1])
+      const comp = jobItems?.components.find((c) => c.id === compId)
+      return comp ? `${comp.description}${comp.itemNumber ? ` (${comp.itemNumber})` : ''}` : itemId
+    } else if (itemId.startsWith('product:')) {
+      const prodId = parseInt(itemId.split(':')[1])
+      const prod = jobItems?.products.find((p) => p.id === prodId)
+      return prod ? `${prod.description}${prod.productID ? ` (${prod.productID})` : ''}` : itemId
+    } else if (itemId.startsWith('part:')) {
+      const part = jobItems?.parts.find((p) => p.id === itemId)
+      return part ? `${part.description}${part.partName ? ` (${part.partName})` : ''}` : itemId
+    } else if (itemId.startsWith('material:')) {
+      const materialId = parseInt(itemId.split(':')[1])
+      const material = jobItems?.materials?.find((m) => m.id === materialId)
+      return material ? `${material.materialID || material.description}${material.jobPart ? ` (Part ${material.jobPart})` : ''}` : itemId
+    }
+    return itemId
+  }
+
+  // Calculate totals for preview
+  const totals = useMemo(() => {
+    let totalSkidCount = 0
+    let totalCartonCount = 0
+    let totalWeight = 0
+    const itemQuantities: Record<string, { name: string; quantity: number }> = {}
+
+    if (mode === 'skid') {
+      // Skid mode calculations
+      skids.forEach((skid) => {
+        totalSkidCount += skid.count
+        totalWeight += skid.weight * skid.count
+
+        skid.cartons.forEach((carton) => {
+          totalCartonCount += carton.count * skid.count
+
+          carton.contents.forEach((content) => {
+            if (content.itemId && content.quantity > 0) {
+              const totalQty = content.quantity * carton.count * skid.count
+              const itemName = getItemName(content.itemId)
+
+              if (itemQuantities[content.itemId]) {
+                itemQuantities[content.itemId].quantity += totalQty
+              } else {
+                itemQuantities[content.itemId] = { name: itemName, quantity: totalQty }
+              }
+            }
+          })
+        })
+      })
+    } else {
+      // Carton-only mode calculations
+      cartons.forEach((carton) => {
+        totalCartonCount += carton.count
+
+        carton.contents.forEach((content) => {
+          if (content.itemId && content.quantity > 0) {
+            const totalQty = content.quantity * carton.count
+            const itemName = getItemName(content.itemId)
+
+            if (itemQuantities[content.itemId]) {
+              itemQuantities[content.itemId].quantity += totalQty
+            } else {
+              itemQuantities[content.itemId] = { name: itemName, quantity: totalQty }
+            }
+          }
+        })
+      })
+    }
+
+    return {
+      totalSkidCount,
+      totalCartonCount,
+      totalWeight,
+      itemQuantities: Object.entries(itemQuantities).map(([id, data]) => ({
+        id,
+        name: data.name,
+        quantity: data.quantity,
+      })),
+    }
+  }, [mode, skids, cartons, jobItems])
+
+  // Helper function to parse itemId and return content payload
+  const parseContentItemId = (content: { itemId?: string; quantity: number }) => {
+    const baseContent: any = {
+      quantity: content.quantity,
+    }
+
+    if (content.itemId) {
+      const parts = content.itemId.split(':')
+      const type = parts[0]
+
+      if (type === 'job') {
+        baseContent.job = parts[1]
+      } else if (type === 'component') {
+        baseContent.jobComponent = parseInt(parts[1])
+      } else if (type === 'product') {
+        baseContent.jobProduct = parseInt(parts[1])
+      } else if (type === 'part') {
+        baseContent.jobPartJob = parts[1]
+        baseContent.jobPart = parts[2]
+      } else if (type === 'material') {
+        baseContent.jobMaterial = parseInt(parts[1])
+      }
+    }
+
+    return baseContent
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setProcessing(true)
+    setError(null)
+
+    try {
+      const requestBody: any = {
+        mode,
+        shipmentDetails: {
+          notes: shipmentDetails.notes || undefined,
+          trackingNumber: shipmentDetails.trackingNumber || undefined,
+          trackingNotes: shipmentDetails.trackingNotes || undefined,
+          cost: shipmentDetails.cost ? parseFloat(shipmentDetails.cost) : undefined,
+        },
+        deleteExisting: existingCartons && existingCartons.length > 0,
+      }
+
+      if (mode === 'skid') {
+        // Map skids with nested cartons
+        requestBody.skids = skids.map((skid) => ({
+          count: skid.count,
+          description: skid.description,
+          weight: skid.weight,
+          cartons: skid.cartons.map((carton) => ({
+            count: carton.count,
+            note: carton.note || undefined,
+            contents: carton.contents.map(parseContentItemId),
+          })),
+        }))
+      } else {
+        // Map cartons directly (carton-only mode)
+        requestBody.cartons = cartons.map((carton) => ({
+          count: carton.count,
+          note: carton.note || undefined,
+          contents: carton.contents.map(parseContentItemId),
+        }))
+      }
+
+      const response = await fetch(`/api/pace/shipments/${shipmentId}/process-skids`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Failed to process ${mode === 'skid' ? 'skids' : 'cartons'}`)
+      }
+
+      onSuccess()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  // Handle mode switching with data conversion
+  const handleModeSwitch = (newMode: 'skid' | 'carton') => {
+    if (newMode === mode) return
+
+    // Check if there's data to convert
+    const hasSkidData = skids.some(s => s.cartons.some(c => c.contents.some(ct => ct.itemId)))
+    const hasCartonData = cartons.some(c => c.contents.some(ct => ct.itemId))
+
+    if (newMode === 'carton' && hasSkidData) {
+      // Switching from Skid Mode to Carton Mode - extract cartons from skids
+      const extractedCartons = skids.flatMap(skid => skid.cartons)
+      if (extractedCartons.length > 0) {
+        const confirmSwitch = window.confirm(
+          'Switch to Carton Mode?\n\n' +
+          'Your cartons will be extracted from skids. Skid information (description, weight) will be lost.\n\n' +
+          'Click OK to continue or Cancel to stay in Skid Mode.'
+        )
+        if (confirmSwitch) {
+          setCartons(extractedCartons)
+          setMode('carton')
+        }
+      } else {
+        setMode('carton')
+      }
+    } else if (newMode === 'skid' && hasCartonData) {
+      // Switching from Carton Mode to Skid Mode - wrap cartons in a new skid
+      const confirmSwitch = window.confirm(
+        'Switch to Skid Mode?\n\n' +
+        'Your cartons will be placed into a new skid.\n\n' +
+        'Click OK to continue or Cancel to stay in Carton Mode.'
+      )
+      if (confirmSwitch) {
+        setSkids([{
+          count: 1,
+          description: '',
+          weight: 0,
+          cartons: cartons
+        }])
+        setMode('skid')
+      }
+    } else {
+      // No data to convert, just switch modes
+      setMode(newMode)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-6 p-6 h-full overflow-hidden">
+      {/* Left side - Form */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Mode Toggle */}
+        <div className="mb-6">
+          <div className="flex items-center justify-center">
+            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => handleModeSwitch('skid')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  mode === 'skid'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span>🗃️</span>
+                  <span>Skid Mode</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeSwitch('carton')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  mode === 'carton'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span>📦</span>
+                  <span>Carton Mode</span>
+                </span>
+              </button>
+            </div>
+          </div>
+          <p className="text-center text-xs text-gray-500 mt-2">
+            {mode === 'skid'
+              ? 'Create pallets (skids) with cartons inside them'
+              : 'Create cartons directly without pallets'}
+          </p>
+        </div>
+
+        {/* Step Indicators */}
+        <div className="mb-6">
+          <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                currentStep === 1
+                  ? mode === 'skid' ? 'bg-purple-600 text-white ring-4 ring-purple-100' : 'bg-blue-600 text-white ring-4 ring-blue-100'
+                  : 'bg-green-500 text-white'
+              }`}>
+                {currentStep > 1 ? '✓' : '1'}
+              </div>
+              <div className={`ml-3 text-sm font-medium ${
+                currentStep === 1
+                  ? mode === 'skid' ? 'text-purple-600' : 'text-blue-600'
+                  : 'text-green-600'
+              }`}>
+                {mode === 'skid' ? 'Configure Skids' : 'Configure Cartons'}
+              </div>
+            </div>
+            <div className={`h-1 w-24 rounded-full ${currentStep > 1 ? 'bg-green-500' : 'bg-gray-200'}`} />
+            <div className="flex items-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                currentStep === 2
+                  ? mode === 'skid' ? 'bg-purple-600 text-white ring-4 ring-purple-100' : 'bg-blue-600 text-white ring-4 ring-blue-100'
+                  : 'bg-gray-200 text-gray-500'
+              }`}>
+                2
+              </div>
+              <div className={`ml-3 text-sm font-medium ${
+                currentStep === 2
+                  ? mode === 'skid' ? 'text-purple-600' : 'text-blue-600'
+                  : 'text-gray-500'
+              }`}>
+                Shipment Details
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
+        {/* Step 1: Configure Skids or Cartons */}
+        {currentStep === 1 && (
+          <>
+            {/* Storefront Shipment Notice */}
+        {isStorefrontShipment() && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">Storefront Shipment Detected</p>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Materials are shown by default. {!showOtherItemTypes && 'Click the button to show Job, Components, Products, and Parts.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOtherItemTypes(!showOtherItemTypes)}
+                className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded transition-colors whitespace-nowrap"
+              >
+                {showOtherItemTypes ? 'Hide' : 'Show'} Job/Products/Parts
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SKID MODE UI */}
+        {mode === 'skid' && (
+        <div className="space-y-6">
+          {skids.length === 0 && existingCartons && existingCartons.length > 0 && (
+            <div className="border-2 border-orange-200 rounded-lg bg-orange-50 p-6 text-center">
+              <p className="text-orange-800 font-medium mb-3">
+                All skids/cartons will be removed from this shipment.
+              </p>
+              <button
+                type="button"
+                onClick={addSkid}
+                className="text-purple-600 hover:text-purple-800 font-medium"
+              >
+                + Add Skid
+              </button>
+            </div>
+          )}
+          {skids.map((skid, skidIndex) => (
+            <div key={skidIndex} className="border-2 border-purple-200 rounded-lg bg-purple-50">
+            {/* Skid Header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-purple-100 border-b-2 border-purple-200">
+              <div className="flex items-center gap-4">
+                <h3 className="text-base font-bold text-purple-900">
+                  🗃️ Skid {skidIndex + 1}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => addCartonToSkid(skidIndex)}
+                  className="text-purple-700 hover:text-purple-900 text-xs font-medium"
+                >
+                  + Add Carton
+                </button>
+                {(skids.length > 1 || (existingCartons && existingCartons.length > 0)) && (
+                  <button
+                    type="button"
+                    onClick={() => removeSkid(skidIndex)}
+                    className="text-red-600 hover:text-red-800 text-xs font-medium ml-2"
+                  >
+                    Remove Skid
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Skid Properties */}
+            <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Count</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={skid.count}
+                  onChange={(e) => updateSkid(skidIndex, 'count', parseInt(e.target.value) || 1)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={skid.description}
+                  onChange={(e) => updateSkid(skidIndex, 'description', e.target.value)}
+                  placeholder="Optional description"
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Weight (lbs)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={skid.weight}
+                  onChange={(e) => updateSkid(skidIndex, 'weight', parseFloat(e.target.value) || 0)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            {/* Cartons within this Skid */}
+            <div className="p-4 space-y-3">
+              {skid.cartons.map((carton, cartonIndex) => (
+                <div key={cartonIndex} className="border border-gray-200 rounded-lg bg-white">
+                  {/* Carton Header */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                    <div className="flex items-center gap-4">
+                      <h4 className="text-sm font-semibold text-gray-900">
+                        📦 Carton {cartonIndex + 1}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-600">Qty:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={carton.count}
+                          onChange={(e) => updateCarton(skidIndex, cartonIndex, 'count', parseInt(e.target.value) || 1)}
+                          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-600">Note:</label>
+                        <input
+                          type="text"
+                          value={carton.note || ''}
+                          onChange={(e) => updateCarton(skidIndex, cartonIndex, 'note', e.target.value)}
+                          placeholder="Optional note"
+                          className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => addContentToCarton(skidIndex, cartonIndex)}
+                        className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                      >
+                        + Add Item
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => duplicateCarton(skidIndex, cartonIndex)}
+                        className="text-green-600 hover:text-green-800 text-xs font-medium flex items-center gap-1"
+                        title="Duplicate this carton with quantities set to 1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Duplicate
+                      </button>
+                      {skid.cartons.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeCartonFromSkid(skidIndex, cartonIndex)}
+                          className="text-red-600 hover:text-red-800 text-xs font-medium ml-2"
+                        >
+                          Remove Carton
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Contents Table */}
+                  <div className="divide-y divide-gray-100">
+                    {carton.contents.map((content, contentIndex) => (
+                      <div key={contentIndex} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50">
+                        {/* Item Selector */}
+                        <div className="flex-1">
+                          {loadingItems ? (
+                            <div className="px-3 py-2 text-sm text-gray-500">
+                              Loading items...
+                            </div>
+                          ) : (
+                            <select
+                              value={content.itemId || ''}
+                              onChange={(e) => {
+                                const selectedValue = e.target.value
+                                updateContent(skidIndex, cartonIndex, contentIndex, 'itemId', selectedValue)
+
+                                // Auto-populate quantity based on selected item
+                                const allItemsFlat: Array<{ value: string; label: string; orderedQty?: number; plannedQty?: number }> = [
+                                  ...itemGroups.job,
+                                  ...itemGroups.components,
+                                  ...itemGroups.products,
+                                  ...itemGroups.parts,
+                                  ...itemGroups.materials,
+                                ]
+                                const selectedItem = allItemsFlat.find(item => item.value === selectedValue)
+                                const autoQty = selectedItem?.orderedQty || selectedItem?.plannedQty
+                                if (autoQty && autoQty > 0) {
+                                  updateContent(skidIndex, cartonIndex, contentIndex, 'quantity', autoQty)
+                                }
+                              }}
+                              required
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                            >
+                              <option value="">Select item to ship...</option>
+
+                              {isStorefrontShipment() && !showOtherItemTypes && (
+                                <option value="" disabled className="text-blue-600">
+                                  ⓘ Click "Show Job/Products/Parts" above for more options
+                                </option>
+                              )}
+
+                              {/* Job Option */}
+                              {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.job.length > 0 && (
+                                <optgroup label="━━━ JOB ━━━">
+                                  {itemGroups.job.map((item) => (
+                                    <option key={item.value} value={item.value}>
+                                      {item.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+
+                              {/* Components */}
+                              {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.components.length > 0 && (
+                                <optgroup label="━━━ COMPONENTS ━━━">
+                                  {itemGroups.components.map((item) => (
+                                    <option key={item.value} value={item.value}>
+                                      {item.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+
+                              {/* Products */}
+                              {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.products.length > 0 && (
+                                <optgroup label="━━━ PRODUCTS ━━━">
+                                  {itemGroups.products.map((item) => (
+                                    <option key={item.value} value={item.value}>
+                                      {item.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+
+                              {/* Parts */}
+                              {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.parts.length > 0 && (
+                                <optgroup label="━━━ PARTS ━━━">
+                                  {itemGroups.parts.map((item) => (
+                                    <option key={item.value} value={item.value}>
+                                      {item.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+
+                              {/* Materials */}
+                              {itemGroups.materials.length > 0 && (
+                                <optgroup label="━━━ MATERIALS ━━━">
+                                  {itemGroups.materials.map((item) => (
+                                    <option key={item.value} value={item.value}>
+                                      {item.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          )}
+                        </div>
+
+                        {/* Quantity Input */}
+                        <div className="w-32">
+                          <input
+                            type="number"
+                            min="0"
+                            value={content.quantity}
+                            onChange={(e) => updateContent(skidIndex, cartonIndex, contentIndex, 'quantity', parseInt(e.target.value) || 0)}
+                            placeholder="Qty"
+                            required
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+
+                        {/* Remove Button */}
+                        {carton.contents.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeContentFromCarton(skidIndex, cartonIndex, contentIndex)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Remove item"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+          <button
+            type="button"
+            onClick={addSkid}
+            className="w-full py-2 border-2 border-dashed border-purple-300 rounded-lg text-purple-600 hover:border-purple-400 hover:text-purple-700 transition-colors font-medium"
+          >
+            + Add Another Skid
+          </button>
+        </div>
+        )}
+
+        {/* CARTON MODE UI */}
+        {mode === 'carton' && (
+        <div className="space-y-6">
+          {cartons.length === 0 && existingCartons && existingCartons.length > 0 && (
+            <div className="border-2 border-orange-200 rounded-lg bg-orange-50 p-6 text-center">
+              <p className="text-orange-800 font-medium mb-3">
+                All cartons will be removed from this shipment.
+              </p>
+              <button
+                type="button"
+                onClick={addCarton}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                + Add Carton
+              </button>
+            </div>
+          )}
+
+          {cartons.map((carton, cartonIndex) => (
+            <div key={cartonIndex} className="border-2 border-blue-200 rounded-lg bg-blue-50">
+              {/* Carton Header */}
+              <div className="flex items-center justify-between px-4 py-3 bg-blue-100 border-b-2 border-blue-200">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-base font-bold text-blue-900">
+                    📦 Carton {cartonIndex + 1}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-600">Qty:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={carton.count}
+                      onChange={(e) => updateCartonDirect(cartonIndex, 'count', parseInt(e.target.value) || 1)}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-600">Note:</label>
+                    <input
+                      type="text"
+                      value={carton.note || ''}
+                      onChange={(e) => updateCartonDirect(cartonIndex, 'note', e.target.value)}
+                      placeholder="Optional note"
+                      className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => addContentToCartonDirect(cartonIndex)}
+                    className="text-blue-700 hover:text-blue-900 text-xs font-medium"
+                  >
+                    + Add Item
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => duplicateCartonDirect(cartonIndex)}
+                    className="text-green-600 hover:text-green-800 text-xs font-medium flex items-center gap-1"
+                    title="Duplicate this carton with quantities set to 1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Duplicate
+                  </button>
+                  {(cartons.length > 1 || (existingCartons && existingCartons.length > 0)) && (
+                    <button
+                      type="button"
+                      onClick={() => removeCarton(cartonIndex)}
+                      className="text-red-600 hover:text-red-800 text-xs font-medium ml-2"
+                    >
+                      Remove Carton
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Contents */}
+              <div className="p-4">
+                <div className="border border-gray-200 rounded-lg bg-white divide-y divide-gray-100">
+                  {carton.contents.map((content, contentIndex) => (
+                    <div key={contentIndex} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50">
+                      {/* Item Selector */}
+                      <div className="flex-1">
+                        {loadingItems ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">
+                            Loading items...
+                          </div>
+                        ) : (
+                          <select
+                            value={content.itemId || ''}
+                            onChange={(e) => {
+                              const selectedValue = e.target.value
+                              updateContentDirect(cartonIndex, contentIndex, 'itemId', selectedValue)
+
+                              // Auto-populate quantity based on selected item
+                              const allItemsFlat: Array<{ value: string; label: string; orderedQty?: number; plannedQty?: number }> = [
+                                ...itemGroups.job,
+                                ...itemGroups.components,
+                                ...itemGroups.products,
+                                ...itemGroups.parts,
+                                ...itemGroups.materials,
+                              ]
+                              const selectedItem = allItemsFlat.find(item => item.value === selectedValue)
+                              const autoQty = selectedItem?.orderedQty || selectedItem?.plannedQty
+                              if (autoQty && autoQty > 0) {
+                                updateContentDirect(cartonIndex, contentIndex, 'quantity', autoQty)
+                              }
+                            }}
+                            required
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">Select item to ship...</option>
+
+                            {isStorefrontShipment() && !showOtherItemTypes && (
+                              <option value="" disabled className="text-blue-600">
+                                ⓘ Click "Show Job/Products/Parts" above for more options
+                              </option>
+                            )}
+
+                            {/* Job Option */}
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.job.length > 0 && (
+                              <optgroup label="━━━ JOB ━━━">
+                                {itemGroups.job.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {/* Components */}
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.components.length > 0 && (
+                              <optgroup label="━━━ COMPONENTS ━━━">
+                                {itemGroups.components.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {/* Products */}
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.products.length > 0 && (
+                              <optgroup label="━━━ PRODUCTS ━━━">
+                                {itemGroups.products.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {/* Parts */}
+                            {(!isStorefrontShipment() || showOtherItemTypes) && itemGroups.parts.length > 0 && (
+                              <optgroup label="━━━ PARTS ━━━">
+                                {itemGroups.parts.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {/* Materials */}
+                            {itemGroups.materials.length > 0 && (
+                              <optgroup label="━━━ MATERIALS ━━━">
+                                {itemGroups.materials.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        )}
+                      </div>
+
+                      {/* Quantity Input */}
+                      <div className="w-32">
+                        <input
+                          type="number"
+                          min="0"
+                          value={content.quantity}
+                          onChange={(e) => updateContentDirect(cartonIndex, contentIndex, 'quantity', parseInt(e.target.value) || 0)}
+                          placeholder="Qty"
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+
+                      {/* Remove Button */}
+                      {carton.contents.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeContentFromCartonDirect(cartonIndex, contentIndex)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="Remove item"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addCarton}
+            className="w-full py-2 border-2 border-dashed border-blue-300 rounded-lg text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors font-medium"
+          >
+            + Add Another Carton
+          </button>
+        </div>
+        )}
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t pt-4">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className={`px-6 py-2 text-white rounded-md font-medium ${
+                  mode === 'skid' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                Next: Shipment Details →
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Step 2: Shipment Details */}
+        {currentStep === 2 && (
+          <div className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-blue-900 mb-2">📋 Optional Shipment Information</h3>
+              <p className="text-xs text-blue-700">
+                Add optional details for this shipment. All fields are optional and can be left blank.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  value={shipmentDetails.notes}
+                  onChange={(e) => setShipmentDetails({ ...shipmentDetails, notes: e.target.value })}
+                  rows={4}
+                  placeholder="Enter any notes about this shipment..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Tracking Number */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tracking Number
+                </label>
+                <input
+                  type="text"
+                  value={shipmentDetails.trackingNumber}
+                  onChange={(e) => setShipmentDetails({ ...shipmentDetails, trackingNumber: e.target.value })}
+                  placeholder="Enter tracking number..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Tracking Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tracking Notes
+                </label>
+                <textarea
+                  value={shipmentDetails.trackingNotes}
+                  onChange={(e) => setShipmentDetails({ ...shipmentDetails, trackingNotes: e.target.value })}
+                  rows={3}
+                  placeholder="Enter tracking notes..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Cost */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cost
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={shipmentDetails.cost}
+                    onChange={(e) => setShipmentDetails({ ...shipmentDetails, cost: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="mt-6 flex items-center justify-between border-t pt-4">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                ← Back to {mode === 'skid' ? 'Skids' : 'Cartons'}
+              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  disabled={processing}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processing}
+                  className={`px-6 py-2 text-white rounded-md font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
+                    mode === 'skid' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {processing
+                    ? 'Processing...'
+                    : existingCartons && existingCartons.length > 0
+                    ? 'Update Configuration'
+                    : mode === 'skid'
+                    ? 'Create Skids with Cartons'
+                    : 'Create Cartons'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right side - Preview Panel */}
+      <div className="w-96 flex-shrink-0">
+        <div className={`sticky top-6 bg-gradient-to-br rounded-lg p-6 shadow-lg border-2 ${
+          mode === 'skid'
+            ? 'from-purple-50 to-blue-50 border-purple-200'
+            : 'from-blue-50 to-indigo-50 border-blue-200'
+        }`}>
+          <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${
+            mode === 'skid' ? 'text-purple-900' : 'text-blue-900'
+          }`}>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            Summary Preview
+          </h3>
+
+          <div className="space-y-4">
+            {/* Totals Section */}
+            <div className={`bg-white rounded-lg p-4 shadow-sm border ${
+              mode === 'skid' ? 'border-purple-100' : 'border-blue-100'
+            }`}>
+              <h4 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">Totals</h4>
+              <div className="space-y-2">
+                {mode === 'skid' && (
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      <span className="text-2xl">🗃️</span>
+                      <span className="font-medium">Skids</span>
+                    </span>
+                    <span className="font-bold text-purple-700 text-lg">{totals.totalSkidCount}</span>
+                  </div>
+                )}
+                <div className={`flex items-center justify-between py-2 ${mode === 'skid' ? 'border-b border-gray-100' : ''}`}>
+                  <span className="text-gray-600 flex items-center gap-2">
+                    <span className="text-2xl">📦</span>
+                    <span className="font-medium">Cartons</span>
+                  </span>
+                  <span className="font-bold text-blue-700 text-lg">{totals.totalCartonCount}</span>
+                </div>
+                {mode === 'skid' && (
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      <span className="text-2xl">⚖️</span>
+                      <span className="font-medium">Weight</span>
+                    </span>
+                    <span className="font-bold text-gray-700 text-lg">{totals.totalWeight.toFixed(2)} lbs</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Items Section */}
+            {totals.itemQuantities.length > 0 && (
+              <div className={`bg-white rounded-lg p-4 shadow-sm border ${
+                mode === 'skid' ? 'border-purple-100' : 'border-blue-100'
+              }`}>
+                <h4 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">Items Breakdown</h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {totals.itemQuantities.map((item) => (
+                    <div key={item.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                      <span className="text-sm text-gray-700 flex-1 pr-2 leading-tight">
+                        {item.name}
+                      </span>
+                      <span className={`font-semibold text-sm whitespace-nowrap ${
+                        mode === 'skid' ? 'text-purple-700' : 'text-blue-700'
+                      }`}>
+                        {item.quantity} qty
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {totals.itemQuantities.length === 0 && (
+              <div className={`bg-white rounded-lg p-6 shadow-sm border text-center ${
+                mode === 'skid' ? 'border-purple-100' : 'border-blue-100'
+              }`}>
+                <div className="text-gray-400 text-4xl mb-2">📋</div>
+                <p className="text-gray-500 text-sm">
+                  Add items to cartons to see the breakdown
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </form>
+  )
+}
+
 // Edit Carton Form Component
 function EditCartonForm({
   carton,
@@ -1971,6 +3782,7 @@ function EditCartonForm({
   }
 
   const handleUpdateContent = async (contentId: number, quantity: number) => {
+    console.log('Updating carton content quantity:', { contentId, quantity })
     try {
       const response = await fetch(`/api/pace/carton-content/${contentId}`, {
         method: 'PATCH',
@@ -1980,12 +3792,20 @@ function EditCartonForm({
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error('Failed to update carton content:', errorData)
         throw new Error(errorData.error || 'Failed to update content')
       }
 
+      const result = await response.json()
+      console.log('Carton content quantity updated successfully:', result)
+
       // Update local state
       setContents(contents.map(c => c.id === contentId ? { ...c, quantity } : c))
+
+      // Refresh the parent carton list to show updated quantities
+      onSuccess()
     } catch (err) {
+      console.error('Update content error:', err)
       setError(err instanceof Error ? err.message : 'An error occurred')
     }
   }
@@ -2079,21 +3899,35 @@ function EditCartonForm({
                 const description =
                   content.jobComponentDescription ||
                   content.jobProductDescription ||
+                  content.jobMaterialDescription ||
                   content.jobDescription ||
                   content.contentDescription ||
                   'Unknown content'
 
                 let contentType = ''
-                if (content.jobComponent) contentType = 'Component'
-                else if (content.jobProduct) contentType = 'Product'
-                else if (content.job) contentType = 'Job'
-                else if (content.jobPart) contentType = 'Part'
+                let badgeColor = 'bg-blue-100 text-blue-700'
+                if (content.jobComponent) {
+                  contentType = 'Component'
+                  badgeColor = 'bg-blue-100 text-blue-700'
+                } else if (content.jobProduct) {
+                  contentType = 'Product'
+                  badgeColor = 'bg-green-100 text-green-700'
+                } else if (content.jobMaterial) {
+                  contentType = 'Material'
+                  badgeColor = 'bg-yellow-100 text-yellow-700'
+                } else if (content.job) {
+                  contentType = 'Job'
+                  badgeColor = 'bg-purple-100 text-purple-700'
+                } else if (content.jobPart) {
+                  contentType = 'Part'
+                  badgeColor = 'bg-orange-100 text-orange-700'
+                }
 
                 return (
                   <div key={content.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded border border-gray-200">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeColor}`}>
                           {contentType}
                         </span>
                         <span className="text-sm text-gray-900">{description}</span>
@@ -2102,6 +3936,11 @@ function EditCartonForm({
                         <p className="text-xs text-gray-600 mt-1">
                           Item: {content.jobComponentItemNumber}
                           {content.jobComponentPO && ` | PO: ${content.jobComponentPO}`}
+                        </p>
+                      )}
+                      {content.jobMaterialID && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Material ID: {content.jobMaterialID}
                         </p>
                       )}
                     </div>
@@ -2116,8 +3955,14 @@ function EditCartonForm({
                         }}
                         onBlur={(e) => {
                           const newQty = parseInt(e.target.value) || 0
-                          if (newQty !== content.quantity && content.id) {
+                          // Get the original value from the carton prop, not the current state
+                          const originalContent = carton.contents?.find(c => c.id === content.id)
+                          const originalQty = originalContent?.quantity || 0
+                          if (newQty !== originalQty && content.id) {
+                            console.log('Quantity changed, updating:', { contentId: content.id, from: originalQty, to: newQty })
                             handleUpdateContent(content.id, newQty)
+                          } else {
+                            console.log('Quantity unchanged, not updating:', { contentId: content.id, quantity: newQty })
                           }
                         }}
                         className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"

@@ -61,14 +61,14 @@ export async function GET(
 
     // Call PACE API to get shipment details
     // Expand shipBillToContact to get the full Contact object with zip code
-    const paceUrl = `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${shipmentId}&expand=shipBillToContact`
+    let paceUrl = `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${shipmentId}&expand=shipBillToContact`
 
     console.log('Fetching shipment from PACE:', {
       url: paceUrl,
       shipmentId,
     })
 
-    const response = await fetch(paceUrl, {
+    let response = await fetch(paceUrl, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -77,8 +77,31 @@ export async function GET(
       body: '',
     })
 
+    // If we get a 500 error with ClassCastException, retry without expand parameter
+    // This can happen if PACE has data type issues with certain fields
+    let cachedErrorText: string | null = null
+    if (!response.ok && response.status === 500) {
+      cachedErrorText = await response.text()
+      if (cachedErrorText.includes('ClassCastException') || cachedErrorText.includes('cannot be cast')) {
+        console.warn('PACE API ClassCastException with expand parameter, retrying without expand...')
+
+        // Retry without expand
+        paceUrl = `${paceApiUrl}/ReadObject/readJobShipment?primaryKey=${shipmentId}`
+        response = await fetch(paceUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': authHeader,
+          },
+          body: '',
+        })
+        // Clear cached error text since we have a new response
+        cachedErrorText = null
+      }
+    }
+
     if (!response.ok) {
-      const errorText = await response.text()
+      const errorText = cachedErrorText || await response.text()
       console.error('PACE API error:', {
         status: response.status,
         statusText: response.statusText,

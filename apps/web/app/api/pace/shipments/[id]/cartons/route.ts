@@ -134,6 +134,30 @@ export async function GET(
 
       const carton: Carton = await cartonResponse.json()
 
+      // Fetch skid details if carton belongs to a skid
+      if (carton.skid) {
+        try {
+          const readSkidUrl = `${paceApiUrl}/ReadObject/readSkid?primaryKey=${carton.skid}`
+          const skidResponse = await fetch(readSkidUrl, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: '',
+          })
+
+          if (skidResponse.ok) {
+            const skidData = await skidResponse.json()
+            carton.skidDescription = skidData.description
+            carton.skidWeight = skidData.weight
+            carton.skidCount = skidData.count
+          }
+        } catch (err) {
+          console.error('Failed to fetch skid details:', err)
+        }
+      }
+
       // Step 3: Find all CartonContent for this carton
       const contentXpath = `@carton=${cartonId}`
       const contentQueryParams = new URLSearchParams({
@@ -240,6 +264,25 @@ export async function GET(
                   }
                 })
                 .catch(err => console.error('Failed to fetch JobProduct description:', err))
+            )
+          }
+
+          // Lookup JobMaterial description
+          if (content.jobMaterial) {
+            lookupPromises.push(
+              fetch(`${paceApiUrl}/ReadObject/readJobMaterial?primaryKey=${content.jobMaterial}`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Authorization': authHeader },
+                body: '',
+              })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                  if (data) {
+                    content.jobMaterialDescription = data.description
+                    content.jobMaterialID = data.materialID
+                  }
+                })
+                .catch(err => console.error('Failed to fetch JobMaterial description:', err))
             )
           }
 
