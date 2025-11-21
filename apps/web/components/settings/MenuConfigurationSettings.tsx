@@ -26,7 +26,7 @@ interface TenantUser {
   memberships: Array<{ role: string }>
 }
 
-const AVAILABLE_ROLES = ['full_admin', 'admin', 'manager', 'customer_service', 'estimators', 'logistics', 'accounting']
+const AVAILABLE_ROLES = ['full_admin', 'admin', 'manager', 'customer_service', 'estimators', 'logistics', 'accounting', 'warehouse']
 
 const ROLE_LABELS: Record<string, string> = {
   full_admin: 'Full Admin',
@@ -35,7 +35,8 @@ const ROLE_LABELS: Record<string, string> = {
   customer_service: 'Customer Service',
   estimators: 'Estimators',
   logistics: 'Logistics',
-  accounting: 'Accounting'
+  accounting: 'Accounting',
+  warehouse: 'Warehouse'
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -45,7 +46,8 @@ const ROLE_COLORS: Record<string, string> = {
   customer_service: 'bg-green-100 text-green-800',
   estimators: 'bg-yellow-100 text-yellow-800',
   logistics: 'bg-orange-100 text-orange-800',
-  accounting: 'bg-pink-100 text-pink-800'
+  accounting: 'bg-pink-100 text-pink-800',
+  warehouse: 'bg-amber-100 text-amber-800'
 }
 
 const VISIBILITY_MODES = [
