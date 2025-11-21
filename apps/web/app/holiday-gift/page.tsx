@@ -37,25 +37,29 @@ const gifts = [
     id: 'chill-out',
     name: 'The Chill Out Gift Box',
     description: 'Your moment of calm starts here..',
-    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=85'
+    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=85',
+    image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Green.jpg'
   },
   {
     id: 'game-night',
     name: 'The Game Night Gift Box',
     description: 'Let the games and the memories begin!',
-    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=86'
+    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=86',
+    image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Red.jpg'
   },
   {
     id: 'get-moving',
     name: 'The Get Moving Gift Box',
     description: 'Let\'s get moving, motivation included.',
-    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=87'
+    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=87',
+    image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Blue.jpg'
   },
   {
     id: 'mystery',
-    name: 'Mystery Gift',
-    description: 'Embrace the surprise and let us delight you!',
-    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=88'
+    name: 'Surprise Me!',
+    description: 'Can\'t decide? Let us pick the perfect gift for you!',
+    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=88',
+    image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Silver.jpg'
   }
 ]
 
@@ -190,19 +194,11 @@ export default function HolidayGiftPage() {
                   onClick={() => handleGiftSelect(gift)}
                   className={styles.giftCard}
                 >
-                  {gift.id === 'mystery' ? (
-                    <img
-                      src="/images/mystery gift.png"
-                      alt="Mystery Gift"
-                      className={styles.giftCardIconImage}
-                    />
-                  ) : (
-                    <img
-                      src="/images/110710_Calitho_Get Movin_Influencer Kit_Face1.jpg"
-                      alt={gift.name}
-                      className={styles.giftCardIconImage}
-                    />
-                  )}
+                  <img
+                    src={gift.image}
+                    alt={gift.name}
+                    className={styles.giftCardIconImage}
+                  />
                   <h3 className={styles.giftCardTitle}>{gift.name}</h3>
                   <p className={styles.giftCardDescription}>{gift.description}</p>
                 </button>
@@ -216,7 +212,7 @@ export default function HolidayGiftPage() {
             <h2 className={styles.giftTitle}>Almost There!</h2>
 
             <p className={styles.giftDescription}>
-              Please provide your shipping information so we can send your {selectedGift?.name} to you.
+              Please provide your shipping information so we can send your {selectedGift?.id === 'mystery' ? 'surprise gift' : selectedGift?.name} to you.
             </p>
 
             <form onSubmit={handleSubmit} className={styles.shippingForm}>
@@ -327,19 +323,16 @@ export default function HolidayGiftPage() {
               </div>
 
               <div className={styles.formGroup}>
-                <label htmlFor="country" className={styles.formLabel}>Country *</label>
-                <select
+                <label htmlFor="country" className={styles.formLabel}>Country</label>
+                <input
+                  type="text"
                   id="country"
                   name="country"
-                  value={formData.country}
-                  onChange={handleInputChange}
-                  required
+                  value="USA"
+                  readOnly
                   className={styles.formInput}
-                >
-                  <option value="USA">USA</option>
-                  <option value="Canada">Canada</option>
-                  <option value="Mexico">Mexico</option>
-                </select>
+                  style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                />
               </div>
 
               <div className={styles.formActions}>
@@ -371,7 +364,7 @@ export default function HolidayGiftPage() {
             <h2 className={styles.giftTitle}>Thank You!</h2>
 
             <p className={styles.giftDescription}>
-              Your order for <strong>{selectedGift?.name}</strong> has been received!
+              Your order for <strong>{selectedGift?.id === 'mystery' ? 'a surprise gift' : selectedGift?.name}</strong> has been received!
               <br /><br />
               We&apos;ll be processing your gift and shipping it to:
               <br />
