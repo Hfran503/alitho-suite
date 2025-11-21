@@ -232,6 +232,32 @@ elif [ -f "/app/apps/web/server.js" ]; then
   WEB_PID=$!
 elif [ -f "/app/apps/web/.next/standalone/apps/web/server.js" ]; then
   echo "Found server.js at /app/apps/web/.next/standalone/apps/web/server.js (Nixpacks build)"
+
+  # Copy generated Prisma client to standalone directory (critical for runtime)
+  echo "Copying Prisma client to standalone directory..."
+
+  # Find all .prisma/client directories in standalone and copy the generated client there
+  if [ -d "/app/node_modules/.prisma/client" ]; then
+    # Find pnpm-style prisma client directories in standalone
+    STANDALONE_BASE="/app/apps/web/.next/standalone"
+    find "$STANDALONE_BASE" -type d -name ".prisma" 2>/dev/null | while read prisma_dir; do
+      echo "  Copying to: $prisma_dir/client"
+      cp -r /app/node_modules/.prisma/client/* "$prisma_dir/client/" 2>/dev/null || true
+    done
+
+    # Also copy to standard location
+    mkdir -p "$STANDALONE_BASE/node_modules/.prisma/client"
+    cp -r /app/node_modules/.prisma/client/* "$STANDALONE_BASE/node_modules/.prisma/client/"
+
+    echo "✓ Prisma client copied to standalone directory"
+  else
+    echo "⚠️  Warning: Prisma client not found at /app/node_modules/.prisma/client"
+    # Try generating in standalone
+    echo "Attempting to generate Prisma client in standalone..."
+    cd /app/apps/web/.next/standalone
+    /app/node_modules/.bin/prisma generate --schema=/app/prisma/schema.prisma 2>/dev/null || true
+  fi
+
   cd /app/apps/web/.next/standalone
   node apps/web/server.js &
   WEB_PID=$!
