@@ -220,11 +220,14 @@ export async function generatePDFForOrder(orderId: string) {
 
   console.log(`✓ Generated PDF for ${order.printName} (${order.orderNumber}): ${pdfPath}`);
 
-  // Upload to SFTP if configured (only for USA and International US, and NOT duplicates)
+  // Upload to SFTP if configured (only for USA and International US, and NOT duplicates/missing/archived)
   let sftpUrl: string | null = null;
-  const isDuplicate = order.status === 'potential_duplicate';
+  const isExcludedStatus =
+    order.status === 'potential_duplicate' ||
+    order.status === 'missing_address' ||
+    order.status === 'archived';
   const shouldUploadToSFTP =
-    !isDuplicate &&
+    !isExcludedStatus &&
     (order.countryCategory === 'United States of America' ||
       order.countryCategory === 'International US');
 
@@ -252,9 +255,9 @@ export async function generatePDFForOrder(orderId: string) {
       console.error(`Failed to upload PDF to SFTP for order ${order.id}:`, sftpError);
       // Don't fail if SFTP upload fails
     }
-  } else if (isDuplicate) {
+  } else if (isExcludedStatus) {
     console.log(
-      `Skipping SFTP upload for order ${order.orderNumber} (potential duplicate)`
+      `Skipping SFTP upload for order ${order.orderNumber} (status: ${order.status})`
     );
   } else if (!shouldUploadToSFTP) {
     console.log(

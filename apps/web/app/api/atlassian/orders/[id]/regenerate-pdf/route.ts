@@ -48,11 +48,16 @@ export async function POST(
       countryCategory
     );
 
-    // Upload to SFTP if configured (only for USA and International US)
+    // Upload to SFTP if configured (only for USA and International US, and NOT duplicates/missing)
     let sftpUrl: string | null = null;
+    const isExcludedStatus =
+      order.status === 'potential_duplicate' ||
+      order.status === 'missing_address' ||
+      order.status === 'archived';
     const shouldUploadToSFTP =
-      countryCategory === 'United States of America' ||
-      countryCategory === 'International US';
+      !isExcludedStatus &&
+      (countryCategory === 'United States of America' ||
+       countryCategory === 'International US');
 
     if (isSftpConfigured() && shouldUploadToSFTP) {
       try {
@@ -77,6 +82,8 @@ export async function POST(
         console.error(`Failed to upload PDF to SFTP for order ${id}:`, sftpError);
         // Don't fail the entire regeneration if SFTP upload fails
       }
+    } else if (isExcludedStatus) {
+      console.log(`Skipping SFTP upload for order ${orderNumber} (status: ${order.status})`);
     } else if (!shouldUploadToSFTP) {
       console.log(`Skipping SFTP upload for ${countryCategory} (only USA/International go to SFTP)`);
     }
