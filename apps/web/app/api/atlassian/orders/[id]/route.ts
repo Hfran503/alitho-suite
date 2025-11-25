@@ -93,6 +93,7 @@ export async function PATCH(
     // Only allow updating certain fields
     const allowedFields = [
       'status',
+      'duplicateOfOrderId',
       'firstName',
       'lastName',
       'fullName',

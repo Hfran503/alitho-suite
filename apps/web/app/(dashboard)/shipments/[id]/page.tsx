@@ -949,7 +949,14 @@ export default function ShipmentDetailsPage() {
               <h2 className="text-lg font-semibold text-gray-900">
                 Configuration {!loadingCartons && cartons.length > 0 && (
                   <span className="text-sm font-normal text-gray-500 ml-2">
-                    ({cartons.length} carton{cartons.length !== 1 ? 's' : ''})
+                    {(() => {
+                      const totalCartonCount = cartons.reduce((sum, carton) => {
+                        const skidCount = carton.skidCount || 1
+                        const cartonCount = carton.count || 1
+                        return sum + (skidCount * cartonCount)
+                      }, 0)
+                      return `(${totalCartonCount} carton${totalCartonCount !== 1 ? 's' : ''})`
+                    })()}
                   </span>
                 )}
               </h2>
@@ -1085,6 +1092,17 @@ export default function ShipmentDetailsPage() {
                             </button>
                           </>
                         )}
+
+                        {/* Print PDF Button - Always visible when cartons exist */}
+                        <button
+                          onClick={() => window.open(`/api/pace/shipments/${shipmentId}/pdf`, '_blank')}
+                          className="inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                          Print PDF
+                        </button>
 
                         {!hasLabels && (
                           <button
@@ -1562,7 +1580,8 @@ export default function ShipmentDetailsPage() {
                                 const cartonTotal = (carton.contents || []).reduce((contentSum, content) => {
                                   const qty = content.quantity || 0
                                   const count = carton.count || 1
-                                  return contentSum + (qty * count)
+                                  const skidCount = carton.skidCount || 1
+                                  return contentSum + (qty * count * skidCount)
                                 }, 0)
                                 return sum + cartonTotal
                               }, 0)
@@ -1590,7 +1609,9 @@ export default function ShipmentDetailsPage() {
                               <span className="font-semibold">
                                 {(() => {
                                   const totalCartonCount = cartons.reduce((sum, carton) => {
-                                    return sum + (carton.count || 1)
+                                    const skidCount = carton.skidCount || 1
+                                    const cartonCount = carton.count || 1
+                                    return sum + (skidCount * cartonCount)
                                   }, 0)
                                   return totalCartonCount
                                 })()}

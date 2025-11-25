@@ -32,13 +32,50 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { personalEmail: { contains: search, mode: 'insensitive' } },
-        { workEmail: { contains: search, mode: 'insensitive' } },
-      ];
+      const searchField = searchParams.get('searchField') || 'all';
+
+      const searchConditions: Record<string, any[]> = {
+        all: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { fullName: { contains: search, mode: 'insensitive' } },
+          { printName: { contains: search, mode: 'insensitive' } },
+          { personalEmail: { contains: search, mode: 'insensitive' } },
+          { workEmail: { contains: search, mode: 'insensitive' } },
+          { paceJobNumber: { contains: search, mode: 'insensitive' } },
+          { orderNumber: { contains: search, mode: 'insensitive' } },
+          { address1: { contains: search, mode: 'insensitive' } },
+          { address2: { contains: search, mode: 'insensitive' } },
+          { city: { contains: search, mode: 'insensitive' } },
+          { state: { contains: search, mode: 'insensitive' } },
+          { zipCode: { contains: search, mode: 'insensitive' } },
+        ],
+        name: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { fullName: { contains: search, mode: 'insensitive' } },
+          { printName: { contains: search, mode: 'insensitive' } },
+        ],
+        email: [
+          { personalEmail: { contains: search, mode: 'insensitive' } },
+          { workEmail: { contains: search, mode: 'insensitive' } },
+        ],
+        paceJob: [
+          { paceJobNumber: { contains: search, mode: 'insensitive' } },
+        ],
+        orderNumber: [
+          { orderNumber: { contains: search, mode: 'insensitive' } },
+        ],
+        address: [
+          { address1: { contains: search, mode: 'insensitive' } },
+          { address2: { contains: search, mode: 'insensitive' } },
+          { city: { contains: search, mode: 'insensitive' } },
+          { state: { contains: search, mode: 'insensitive' } },
+          { zipCode: { contains: search, mode: 'insensitive' } },
+        ],
+      };
+
+      where.OR = searchConditions[searchField] || searchConditions.all;
     }
 
     // Get total count
@@ -99,13 +136,79 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Get summary by country category
-    const summary = await db.atlassianOrder.groupBy({
-      by: ['countryCategory', 'status'],
-      _count: {
-        id: true,
-      },
-    });
+    // Get counts for each category (across ALL orders, not just paginated)
+    const [
+      readyToSendCount,
+      sentToPaceCount,
+      duplicatesCount,
+      archivedCount,
+      philippinesCount,
+      australiaCount,
+      indiaCount,
+      usaCount,
+      internationalCount,
+      missingCount,
+    ] = await Promise.all([
+      // Ready to send: completed or pending, NOT duplicates
+      db.atlassianOrder.count({
+        where: {
+          OR: [{ status: 'completed' }, { status: 'pending' }],
+          duplicateOfOrderId: null,
+        },
+      }),
+      // Sent to PACE
+      db.atlassianOrder.count({
+        where: { status: 'sent_to_pace' },
+      }),
+      // Duplicates
+      db.atlassianOrder.count({
+        where: {
+          OR: [{ status: 'potential_duplicate' }, { duplicateOfOrderId: { not: null } }],
+        },
+      }),
+      // Archived
+      db.atlassianOrder.count({
+        where: { status: 'archived' },
+      }),
+      // Philippines (exclude archived)
+      db.atlassianOrder.count({
+        where: { countryCategory: 'Philippines', status: { not: 'archived' } },
+      }),
+      // Australia (exclude archived)
+      db.atlassianOrder.count({
+        where: { countryCategory: 'Australia', status: { not: 'archived' } },
+      }),
+      // India (exclude archived)
+      db.atlassianOrder.count({
+        where: { countryCategory: 'India', status: { not: 'archived' } },
+      }),
+      // USA (exclude archived)
+      db.atlassianOrder.count({
+        where: { countryCategory: 'United States of America', status: { not: 'archived' } },
+      }),
+      // International (exclude archived)
+      db.atlassianOrder.count({
+        where: { countryCategory: 'International US', status: { not: 'archived' } },
+      }),
+      // Missing address
+      db.atlassianOrder.count({
+        where: { status: 'missing_address' },
+      }),
+    ]);
+
+    const counts = {
+      all: totalCount,
+      readyToSend: readyToSendCount,
+      sentToPace: sentToPaceCount,
+      duplicates: duplicatesCount,
+      archived: archivedCount,
+      philippines: philippinesCount,
+      australia: australiaCount,
+      india: indiaCount,
+      usa: usaCount,
+      international: internationalCount,
+      missing: missingCount,
+    };
 
     return NextResponse.json({
       success: true,
@@ -113,7 +216,7 @@ export async function GET(request: NextRequest) {
       totalCount,
       limit,
       offset,
-      summary,
+      counts,
     });
   } catch (error) {
     console.error('Error fetching Atlassian orders:', error);

@@ -33,13 +33,7 @@ function Snowflakes() {
 }
 
 const gifts = [
-  {
-    id: 'chill-out',
-    name: 'The Chill Out Gift Box',
-    description: 'Your moment of calm starts here..',
-    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=85',
-    image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Green.jpg'
-  },
+  
   {
     id: 'game-night',
     name: 'The Game Night Gift Box',
@@ -55,9 +49,16 @@ const gifts = [
     image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Blue.jpg'
   },
   {
+    id: 'chill-out',
+    name: 'The Chill Out Gift Box',
+    description: 'Your moment of calm starts here..',
+    url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=85',
+    image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Green.jpg'
+  },
+  {
     id: 'mystery',
-    name: 'Surprise Me!',
-    description: 'Can\'t decide? Let us pick the perfect gift for you!',
+    name: 'The “Surprise Me” Gift Box',
+    description: 'I can’t decide, surprise me!',
     url: 'https://calithogift.myprintdesk.net/DSF/StoreFront.web/product.aspx?productid=88',
     image: '/images/110710_Calitho_Get Movin_Influencer Kit_Face-Silver.jpg'
   }
@@ -144,7 +145,7 @@ export default function HolidayGiftPage() {
             alt="Calitho"
             className={styles.companyLogo}
           />
-          <p className={styles.tagline}>Printing & Production Excellence</p>
+          <p className={styles.tagline}>Your Print and Packaging Partners</p>
         </div>
 
         {step === 1 ? (
@@ -167,13 +168,12 @@ export default function HolidayGiftPage() {
             <h2 className={styles.giftTitle}>Our Gift to You This Season</h2>
 
             <p className={styles.giftDescription}>
-              Your partnership means the world to us. As a token of our deepest appreciation
-              for your continued trust and collaboration, we&apos;ve prepared something special
-              to celebrate this wonderful season together.
+              Thank you for being an important part of our year. In appreciation, we’ve custom-made gift boxes inspired by the different ways to welcome 2026. 
+              Choose the one that feels right for you!
             </p>
 
             <button onClick={() => setStep(2)} className={styles.ctaButton}>
-              Unwrap Your Gift
+              Choose Your Gift
             </button>
           </div>
         ) : step === 2 ? (
@@ -183,8 +183,7 @@ export default function HolidayGiftPage() {
             <h2 className={styles.giftTitle}>Choose Your Perfect Gift</h2>
 
             <p className={styles.giftDescription}>
-              Each gift has been thoughtfully curated as a token of our appreciation.
-              Select the one that resonates with you and celebrate this special season together.
+             We hope this gift brings a little joy to your holidays and helps you step into the new year feeling playful, energized or blissfully calm.  
             </p>
 
             <div className={styles.giftGrid}>

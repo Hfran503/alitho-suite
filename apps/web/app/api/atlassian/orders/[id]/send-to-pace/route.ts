@@ -28,6 +28,17 @@ export async function POST(
       );
     }
 
+    // Check if order is a potential duplicate
+    if (order.status === 'potential_duplicate') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Cannot send potential duplicate orders to PACE. Please review and resolve the duplicate status first.',
+        },
+        { status: 400 }
+      );
+    }
+
     // Check if order has required fields
     if (!order.orderNumber) {
       return NextResponse.json(

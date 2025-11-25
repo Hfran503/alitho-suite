@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Loader2, RefreshCw, Download, Plus, Upload, User, Mail, MapPin, FileText, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, RefreshCw, Download, Plus, Upload, User, Mail, MapPin, FileText, X, ChevronLeft, ChevronRight, Search, Send } from 'lucide-react';
 
 interface AtlassianOrder {
   id: string;
@@ -61,12 +62,14 @@ export default function AtlassianOrdersPage() {
   const [paceSuccess, setPaceSuccess] = useState<string | null>(null);
   const [paceError, setPaceError] = useState<string | null>(null);
   const [sendingAllToPace, setSendingAllToPace] = useState(false);
+  const [sendingSelectedToPace, setSendingSelectedToPace] = useState(false);
   const [batchPaceSuccess, setBatchPaceSuccess] = useState<string | null>(null);
   const [batchPaceError, setBatchPaceError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedOrder, setEditedOrder] = useState<AtlassianOrder | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [changingStatus, setChangingStatus] = useState(false);
   const [regeneratingPdf, setRegeneratingPdf] = useState(false);
   const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -83,6 +86,26 @@ export default function AtlassianOrdersPage() {
   const [pageSize, setPageSize] = useState(100);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchField, setSearchField] = useState('all');
+
+  // API counts for all categories (not just current page)
+  const [apiCounts, setApiCounts] = useState({
+    all: 0,
+    readyToSend: 0,
+    sentToPace: 0,
+    duplicates: 0,
+    archived: 0,
+    philippines: 0,
+    australia: 0,
+    india: 0,
+    usa: 0,
+    international: 0,
+    missing: 0,
+  });
+
   // Manual add order state
   const [showManualAddDialog, setShowManualAddDialog] = useState(false);
   const [manualOrderData, setManualOrderData] = useState<any>({});
@@ -98,13 +121,14 @@ export default function AtlassianOrdersPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const fetchOrders = async (page: number = currentPage) => {
+  const fetchOrders = async (page: number = currentPage, search: string = debouncedSearch, field: string = searchField) => {
     setLoading(true);
     setError(null);
 
     try {
       const offset = (page - 1) * pageSize;
-      const response = await fetch(`/api/atlassian/orders?limit=${pageSize}&offset=${offset}`);
+      const searchParam = search ? `&search=${encodeURIComponent(search)}&searchField=${field}` : '';
+      const response = await fetch(`/api/atlassian/orders?limit=${pageSize}&offset=${offset}${searchParam}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
@@ -115,6 +139,10 @@ export default function AtlassianOrdersPage() {
       if (data.success) {
         setOrders(data.data);
         setTotalCount(data.totalCount || 0);
+        // Set counts from API (these are counts across ALL orders, not just current page)
+        if (data.counts) {
+          setApiCounts(data.counts);
+        }
       } else {
         throw new Error('API returned unsuccessful response');
       }
@@ -126,9 +154,25 @@ export default function AtlassianOrdersPage() {
     }
   };
 
+  // Debounce search query
   useEffect(() => {
-    fetchOrders(currentPage);
-  }, [currentPage, pageSize]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch orders when page, pageSize, search, or searchField changes
+  useEffect(() => {
+    fetchOrders(currentPage, debouncedSearch, searchField);
+  }, [currentPage, pageSize, debouncedSearch, searchField]);
+
+  // Reset to first page when search or searchField changes
+  useEffect(() => {
+    if (debouncedSearch !== '') {
+      setCurrentPage(1);
+    }
+  }, [debouncedSearch, searchField]);
 
   const handleTriggerCheck = async () => {
     setTriggeringCheck(true);
@@ -285,10 +329,29 @@ export default function AtlassianOrdersPage() {
         return 'bg-orange-100 text-orange-800';
       case 'potential_duplicate':
         return 'bg-purple-100 text-purple-800';
+      case 'archived':
+        return 'bg-gray-200 text-gray-600';
       case 'failed':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusDisplayText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Ready To Process';
+      case 'sent_to_pace':
+        return 'Sent to PACE';
+      case 'missing_address':
+        return 'Missing Address';
+      case 'potential_duplicate':
+        return 'Potential Duplicate';
+      case 'archived':
+        return 'Archived';
+      default:
+        return status.replace('_', ' ');
     }
   };
 
@@ -307,33 +370,22 @@ export default function AtlassianOrdersPage() {
   const groupedOrders = {
     all: orders,
     readyToSend: orders.filter((o) =>
-      o.status === 'completed' || o.status === 'pending'
+      (o.status === 'completed' || o.status === 'pending') &&
+      !o.duplicateOfOrderId
     ),
     sentToPace: orders.filter((o) => o.status === 'sent_to_pace'),
-    philippines: orders.filter((o) => o.countryCategory === 'Philippines'),
-    australia: orders.filter((o) => o.countryCategory === 'Australia'),
-    india: orders.filter((o) => o.countryCategory === 'India'),
-    usa: orders.filter((o) => o.countryCategory === 'United States of America'),
-    international: orders.filter((o) => o.countryCategory === 'International US'),
+    duplicates: orders.filter((o) => o.status === 'potential_duplicate' || o.duplicateOfOrderId),
+    archived: orders.filter((o) => o.status === 'archived'),
+    philippines: orders.filter((o) => o.countryCategory === 'Philippines' && o.status !== 'archived'),
+    australia: orders.filter((o) => o.countryCategory === 'Australia' && o.status !== 'archived'),
+    india: orders.filter((o) => o.countryCategory === 'India' && o.status !== 'archived'),
+    usa: orders.filter((o) => o.countryCategory === 'United States of America' && o.status !== 'archived'),
+    international: orders.filter((o) => o.countryCategory === 'International US' && o.status !== 'archived'),
     missing: orders.filter((o) => o.status === 'missing_address'),
   };
 
-  // Get count for each tab
-  const getCounts = () => {
-    return {
-      all: totalCount, // Use total count from API for all orders
-      readyToSend: groupedOrders.readyToSend.length,
-      sentToPace: groupedOrders.sentToPace.length,
-      philippines: groupedOrders.philippines.length,
-      australia: groupedOrders.australia.length,
-      india: groupedOrders.india.length,
-      usa: groupedOrders.usa.length,
-      international: groupedOrders.international.length,
-      missing: groupedOrders.missing.length,
-    };
-  };
-
-  const counts = getCounts();
+  // Use counts from API (these reflect ALL orders, not just current page)
+  const counts = apiCounts;
 
   const renderOrdersTable = (ordersList: AtlassianOrder[]) => {
     if (ordersList.length === 0) {
@@ -493,7 +545,7 @@ export default function AtlassianOrdersPage() {
                   onClick={() => setSelectedOrder(order)}
                 >
                   <Badge className={getStatusBadgeColor(order.status)}>
-                    {order.status.replace('_', ' ')}
+                    {getStatusDisplayText(order.status)}
                   </Badge>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
@@ -594,6 +646,76 @@ export default function AtlassianOrdersPage() {
       setBatchPaceError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setSendingAllToPace(false);
+    }
+  };
+
+  const handleSendSelectedToPace = async () => {
+    if (selectedOrderIds.size === 0) return;
+
+    setSendingSelectedToPace(true);
+    setBatchPaceSuccess(null);
+    setBatchPaceError(null);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      // Get the selected orders that are ready to send (not duplicates, not already sent)
+      const ordersToSend = orders.filter(
+        (o) =>
+          selectedOrderIds.has(o.id) &&
+          o.status !== 'sent_to_pace' &&
+          o.status !== 'potential_duplicate' &&
+          o.status !== 'archived' &&
+          !o.duplicateOfOrderId
+      );
+
+      if (ordersToSend.length === 0) {
+        setBatchPaceError('No valid orders selected. Orders must not be duplicates, archived, or already sent to PACE.');
+        return;
+      }
+
+      // Send each selected order to PACE
+      for (const order of ordersToSend) {
+        try {
+          const response = await fetch(`/api/atlassian/orders/${order.id}/send-to-pace`, {
+            method: 'POST',
+          });
+          const data = await response.json();
+
+          if (data.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            errors.push(`${order.orderNumber || order.id}: ${data.error}`);
+          }
+        } catch {
+          errorCount++;
+          errors.push(`${order.orderNumber || order.id}: Network error`);
+        }
+      }
+
+      if (successCount > 0) {
+        setBatchPaceSuccess(
+          `Successfully sent ${successCount} order(s) to PACE!${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+        );
+        // Refresh orders and clear selection
+        setTimeout(() => {
+          fetchOrders();
+          setBatchPaceSuccess(null);
+          setSelectedOrderIds(new Set());
+          setIsSelectMode(false);
+        }, 3000);
+      }
+
+      if (errorCount > 0 && successCount === 0) {
+        setBatchPaceError(`Failed to send orders: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
+      }
+    } catch (err) {
+      setBatchPaceError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSendingSelectedToPace(false);
     }
   };
 
@@ -713,6 +835,53 @@ export default function AtlassianOrdersPage() {
         ...editedOrder,
         [field]: value,
       });
+    }
+  };
+
+  const handleQuickStatusChange = async (orderId: string, newStatus: string, clearDuplicate: boolean = false) => {
+    setChangingStatus(true);
+    setUpdateSuccess(null);
+    setUpdateError(null);
+
+    try {
+      const updateData: any = { status: newStatus };
+
+      // If marking as ready to process, also clear the duplicate reference
+      if (clearDuplicate) {
+        updateData.duplicateOfOrderId = null;
+      }
+
+      const response = await fetch(`/api/atlassian/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const statusText = newStatus === 'completed' ? 'Ready To Process' : 'Archived';
+        setUpdateSuccess(`Order marked as ${statusText}!`);
+        // Update the selected order with new status
+        setSelectedOrder({
+          ...selectedOrder!,
+          status: newStatus,
+          ...(clearDuplicate && { duplicateOfOrderId: undefined, duplicateOfOrder: undefined }),
+        });
+        // Refresh orders to update the list
+        setTimeout(() => {
+          fetchOrders();
+          setUpdateSuccess(null);
+        }, 2000);
+      } else {
+        throw new Error(data.error || 'Failed to update order status');
+      }
+    } catch (err) {
+      setUpdateError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setChangingStatus(false);
     }
   };
 
@@ -919,102 +1088,194 @@ export default function AtlassianOrdersPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold">Atlassian Orders</h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-500 mt-1">
             Manage and view Atlassian welcome packet orders from email
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowManualAddDialog(true)} variant="outline">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Order
-          </Button>
-          <Button onClick={() => setShowUploadDialog(true)} variant="outline">
-            <Upload className="mr-2 h-4 w-4" />
-            Upload HTML
-          </Button>
-          <Button onClick={handleExportJSON} variant="outline" disabled={orders.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
-            Export JSON
-          </Button>
-          {!isSelectMode ? (
-            <Button onClick={handleToggleSelectMode} variant="secondary" disabled={orders.length === 0}>
-              Select Orders
-            </Button>
+        <Button onClick={handleTriggerCheck} disabled={triggeringCheck} size="lg">
+          {triggeringCheck ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Checking...
+            </>
           ) : (
             <>
-              <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-md">
-                <span className="text-sm font-medium text-purple-900">
-                  {selectedOrderIds.size} order{selectedOrderIds.size !== 1 ? 's' : ''} selected
-                </span>
-              </div>
-              <Button
-                onClick={handleBatchRegeneratePdfs}
-                disabled={batchRegeneratingPdfs || selectedOrderIds.size === 0}
-                variant="outline"
-              >
-                {batchRegeneratingPdfs ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  'Generate PDFs'
-                )}
-              </Button>
-              <Button
-                onClick={handleBulkDownload}
-                disabled={downloadingBulk || selectedOrderIds.size === 0}
-                variant="default"
-              >
-                {downloadingBulk ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Preparing...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download ZIP
-                  </>
-                )}
-              </Button>
-              <Button onClick={handleCancelSelection} variant="outline">
-                Cancel
-              </Button>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Check for New Emails
             </>
           )}
-          <Button
-            onClick={handleSendAllToPace}
-            disabled={sendingAllToPace || counts.readyToSend === 0}
-            variant="default"
-          >
-            {sendingAllToPace ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending to PACE...
-              </>
-            ) : (
-              `Send All to PACE (${counts.readyToSend})`
-            )}
-          </Button>
-          <Button onClick={handleTriggerCheck} disabled={triggeringCheck}>
-            {triggeringCheck ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Checking...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Check Emails
-              </>
-            )}
-          </Button>
-        </div>
+        </Button>
       </div>
+
+      {/* Action Bar */}
+      <Card className="border-gray-200">
+        <CardContent className="py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Search */}
+            <div className="flex items-center gap-2 flex-1 max-w-lg">
+              <Select value={searchField} onValueChange={setSearchField}>
+                <SelectTrigger className="w-[130px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Fields</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="paceJob">PACE Job #</SelectItem>
+                  <SelectItem value="orderNumber">Order #</SelectItem>
+                  <SelectItem value="address">Address</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder={
+                    searchField === 'all' ? 'Search...' :
+                    searchField === 'name' ? 'Search by name...' :
+                    searchField === 'email' ? 'Search by email...' :
+                    searchField === 'paceJob' ? 'Search by PACE job #...' :
+                    searchField === 'orderNumber' ? 'Search by order #...' :
+                    'Search by address...'
+                  }
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Add/Import actions */}
+            <div className="flex items-center gap-2">
+              <Button onClick={() => setShowManualAddDialog(true)} variant="outline" size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add Order
+              </Button>
+              <Button onClick={() => setShowUploadDialog(true)} variant="outline" size="sm">
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                Upload HTML
+              </Button>
+            </div>
+
+            {/* Center - Selection mode */}
+            <div className="flex items-center gap-2">
+              {!isSelectMode ? (
+                <Button
+                  onClick={handleToggleSelectMode}
+                  variant="ghost"
+                  size="sm"
+                  disabled={orders.length === 0}
+                  className="text-gray-600"
+                >
+                  Select Orders
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg">
+                  <span className="text-sm font-medium text-purple-800">
+                    {selectedOrderIds.size} selected
+                  </span>
+                  <div className="h-4 w-px bg-purple-200" />
+                  <Button
+                    onClick={handleBatchRegeneratePdfs}
+                    disabled={batchRegeneratingPdfs || selectedOrderIds.size === 0}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-purple-700 hover:text-purple-900 hover:bg-purple-100"
+                  >
+                    {batchRegeneratingPdfs ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      'Generate PDFs'
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleBulkDownload}
+                    disabled={downloadingBulk || selectedOrderIds.size === 0}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-purple-700 hover:text-purple-900 hover:bg-purple-100"
+                  >
+                    {downloadingBulk ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Download className="mr-1 h-3.5 w-3.5" />
+                        ZIP
+                      </>
+                    )}
+                  </Button>
+                  <div className="h-4 w-px bg-purple-200" />
+                  <Button
+                    onClick={handleSendSelectedToPace}
+                    disabled={sendingSelectedToPace || selectedOrderIds.size === 0}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-blue-700 hover:text-blue-900 hover:bg-blue-100"
+                  >
+                    {sendingSelectedToPace ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Send className="mr-1 h-3.5 w-3.5" />
+                        Send to PACE
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleCancelSelection}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+              <Button
+                onClick={handleExportJSON}
+                variant="ghost"
+                size="sm"
+                disabled={orders.length === 0}
+                className="text-gray-600"
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Export JSON
+              </Button>
+            </div>
+
+            {/* Right side - Primary action */}
+            <Button
+              onClick={handleSendAllToPace}
+              disabled={sendingAllToPace || counts.readyToSend === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {sendingAllToPace ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  Send All to PACE
+                  <Badge className="ml-2 bg-blue-500 text-white">{counts.readyToSend}</Badge>
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {checkSuccess && (
         <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
@@ -1223,23 +1484,29 @@ export default function AtlassianOrdersPage() {
               <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
               <TabsTrigger value="readyToSend" className="text-blue-600">Ready to Send ({counts.readyToSend})</TabsTrigger>
               <TabsTrigger value="sentToPace" className="text-green-600">Sent to PACE ({counts.sentToPace})</TabsTrigger>
+              <TabsTrigger value="duplicates" className="text-purple-600">Duplicates ({counts.duplicates})</TabsTrigger>
               <TabsTrigger value="philippines">Philippines ({counts.philippines})</TabsTrigger>
               <TabsTrigger value="australia">Australia ({counts.australia})</TabsTrigger>
               <TabsTrigger value="india">India ({counts.india})</TabsTrigger>
               <TabsTrigger value="usa">USA ({counts.usa})</TabsTrigger>
               <TabsTrigger value="international">International ({counts.international})</TabsTrigger>
               <TabsTrigger value="missing">Missing Address ({counts.missing})</TabsTrigger>
+              <TabsTrigger value="archived" className="text-gray-400">
+                Archived ({counts.archived})
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="all">{loading ? <Loader2 className="animate-spin" /> : renderOrdersTable(groupedOrders.all)}</TabsContent>
             <TabsContent value="readyToSend">{renderOrdersTable(groupedOrders.readyToSend)}</TabsContent>
             <TabsContent value="sentToPace">{renderOrdersTable(groupedOrders.sentToPace)}</TabsContent>
+            <TabsContent value="duplicates">{renderOrdersTable(groupedOrders.duplicates)}</TabsContent>
             <TabsContent value="philippines">{renderOrdersTable(groupedOrders.philippines)}</TabsContent>
             <TabsContent value="australia">{renderOrdersTable(groupedOrders.australia)}</TabsContent>
             <TabsContent value="india">{renderOrdersTable(groupedOrders.india)}</TabsContent>
             <TabsContent value="usa">{renderOrdersTable(groupedOrders.usa)}</TabsContent>
             <TabsContent value="international">{renderOrdersTable(groupedOrders.international)}</TabsContent>
             <TabsContent value="missing">{renderOrdersTable(groupedOrders.missing)}</TabsContent>
+            <TabsContent value="archived">{renderOrdersTable(groupedOrders.archived)}</TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -1312,6 +1579,32 @@ export default function AtlassianOrdersPage() {
                       <p className="mt-1 text-xs">
                         Review both orders to verify if this is a legitimate duplicate or a different person with the same name.
                       </p>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => handleQuickStatusChange(selectedOrder.id, 'completed', true)}
+                          disabled={changingStatus}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {changingStatus ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : null}
+                          Mark as Ready To Process
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleQuickStatusChange(selectedOrder.id, 'archived', false)}
+                          disabled={changingStatus}
+                          className="text-gray-600 hover:bg-gray-100"
+                        >
+                          {changingStatus ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : null}
+                          Archive (Don't Fulfill)
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
