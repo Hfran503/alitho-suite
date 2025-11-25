@@ -99,7 +99,40 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the webhook payload
-    const payload: PACEInvoiceWebhookPayload = await request.json()
+    // PACE sometimes sends malformed JSON with unescaped control characters (tabs, etc.)
+    // We need to sanitize the raw text before parsing
+    const rawBody = await request.text()
+
+    // Remove or escape control characters (except newlines which are valid in JSON strings when escaped)
+    // This handles tabs, carriage returns, and other control chars that PACE doesn't escape properly
+    const sanitizedBody = rawBody.replace(/[\x00-\x1F\x7F]/g, (char) => {
+      // Map common control characters to their escaped equivalents
+      const escapeMap: Record<string, string> = {
+        '\t': ' ',  // Replace tabs with spaces
+        '\r': '',   // Remove carriage returns
+        '\n': '\\n', // Escape newlines
+        '\b': '',   // Remove backspace
+        '\f': '',   // Remove form feed
+      }
+      return escapeMap[char] ?? '' // Remove other control characters
+    })
+
+    let payload: PACEInvoiceWebhookPayload
+    try {
+      payload = JSON.parse(sanitizedBody)
+    } catch (parseError) {
+      console.error('Failed to parse PACE invoice JSON:', parseError)
+      console.error('Raw body (first 500 chars):', rawBody.substring(0, 500))
+      return NextResponse.json(
+        { status: 'error', error: 'Invalid JSON in request body' },
+        { status: 400 }
+      )
+    }
+
+    // Trim whitespace from string fields that PACE sometimes pads
+    if (payload.invoice?.poNumber) {
+      payload.invoice.poNumber = payload.invoice.poNumber.trim()
+    }
 
     // Extract invoice number from the nested structure
     const invoiceNumber = payload.invoice?.invoiceNum
