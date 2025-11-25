@@ -103,18 +103,15 @@ export async function POST(request: NextRequest) {
     // We need to sanitize the raw text before parsing
     const rawBody = await request.text()
 
-    // Remove or escape control characters (except newlines which are valid in JSON strings when escaped)
-    // This handles tabs, carriage returns, and other control chars that PACE doesn't escape properly
-    const sanitizedBody = rawBody.replace(/[\x00-\x1F\x7F]/g, (char) => {
-      // Map common control characters to their escaped equivalents
-      const escapeMap: Record<string, string> = {
-        '\t': ' ',  // Replace tabs with spaces
-        '\r': '',   // Remove carriage returns
-        '\n': '\\n', // Escape newlines
-        '\b': '',   // Remove backspace
-        '\f': '',   // Remove form feed
-      }
-      return escapeMap[char] ?? '' // Remove other control characters
+    // Sanitize control characters INSIDE string values only
+    // PACE sometimes sends unescaped tabs, etc. inside string fields
+    // We can't blindly replace all control chars because newlines/tabs are valid JSON whitespace
+    // Solution: Only sanitize control chars that appear inside quoted strings
+    const sanitizedBody = rawBody.replace(/"([^"\\]|\\.)*"/g, (match) => {
+      // Inside each string, replace problematic control characters
+      return match.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ') // Replace most control chars with space
+                  .replace(/\t/g, ' ') // Replace tabs with spaces
+                  .replace(/\r/g, '')  // Remove carriage returns
     })
 
     let payload: PACEInvoiceWebhookPayload
