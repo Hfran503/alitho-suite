@@ -102,8 +102,34 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             orderNumber: true,
+            emailSubject: true,
+            emailFrom: true,
+            emailDate: true,
+            status: true,
+            firstName: true,
+            lastName: true,
             fullName: true,
+            printName: true,
+            pdfPath: true,
+            sftpUrl: true,
+            personalEmail: true,
+            workEmail: true,
+            phoneNumber: true,
+            address1: true,
+            address2: true,
+            address3: true,
+            city: true,
+            state: true,
+            zipCode: true,
+            country: true,
+            countryCategory: true,
+            startDate: true,
+            manager: true,
+            department: true,
+            location: true,
+            paceJobNumber: true,
             createdAt: true,
+            processedAt: true,
           },
         },
         firstName: true,
@@ -148,6 +174,12 @@ export async function GET(request: NextRequest) {
       usaCount,
       internationalCount,
       missingCount,
+      // Sent to PACE by country
+      sentPhilippinesCount,
+      sentAustraliaCount,
+      sentIndiaCount,
+      sentUsaCount,
+      sentInternationalCount,
     ] = await Promise.all([
       // Ready to send: completed or pending, NOT duplicates
       db.atlassianOrder.count({
@@ -170,29 +202,49 @@ export async function GET(request: NextRequest) {
       db.atlassianOrder.count({
         where: { status: 'archived' },
       }),
-      // Philippines (exclude archived)
+      // Philippines (only ready to process: completed or pending, not duplicates)
       db.atlassianOrder.count({
-        where: { countryCategory: 'Philippines', status: { not: 'archived' } },
+        where: { countryCategory: 'Philippines', status: { in: ['completed', 'pending'] }, duplicateOfOrderId: null },
       }),
-      // Australia (exclude archived)
+      // Australia (only ready to process: completed or pending, not duplicates)
       db.atlassianOrder.count({
-        where: { countryCategory: 'Australia', status: { not: 'archived' } },
+        where: { countryCategory: 'Australia', status: { in: ['completed', 'pending'] }, duplicateOfOrderId: null },
       }),
-      // India (exclude archived)
+      // India (only ready to process: completed or pending, not duplicates)
       db.atlassianOrder.count({
-        where: { countryCategory: 'India', status: { not: 'archived' } },
+        where: { countryCategory: 'India', status: { in: ['completed', 'pending'] }, duplicateOfOrderId: null },
       }),
-      // USA (exclude archived)
+      // USA (only ready to process: completed or pending, not duplicates)
       db.atlassianOrder.count({
-        where: { countryCategory: 'United States of America', status: { not: 'archived' } },
+        where: { countryCategory: 'United States of America', status: { in: ['completed', 'pending'] }, duplicateOfOrderId: null },
       }),
-      // International (exclude archived)
+      // International (only ready to process: completed or pending, not duplicates)
       db.atlassianOrder.count({
-        where: { countryCategory: 'International US', status: { not: 'archived' } },
+        where: { countryCategory: 'International US', status: { in: ['completed', 'pending'] }, duplicateOfOrderId: null },
       }),
       // Missing address
       db.atlassianOrder.count({
         where: { status: 'missing_address' },
+      }),
+      // Sent to PACE - Philippines
+      db.atlassianOrder.count({
+        where: { countryCategory: 'Philippines', status: 'sent_to_pace' },
+      }),
+      // Sent to PACE - Australia
+      db.atlassianOrder.count({
+        where: { countryCategory: 'Australia', status: 'sent_to_pace' },
+      }),
+      // Sent to PACE - India
+      db.atlassianOrder.count({
+        where: { countryCategory: 'India', status: 'sent_to_pace' },
+      }),
+      // Sent to PACE - USA
+      db.atlassianOrder.count({
+        where: { countryCategory: 'United States of America', status: 'sent_to_pace' },
+      }),
+      // Sent to PACE - International
+      db.atlassianOrder.count({
+        where: { countryCategory: 'International US', status: 'sent_to_pace' },
       }),
     ]);
 
@@ -208,6 +260,12 @@ export async function GET(request: NextRequest) {
       usa: usaCount,
       international: internationalCount,
       missing: missingCount,
+      // Sent to PACE by country
+      sentPhilippines: sentPhilippinesCount,
+      sentAustralia: sentAustraliaCount,
+      sentIndia: sentIndiaCount,
+      sentUsa: sentUsaCount,
+      sentInternational: sentInternationalCount,
     };
 
     return NextResponse.json({
