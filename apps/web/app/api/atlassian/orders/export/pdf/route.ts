@@ -94,8 +94,8 @@ export async function GET(request: NextRequest) {
     // Save the merged PDF
     const mergedPdfBytes = await mergedPdf.save();
 
-    // Return the merged PDF
-    return new NextResponse(mergedPdfBytes, {
+    // Return the merged PDF (convert Uint8Array to Buffer for NextResponse compatibility)
+    return new NextResponse(Buffer.from(mergedPdfBytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
