@@ -36,9 +36,6 @@ export default function SentToPacePage() {
   const [regeneratingPdfs, setRegeneratingPdfs] = useState<string | null>(null);
   const [regenerateSuccess, setRegenerateSuccess] = useState<string | null>(null);
 
-  // We load all orders since they're grouped and collapsed
-  const [totalCount, setTotalCount] = useState(0);
-
   // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -87,7 +84,6 @@ export default function SentToPacePage() {
 
       if (data.success) {
         setOrders(data.data);
-        setTotalCount(data.totalCount || 0);
         if (data.counts) {
           setApiCounts(data.counts);
         }

@@ -195,10 +195,10 @@ export default function DuplicatesPage() {
           </div>
 
           {/* Right Panel - Comparison View */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 flex flex-col min-h-0">
             {selectedDuplicate ? (
-              <Card className="h-full">
-                <CardHeader className="border-b">
+              <Card className="h-full flex flex-col">
+                <CardHeader className="border-b flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">Order Comparison</CardTitle>
                     <div className="flex gap-2">
@@ -214,7 +214,7 @@ export default function DuplicatesPage() {
                         ) : (
                           <Check className="h-4 w-4 mr-2" />
                         )}
-                        Mark as Ready
+                        Mark as Ready to Process
                       </Button>
                       <Button
                         size="sm"
@@ -232,7 +232,7 @@ export default function DuplicatesPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-6">
+                <CardContent className="pt-6 flex-1 overflow-auto">
                   {/* Column Headers */}
                   <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-gray-200 mb-2">
                     <div className="text-sm font-semibold text-gray-700">Field</div>
