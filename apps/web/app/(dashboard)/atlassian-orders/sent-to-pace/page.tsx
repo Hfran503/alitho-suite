@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, ChevronDown, ChevronRight, ChevronLeft, Download, FileSpreadsheet, FileDown, RefreshCw } from 'lucide-react';
+import { Loader2, Search, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileDown, RefreshCw } from 'lucide-react';
 import { OrderDetailPanel, AtlassianOrder, OrderCounts, formatDate } from '@/components/atlassian-orders';
 
 interface CategoryCounts {
@@ -36,9 +36,7 @@ export default function SentToPacePage() {
   const [regeneratingPdfs, setRegeneratingPdfs] = useState<string | null>(null);
   const [regenerateSuccess, setRegenerateSuccess] = useState<string | null>(null);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(500);
+  // We load all orders since they're grouped and collapsed
   const [totalCount, setTotalCount] = useState(0);
 
   // Search
@@ -68,7 +66,6 @@ export default function SentToPacePage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setCurrentPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -78,9 +75,9 @@ export default function SentToPacePage() {
     setError(null);
 
     try {
-      const offset = (currentPage - 1) * pageSize;
+      // Load all orders since they're grouped and collapsed - no pagination needed
       const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}&searchField=all` : '';
-      const response = await fetch(`/api/atlassian/orders?status=sent_to_pace&limit=${pageSize}&offset=${offset}${searchParam}`);
+      const response = await fetch(`/api/atlassian/orders?status=sent_to_pace&limit=10000&offset=0${searchParam}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
@@ -102,7 +99,7 @@ export default function SentToPacePage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, debouncedSearch]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     fetchOrders();
@@ -315,7 +312,6 @@ export default function SentToPacePage() {
     }
   };
 
-  const totalPages = Math.ceil(totalCount / pageSize);
 
   // Helper to format category breakdown
   const formatCategoryBreakdown = (counts: CategoryCounts): string => {
@@ -491,45 +487,6 @@ export default function SentToPacePage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pagination - Always show to display total count */}
-      <Card>
-        <CardContent className="py-3">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              {totalCount === 0
-                ? 'No orders found'
-                : totalPages > 1
-                  ? `Showing ${((currentPage - 1) * pageSize) + 1} - ${Math.min(currentPage * pageSize, totalCount)} of ${totalCount} orders`
-                  : `Total: ${totalCount} orders`
-              }
-            </div>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
