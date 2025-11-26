@@ -24,7 +24,6 @@ export default function ReadyToProcessPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(500);
-  const [totalCount, setTotalCount] = useState(0);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,7 +76,6 @@ export default function ReadyToProcessPage() {
 
       if (data.success) {
         setOrders(data.data);
-        setTotalCount(data.totalCount || 0);
         if (data.counts) {
           setApiCounts(data.counts);
         }
