@@ -7,6 +7,31 @@ import fs from 'fs';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Try to find the PDF in multiple possible locations
+ * This handles different deployment scenarios (local dev, Docker, standalone)
+ */
+function findPdfPath(filename: string): string | null {
+  const possiblePaths = [
+    // Standard Next.js path
+    path.join(process.cwd(), 'public', 'atlassian-pdfs', filename),
+    // Docker monorepo path
+    path.join(process.cwd(), 'apps', 'web', 'public', 'atlassian-pdfs', filename),
+    // Docker with /app prefix
+    path.join('/app', 'apps', 'web', 'public', 'atlassian-pdfs', filename),
+    // Standalone build path
+    path.join('/app', 'public', 'atlassian-pdfs', filename),
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  return null;
+}
+
 type AtlassianOrder = {
   id: string;
   orderNumber: string | null;
@@ -126,7 +151,6 @@ export async function POST(req: NextRequest) {
     archive.append(excelBuffer, { name: `orders_${new Date().toISOString().slice(0, 10)}.xlsx` });
 
     // Add PDF files to archive
-    const pdfDirectory = path.join(process.cwd(), 'public', 'atlassian-pdfs');
     let pdfCount = 0;
     const pdfErrors: string[] = [];
 
@@ -139,24 +163,26 @@ export async function POST(req: NextRequest) {
           // We need to decode the URL-encoded filename
           const encodedFilename = path.basename(order.pdfPath);
           const filename = decodeURIComponent(encodedFilename);
-          const fullPath = path.join(pdfDirectory, filename);
+
+          // Find the PDF in possible locations
+          const fullPath = findPdfPath(filename);
 
           console.log(`Checking PDF for order ${order.orderNumber}:`, {
             pdfPath: order.pdfPath,
             filename,
             fullPath,
-            exists: fs.existsSync(fullPath)
+            exists: fullPath !== null
           });
 
-          // Check if file exists
-          if (fs.existsSync(fullPath)) {
+          // Check if file was found
+          if (fullPath) {
             const fileBuffer = fs.readFileSync(fullPath);
             const fileName = `${order.orderNumber || order.id}_${filename}`;
             archive.append(fileBuffer, { name: `pdfs/${fileName}` });
             pdfCount++;
             console.log(`Added PDF: ${fileName}`);
           } else {
-            pdfErrors.push(`PDF not found for order ${order.orderNumber}: ${fullPath}`);
+            pdfErrors.push(`PDF not found for order ${order.orderNumber}: ${filename}`);
           }
         } catch (error) {
           const errorMsg = `Error adding PDF for order ${order.orderNumber}: ${error}`;

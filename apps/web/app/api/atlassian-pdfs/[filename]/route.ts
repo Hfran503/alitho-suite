@@ -6,6 +6,34 @@ import { constants } from 'fs'
 export const dynamic = 'force-dynamic'
 
 /**
+ * Try to find the PDF in multiple possible locations
+ * This handles different deployment scenarios (local dev, Docker, standalone)
+ */
+async function findPdfPath(filename: string): Promise<string | null> {
+  const possiblePaths = [
+    // Standard Next.js path
+    join(process.cwd(), 'public', 'atlassian-pdfs', filename),
+    // Docker monorepo path
+    join(process.cwd(), 'apps', 'web', 'public', 'atlassian-pdfs', filename),
+    // Docker with /app prefix
+    join('/app', 'apps', 'web', 'public', 'atlassian-pdfs', filename),
+    // Standalone build path
+    join('/app', 'public', 'atlassian-pdfs', filename),
+  ];
+
+  for (const path of possiblePaths) {
+    try {
+      await access(path, constants.R_OK);
+      return path;
+    } catch {
+      // Try next path
+    }
+  }
+
+  return null;
+}
+
+/**
  * Serve Atlassian PDFs dynamically
  * This ensures PDFs are accessible even in Docker/standalone builds
  */
@@ -25,15 +53,15 @@ export async function GET(
       )
     }
 
-    // Construct path to PDF
-    const pdfPath = join(process.cwd(), 'public', 'atlassian-pdfs', filename)
+    const decodedFilename = decodeURIComponent(filename);
 
-    // Check if file exists
-    try {
-      await access(pdfPath, constants.R_OK)
-    } catch {
+    // Find the PDF in possible locations
+    const pdfPath = await findPdfPath(decodedFilename);
+
+    if (!pdfPath) {
+      console.error(`PDF not found: ${decodedFilename}. Checked multiple paths.`);
       return NextResponse.json(
-        { error: 'PDF not found' },
+        { error: 'PDF not found', filename: decodedFilename },
         { status: 404 }
       )
     }
@@ -47,7 +75,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${decodedFilename}"`,
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })

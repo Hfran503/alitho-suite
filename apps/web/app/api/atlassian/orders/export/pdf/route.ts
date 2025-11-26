@@ -1,6 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@repo/database';
 import { PDFDocument } from 'pdf-lib';
+import { readFile, access } from 'fs/promises';
+import { join } from 'path';
+import { constants } from 'fs';
+
+/**
+ * Try to find the PDF in multiple possible locations
+ * This handles different deployment scenarios (local dev, Docker, standalone)
+ */
+async function findPdfPath(filename: string): Promise<string | null> {
+  const possiblePaths = [
+    // Standard Next.js path
+    join(process.cwd(), 'public', 'atlassian-pdfs', filename),
+    // Docker monorepo path
+    join(process.cwd(), 'apps', 'web', 'public', 'atlassian-pdfs', filename),
+    // Docker with /app prefix
+    join('/app', 'apps', 'web', 'public', 'atlassian-pdfs', filename),
+    // Standalone build path
+    join('/app', 'public', 'atlassian-pdfs', filename),
+  ];
+
+  for (const path of possiblePaths) {
+    try {
+      await access(path, constants.R_OK);
+      return path;
+    } catch {
+      // Try next path
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract filename from pdfPath and read from filesystem
+ * pdfPath format: /api/atlassian-pdfs/filename.pdf
+ */
+async function readPdfFromFilesystem(pdfPath: string): Promise<Buffer | null> {
+  try {
+    // Extract filename from path (e.g., /api/atlassian-pdfs/filename.pdf -> filename.pdf)
+    const filename = pdfPath.split('/').pop();
+    if (!filename) return null;
+
+    const decodedFilename = decodeURIComponent(filename);
+
+    // Find the file in possible locations
+    const localPath = await findPdfPath(decodedFilename);
+    if (!localPath) return null;
+
+    // Read and return the file
+    return await readFile(localPath);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /api/atlassian/orders/export/pdf?paceJobNumber=XXX
@@ -55,21 +109,19 @@ export async function GET(request: NextRequest) {
     // Create a new PDF document
     const mergedPdf = await PDFDocument.create();
 
-    // Fetch and merge each PDF
+    // Read and merge each PDF from filesystem
     for (const order of ordersWithPdf) {
       try {
-        // Fetch the PDF from the URL
-        const pdfResponse = await fetch(order.pdfPath!);
+        // Read the PDF from filesystem
+        const pdfBuffer = await readPdfFromFilesystem(order.pdfPath!);
 
-        if (!pdfResponse.ok) {
-          console.error(`Failed to fetch PDF for order ${order.orderNumber}: ${pdfResponse.status}`);
+        if (!pdfBuffer) {
+          console.error(`Failed to read PDF for order ${order.orderNumber}: file not found`);
           continue;
         }
 
-        const pdfBytes = await pdfResponse.arrayBuffer();
-
         // Load the PDF document
-        const pdfDoc = await PDFDocument.load(pdfBytes);
+        const pdfDoc = await PDFDocument.load(pdfBuffer);
 
         // Copy all pages from this PDF to the merged document
         const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
