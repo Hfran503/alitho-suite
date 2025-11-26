@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, ChevronDown, ChevronRight, ChevronLeft, Download, FileSpreadsheet, FileDown } from 'lucide-react';
+import { Loader2, Search, ChevronDown, ChevronRight, ChevronLeft, Download, FileSpreadsheet, FileDown, RefreshCw } from 'lucide-react';
 import { OrderDetailPanel, AtlassianOrder, OrderCounts, formatDate } from '@/components/atlassian-orders';
 
 interface CategoryCounts {
@@ -33,6 +33,8 @@ export default function SentToPacePage() {
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [exportingXlsx, setExportingXlsx] = useState<string | null>(null);
+  const [regeneratingPdfs, setRegeneratingPdfs] = useState<string | null>(null);
+  const [regenerateSuccess, setRegenerateSuccess] = useState<string | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -271,6 +273,48 @@ export default function SentToPacePage() {
     }
   };
 
+  const handleRegeneratePdfs = async (paceJobNumber: string, orderIds: string[], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRegeneratingPdfs(paceJobNumber);
+    setError(null);
+    setRegenerateSuccess(null);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const orderId of orderIds) {
+        try {
+          const response = await fetch(`/api/atlassian/orders/${orderId}/regenerate-pdf`, {
+            method: 'POST',
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch {
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        setRegenerateSuccess(`Regenerated ${successCount} PDF(s) for Job #${paceJobNumber}${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+        fetchOrders(); // Refresh to get updated PDF paths
+        setTimeout(() => setRegenerateSuccess(null), 5000);
+      }
+
+      if (errorCount > 0 && successCount === 0) {
+        setError(`Failed to regenerate PDFs for Job #${paceJobNumber}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate PDFs');
+    } finally {
+      setRegeneratingPdfs(null);
+    }
+  };
+
   const totalPages = Math.ceil(totalCount / pageSize);
 
   // Helper to format category breakdown
@@ -334,6 +378,20 @@ export default function SentToPacePage() {
                   )}
                 </button>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => handleRegeneratePdfs(group.paceJobNumber, group.orders.map(o => o.id), e)}
+                    disabled={regeneratingPdfs === group.paceJobNumber}
+                    title="Regenerate all PDFs for this job"
+                  >
+                    {regeneratingPdfs === group.paceJobNumber ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    <span className="ml-1 hidden sm:inline">Regen</span>
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -475,6 +533,13 @@ export default function SentToPacePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Success Message */}
+      {regenerateSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
+          {regenerateSuccess}
+        </div>
+      )}
 
       {/* Error */}
       {error && (

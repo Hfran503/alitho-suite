@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
         orderNumber: true,
         fullName: true,
         pdfPath: true,
+        countryCategory: true,
       },
       orderBy: {
         orderNumber: 'asc',
@@ -123,8 +124,13 @@ export async function GET(request: NextRequest) {
         // Load the PDF document
         const pdfDoc = await PDFDocument.load(pdfBuffer);
 
-        // Copy all pages from this PDF to the merged document
-        const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+        // For Australia orders, only include page 1
+        // For all other countries, include all pages
+        const isAustralia = order.countryCategory === 'Australia';
+        const pageIndices = isAustralia ? [0] : pdfDoc.getPageIndices();
+
+        // Copy pages from this PDF to the merged document
+        const copiedPages = await mergedPdf.copyPages(pdfDoc, pageIndices);
 
         copiedPages.forEach((page) => {
           mergedPdf.addPage(page);
