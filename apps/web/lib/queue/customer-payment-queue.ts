@@ -43,12 +43,28 @@ export async function getCustomerPaymentQueue() {
  * Queue a customer payment to be processed and sent to PACE
  * @param customerPaymentIntegrationId - The ID of the CustomerPaymentIntegration record
  * @param delayMs - Optional delay before processing (default: 0ms for immediate processing)
+ * @param forceRetry - If true, removes any existing job with same ID before adding (for manual retries)
  */
 export async function queueCustomerPayment(
   customerPaymentIntegrationId: string,
-  delayMs: number = 0
+  delayMs: number = 0,
+  forceRetry: boolean = false
 ) {
   const queue = await getCustomerPaymentQueue()
+  const jobId = `customer-payment-${customerPaymentIntegrationId}`
+
+  // If force retry, remove any existing job with same ID first
+  if (forceRetry) {
+    try {
+      const existingJob = await queue.getJob(jobId)
+      if (existingJob) {
+        console.log(`🗑️ Removing existing job ${jobId} for retry...`)
+        await existingJob.remove()
+      }
+    } catch (err) {
+      console.log(`⚠️ Could not remove existing job: ${err}`)
+    }
+  }
 
   const job = await queue.add(
     `customer-payment-${customerPaymentIntegrationId}`,
@@ -58,7 +74,7 @@ export async function queueCustomerPayment(
     },
     {
       delay: delayMs,
-      jobId: `customer-payment-${customerPaymentIntegrationId}`, // Use unique job ID to prevent duplicates
+      jobId, // Use unique job ID to prevent duplicates
     }
   )
 

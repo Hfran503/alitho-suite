@@ -71,8 +71,8 @@ export async function POST(
       },
     })
 
-    // Queue for processing (no delay for manual send)
-    await queueCustomerPayment(id, 0)
+    // Queue for processing (no delay for manual send, force retry to remove any stuck job)
+    await queueCustomerPayment(id, 0, true)
 
     console.log(`✅ Manually queued customer payment ${id} for PACE`)
 
