@@ -386,14 +386,16 @@ async function createPacePayment(
       payment: paymentData.payment,
     }
 
-    // Add date if provided
-    // IMPORTANT: PACE does timezone conversion, so we send with T12:00:00 (noon)
-    // to prevent the date from shifting to the previous day
+    // WORKAROUND: PACE has a bug that subtracts one day from dates
+    // To compensate, we add one day to the date before sending
     if (paymentData.paymentDate) {
       const isoDate = convertToISODate(paymentData.paymentDate)
-      // Add noon time to prevent timezone shift from changing the day
-      payload.paymentDate = `${isoDate}T12:00:00`
-      console.log(`[PACE] 📅 Final paymentDate with time: ${payload.paymentDate}`)
+      // Parse the date and add one day to compensate for PACE's date shift
+      const [year, month, day] = isoDate.split('-').map(Number)
+      const dateObj = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0))
+      const adjustedDate = dateObj.toISOString()
+      payload.paymentDate = adjustedDate
+      console.log(`[PACE] 📅 Original date: ${isoDate}, Adjusted (+1 day): ${adjustedDate}`)
     }
 
     // Add autoApply (convert to boolean)
