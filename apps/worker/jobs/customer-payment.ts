@@ -264,34 +264,45 @@ function groupByPayment(rows: CustomerPaymentRow[]): Map<string, CustomerPayment
 /**
  * Convert date string to ISO format (YYYY-MM-DD)
  * Handles formats like MM/DD/YYYY or YYYY-MM-DD
+ * IMPORTANT: Uses string parsing to avoid timezone issues
  */
 function convertToISODate(dateStr: string): string {
   if (!dateStr) return ''
 
+  // Clean up the string - remove any whitespace and quotes
+  const cleanStr = dateStr.trim().replace(/^["']|["']$/g, '')
+
+  console.log(`[PACE] 📅 Converting date: "${dateStr}" → cleaned: "${cleanStr}"`)
+
   // If already in ISO format (YYYY-MM-DD), return as-is
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+    console.log(`[PACE] 📅 Already ISO format: ${cleanStr}`)
+    return cleanStr
   }
 
-  // Try to parse MM/DD/YYYY format
-  const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  // Try to parse MM/DD/YYYY format (US format from NetSuite)
+  const mmddyyyyMatch = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (mmddyyyyMatch) {
     const [, month, day, year] = mmddyyyyMatch
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    console.log(`[PACE] 📅 Parsed MM/DD/YYYY → ${isoDate}`)
+    return isoDate
   }
 
-  // Try to parse as Date and convert
-  const date = new Date(dateStr)
-  if (!isNaN(date.getTime())) {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
+  // Try to parse M/D/YYYY format (without leading zeros)
+  const mdyyyyMatch = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (mdyyyyMatch) {
+    const [, month, day, yearPart] = mdyyyyMatch
+    const year = yearPart.length === 2 ? `20${yearPart}` : yearPart
+    const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    console.log(`[PACE] 📅 Parsed M/D/YYYY → ${isoDate}`)
+    return isoDate
   }
 
-  // Return as-is if we can't parse
-  console.warn(`[PACE] ⚠️  Could not parse date: ${dateStr}`)
-  return dateStr
+  // AVOID using new Date() for parsing as it causes timezone issues
+  // Instead, log a warning and return the cleaned string
+  console.warn(`[PACE] ⚠️  Could not parse date format: "${cleanStr}" - returning as-is`)
+  return cleanStr
 }
 
 /**
