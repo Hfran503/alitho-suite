@@ -386,9 +386,14 @@ async function createPacePayment(
       payment: paymentData.payment,
     }
 
-    // Add date if provided (PACE expects ISO date format: YYYY-MM-DD)
+    // Add date if provided
+    // IMPORTANT: PACE does timezone conversion, so we send with T12:00:00 (noon)
+    // to prevent the date from shifting to the previous day
     if (paymentData.paymentDate) {
-      payload.paymentDate = convertToISODate(paymentData.paymentDate)
+      const isoDate = convertToISODate(paymentData.paymentDate)
+      // Add noon time to prevent timezone shift from changing the day
+      payload.paymentDate = `${isoDate}T12:00:00`
+      console.log(`[PACE] 📅 Final paymentDate with time: ${payload.paymentDate}`)
     }
 
     // Add autoApply (convert to boolean)
