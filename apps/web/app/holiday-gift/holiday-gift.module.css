@@ -1,21 +1,33 @@
+/* Prevent scrollbar-induced layout shift */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
 .heroSection {
   position: relative;
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   padding: 2rem 0;
 }
 
 .snowflake {
-  position: absolute;
+  position: fixed;
   top: -10px;
   color: white;
   font-size: 1em;
   user-select: none;
+  pointer-events: none;
   z-index: 1;
   animation: fall linear infinite;
   opacity: 0.8;

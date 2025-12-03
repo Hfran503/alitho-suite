@@ -5,6 +5,9 @@ import styles from './holiday-gift.module.css'
 
 function Snowflakes() {
   useEffect(() => {
+    const hero = document.querySelector(`.${styles.heroSection}`)
+    if (!hero) return
+
     const createSnowflake = () => {
       const snowflake = document.createElement('div')
       snowflake.className = styles.snowflake
@@ -14,14 +17,11 @@ function Snowflakes() {
       snowflake.style.fontSize = Math.random() * 1 + 0.5 + 'em'
       snowflake.style.opacity = (Math.random() * 0.6 + 0.4).toString()
 
-      const hero = document.querySelector(`.${styles.heroSection}`)
-      if (hero) {
-        hero.appendChild(snowflake)
+      hero.appendChild(snowflake)
 
-        setTimeout(() => {
-          snowflake.remove()
-        }, 5000)
-      }
+      snowflake.addEventListener('animationend', () => {
+        snowflake.remove()
+      })
     }
 
     const interval = setInterval(createSnowflake, 200)
@@ -351,7 +351,7 @@ export default function HolidayGiftPage() {
           </div>
         ) : (
           <div className={styles.giftMessage}>
-            <p className={styles.seasonGreeting}>✨ Order Confirmed! ✨</p>
+            <p className={styles.seasonGreeting} style={{ fontSize: '2.5rem' }}>Order Confirmed!</p>
 
             <div className={styles.giftBox}>
               <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
