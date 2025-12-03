@@ -3,6 +3,22 @@
 import { useEffect, useState } from 'react'
 import styles from './holiday-gift.module.css'
 
+function useGlobalStyles() {
+  useEffect(() => {
+    // Prevent scrollbar-induced layout shift for iframe embedding
+    const originalHtmlStyle = document.documentElement.style.cssText
+    const originalBodyStyle = document.body.style.cssText
+
+    document.documentElement.style.cssText += 'margin:0;padding:0;overflow-x:hidden;scrollbar-gutter:stable;'
+    document.body.style.cssText += 'margin:0;padding:0;overflow-x:hidden;scrollbar-gutter:stable;'
+
+    return () => {
+      document.documentElement.style.cssText = originalHtmlStyle
+      document.body.style.cssText = originalBodyStyle
+    }
+  }, [])
+}
+
 function Snowflakes() {
   useEffect(() => {
     const hero = document.querySelector(`.${styles.heroSection}`)
@@ -65,6 +81,7 @@ const gifts = [
 ]
 
 export default function HolidayGiftPage() {
+  useGlobalStyles()
   const [step, setStep] = useState(1)
   const [selectedGift, setSelectedGift] = useState<typeof gifts[0] | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
