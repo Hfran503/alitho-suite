@@ -368,6 +368,8 @@ export function ProcessShipmentParcelModal({
                 // JobPart requires jobPartJob as integer and jobPart as string (part number)
                 baseContent.jobPartJob = parseInt(parts[1])
                 baseContent.jobPart = parts[2]
+              } else if (type === 'material') {
+                baseContent.jobMaterial = parseInt(parts[1])
               }
             }
 

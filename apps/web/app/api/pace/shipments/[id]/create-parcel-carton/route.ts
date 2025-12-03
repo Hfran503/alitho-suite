@@ -197,6 +197,9 @@ export async function POST(
       if (content.jobProduct) {
         contentData.jobProduct = content.jobProduct
       }
+      if (content.jobMaterial) {
+        contentData.jobMaterial = content.jobMaterial
+      }
       if (content.description) {
         contentData.description = content.description
       }
