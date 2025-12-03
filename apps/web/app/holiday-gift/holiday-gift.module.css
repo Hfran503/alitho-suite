@@ -8,8 +8,7 @@
   align-items: center;
   justify-content: center;
   overflow-x: hidden;
-  overflow-y: scroll;
-  scrollbar-gutter: stable;
+  overflow-y: auto;
   padding: 2rem 0;
 }
 
@@ -21,7 +20,7 @@
   user-select: none;
   pointer-events: none;
   z-index: 1;
-  animation: fall linear infinite;
+  animation: fall linear forwards;
   opacity: 0.8;
 }
 

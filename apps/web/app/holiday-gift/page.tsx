@@ -9,12 +9,23 @@ function useGlobalStyles() {
     const originalHtmlStyle = document.documentElement.style.cssText
     const originalBodyStyle = document.body.style.cssText
 
-    document.documentElement.style.cssText += 'margin:0;padding:0;overflow-x:hidden;scrollbar-gutter:stable;'
-    document.body.style.cssText += 'margin:0;padding:0;overflow-x:hidden;scrollbar-gutter:stable;'
+    // Hide scrollbar while allowing scroll if needed
+    document.documentElement.style.cssText += 'margin:0;padding:0;overflow:hidden;'
+    document.body.style.cssText += 'margin:0;padding:0;overflow:hidden;'
+
+    // Add CSS to hide scrollbar on webkit and Firefox
+    const style = document.createElement('style')
+    style.id = 'hide-scrollbar'
+    style.textContent = `
+      html, body { scrollbar-width: none; -ms-overflow-style: none; }
+      html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
+    `
+    document.head.appendChild(style)
 
     return () => {
       document.documentElement.style.cssText = originalHtmlStyle
       document.body.style.cssText = originalBodyStyle
+      document.getElementById('hide-scrollbar')?.remove()
     }
   }, [])
 }
