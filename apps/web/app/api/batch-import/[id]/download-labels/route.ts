@@ -69,10 +69,25 @@ export async function GET(
 
     const deduplicatedRows = Array.from(uniqueRows.values()).sort((a, b) => a.rowNumber - b.rowNumber)
 
-    console.log(`[Download Labels] Total successful rows: ${batch.rows.length}, Unique rows: ${deduplicatedRows.length}`)
+    // Further deduplicate by labelUrl - multiple boxes in the same shipment often share
+    // the same combined PDF label from ShipStation. We only need to include each unique PDF once.
+    const uniqueLabelUrls = new Map<string, typeof batch.rows[number]>()
+    for (const row of deduplicatedRows) {
+      if (row.labelUrl && !uniqueLabelUrls.has(row.labelUrl)) {
+        uniqueLabelUrls.set(row.labelUrl, row)
+      }
+    }
+
+    const finalRows = Array.from(uniqueLabelUrls.values()).sort((a, b) => a.rowNumber - b.rowNumber)
+
+    if (finalRows.length < deduplicatedRows.length) {
+      console.log(`[Download Labels] 📦 Multi-box shipment detected: ${deduplicatedRows.length} rows share ${finalRows.length} unique label PDFs`)
+    }
+
+    console.log(`[Download Labels] Total successful rows: ${batch.rows.length}, Unique by rowNumber: ${deduplicatedRows.length}, Unique by labelUrl: ${finalRows.length}`)
 
     if (deduplicatedRows.length < batch.rows.length) {
-      console.warn(`[Download Labels] ⚠️ Found ${batch.rows.length - deduplicatedRows.length} duplicate row(s)`)
+      console.warn(`[Download Labels] ⚠️ Found ${batch.rows.length - deduplicatedRows.length} duplicate row(s) from retries`)
     }
 
     // Create a new PDF document to merge all labels
@@ -85,10 +100,10 @@ export async function GET(
     const processedRowNumbers = new Set<number>()
     const processingLog: Array<{rowNum: number, pages: number, tracking?: string}> = []
 
-    console.log(`[Download Labels] 🚀 Starting to merge ${deduplicatedRows.length} labels...`)
+    console.log(`[Download Labels] 🚀 Starting to merge ${finalRows.length} unique label PDFs...`)
 
-    // Fetch and merge each label PDF in row order (using deduplicated rows)
-    for (const row of deduplicatedRows) {
+    // Fetch and merge each unique label PDF (deduplicated by labelUrl to avoid duplicates from multi-box shipments)
+    for (const row of finalRows) {
       if (!row.labelUrl) {
         console.log(`[Download Labels] ⚠️ Row ${row.rowNumber}: Skipping (no labelUrl)`)
         continue
@@ -154,8 +169,8 @@ export async function GET(
     )
 
     // Log any discrepancies
-    if (totalLabels !== deduplicatedRows.length) {
-      console.warn(`[Download Labels] ⚠️ Discrepancy: Expected ${deduplicatedRows.length} labels, actually merged ${totalLabels}`)
+    if (totalLabels !== finalRows.length) {
+      console.warn(`[Download Labels] ⚠️ Discrepancy: Expected ${finalRows.length} unique label PDFs, actually merged ${totalLabels}`)
     }
 
     // If there are multi-page labels, log the first few for inspection
