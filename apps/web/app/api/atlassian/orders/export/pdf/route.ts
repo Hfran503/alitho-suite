@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter orders that have PDF paths
-    const ordersWithPdf = orders.filter((o): o is typeof o & { pdfPath: string } => !!o.pdfPath);
+    const ordersWithPdf = orders.filter((o) => !!o.pdfPath);
 
     if (ordersWithPdf.length === 0) {
       return NextResponse.json(
