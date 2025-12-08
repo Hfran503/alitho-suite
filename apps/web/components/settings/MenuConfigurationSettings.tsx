@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { clearMenuCache } from '../DynamicSidebar'
+import { STAFF_ROLES, ROLE_LABELS, ROLE_COLORS } from '@/lib/roles'
 
 interface MenuConfig {
   id: string
@@ -26,29 +27,8 @@ interface TenantUser {
   memberships: Array<{ role: string }>
 }
 
-const AVAILABLE_ROLES = ['full_admin', 'admin', 'manager', 'customer_service', 'estimators', 'logistics', 'accounting', 'warehouse']
-
-const ROLE_LABELS: Record<string, string> = {
-  full_admin: 'Full Admin',
-  admin: 'Admin',
-  manager: 'Manager',
-  customer_service: 'Customer Service',
-  estimators: 'Estimators',
-  logistics: 'Logistics',
-  accounting: 'Accounting',
-  warehouse: 'Warehouse'
-}
-
-const ROLE_COLORS: Record<string, string> = {
-  full_admin: 'bg-purple-100 text-purple-800',
-  admin: 'bg-blue-100 text-blue-800',
-  manager: 'bg-cyan-100 text-cyan-800',
-  customer_service: 'bg-green-100 text-green-800',
-  estimators: 'bg-yellow-100 text-yellow-800',
-  logistics: 'bg-orange-100 text-orange-800',
-  accounting: 'bg-pink-100 text-pink-800',
-  warehouse: 'bg-amber-100 text-amber-800'
-}
+// Use centralized role definitions
+const AVAILABLE_ROLES = [...STAFF_ROLES]
 
 const VISIBILITY_MODES = [
   { value: 'role', label: 'By Role', description: 'Visible based on user role' },

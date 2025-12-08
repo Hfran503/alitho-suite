@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-
-const STAFF_ROLES = ['full_admin', 'admin', 'manager', 'customer_service', 'accounting', 'estimators', 'logistics', 'warehouse', 'marketing']
-const CUSTOMER_ROLES = ['customer']
+import { STAFF_ROLES, CUSTOMER_ROLES } from '@/lib/roles'
 
 export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
