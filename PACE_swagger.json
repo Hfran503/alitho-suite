@@ -139753,7 +139753,7 @@
           "type" : "boolean"
         }
       }
-    },
+    }, 
     "JobProject" : {
       "type" : "object",
       "properties" : {
