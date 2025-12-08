@@ -35,7 +35,7 @@ export default function AdminHolidayGiftsPage() {
   const fetchOrders = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch('/api/admin/holiday-gifts')
+      const response = await fetch('/api/holiday-gifts')
       const data = await response.json()
 
       if (!response.ok) {
