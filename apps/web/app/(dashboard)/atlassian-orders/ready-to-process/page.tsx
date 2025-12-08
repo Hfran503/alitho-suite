@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, RefreshCw, Search, Send, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Send, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { OrdersTable, OrderDetailPanel, AtlassianOrder, OrderCounts } from '@/components/atlassian-orders';
 
 export default function ReadyToProcessPage() {
@@ -20,6 +20,9 @@ export default function ReadyToProcessPage() {
   const [batchPaceSuccess, setBatchPaceSuccess] = useState<string | null>(null);
   const [batchPaceError, setBatchPaceError] = useState<string | null>(null);
   const [triggeringCheck, setTriggeringCheck] = useState(false);
+  const [regeneratingPdfs, setRegeneratingPdfs] = useState(false);
+  const [batchPdfSuccess, setBatchPdfSuccess] = useState<string | null>(null);
+  const [batchPdfError, setBatchPdfError] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -206,6 +209,66 @@ export default function ReadyToProcessPage() {
     }
   };
 
+  const handleRegenerateSelectedPdfs = async () => {
+    if (selectedOrderIds.size === 0) return;
+
+    setRegeneratingPdfs(true);
+    setBatchPdfSuccess(null);
+    setBatchPdfError(null);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      const ordersToRegenerate = orders.filter((o) => selectedOrderIds.has(o.id));
+
+      if (ordersToRegenerate.length === 0) {
+        setBatchPdfError('No orders selected for PDF regeneration.');
+        return;
+      }
+
+      for (const order of ordersToRegenerate) {
+        try {
+          const response = await fetch(`/api/atlassian/orders/${order.id}/regenerate-pdf`, {
+            method: 'POST',
+          });
+          const data = await response.json();
+
+          if (data.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            errors.push(`${order.orderNumber}: ${data.error}`);
+          }
+        } catch {
+          errorCount++;
+          errors.push(`${order.orderNumber}: Network error`);
+        }
+      }
+
+      if (successCount > 0) {
+        setBatchPdfSuccess(
+          `Successfully regenerated ${successCount} PDF(s)!${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+        );
+        setTimeout(() => {
+          fetchOrders();
+          setBatchPdfSuccess(null);
+          setSelectedOrderIds(new Set());
+          setIsSelectMode(false);
+        }, 3000);
+      }
+
+      if (errorCount > 0 && successCount === 0) {
+        setBatchPdfError(`Failed to regenerate PDFs: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
+      }
+    } catch (err) {
+      setBatchPdfError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setRegeneratingPdfs(false);
+    }
+  };
+
   // Filter orders for Ready to Process view
   const readyOrders = orders.filter(
     (o) =>
@@ -262,19 +325,34 @@ export default function ReadyToProcessPage() {
             {isSelectMode ? 'Cancel Selection' : 'Select Orders'}
           </Button>
           {isSelectMode && selectedOrderIds.size > 0 && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleSendSelectedToPace}
-              disabled={sendingSelectedToPace}
-            >
-              {sendingSelectedToPace ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Send className="h-4 w-4 mr-2" />
-              )}
-              Send {selectedOrderIds.size} to PACE
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRegenerateSelectedPdfs}
+                disabled={regeneratingPdfs}
+              >
+                {regeneratingPdfs ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-2" />
+                )}
+                Regenerate {selectedOrderIds.size} PDF{selectedOrderIds.size > 1 ? 's' : ''}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSendSelectedToPace}
+                disabled={sendingSelectedToPace}
+              >
+                {sendingSelectedToPace ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                Send {selectedOrderIds.size} to PACE
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -288,6 +366,16 @@ export default function ReadyToProcessPage() {
       {batchPaceError && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
           {batchPaceError}
+        </div>
+      )}
+      {batchPdfSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
+          {batchPdfSuccess}
+        </div>
+      )}
+      {batchPdfError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
+          {batchPdfError}
         </div>
       )}
 
