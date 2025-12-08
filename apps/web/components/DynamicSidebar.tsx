@@ -14,6 +14,7 @@ interface MenuItem {
   order: number
   visibleToRoles: string[]
   isActive: boolean
+  visibilityMode?: 'role' | 'all' | 'specific_users'
   submenu?: MenuItem[]
 }
 
@@ -31,7 +32,7 @@ function getDefaultMenu(): MenuItem[] {
       icon: 'home',
       parentKey: null,
       order: 0,
-      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator', 'logistics', 'accounting'],
+      visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimator', 'logistics', 'accounting', 'warehouse', 'marketing'],
       isActive: true
     },
     {
@@ -442,10 +443,18 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
     }
   }
 
-  // Filter menu items based on user role
-  const visibleMenuItems = menuItems.filter(item =>
-    item.visibleToRoles.includes(userRole)
-  )
+  // Filter menu items based on visibility mode
+  // Note: The API already filters based on visibility mode, so items returned from API
+  // should already be visible to the user. We only apply role filter for 'role' mode
+  // or when visibilityMode is not set (backward compatibility with default menu)
+  const visibleMenuItems = menuItems.filter(item => {
+    // If visibility mode is 'all' or 'specific_users', the API already approved this item
+    if (item.visibilityMode === 'all' || item.visibilityMode === 'specific_users') {
+      return true
+    }
+    // For role-based visibility (default), filter by role
+    return item.visibleToRoles.includes(userRole)
+  })
 
   const getIcon = (iconKey: string | null) => {
     if (!iconKey) return null
@@ -495,7 +504,12 @@ export function DynamicSidebar({ onPinChange }: DynamicSidebarProps = {}) {
             const hasSubmenu = item.submenu && item.submenu.length > 0
             const isSubmenuExpanded = expandedMenus.includes(item.menuKey)
             const visibleSubmenu = hasSubmenu
-              ? item.submenu!.filter(sub => sub.visibleToRoles.includes(userRole))
+              ? item.submenu!.filter(sub => {
+                  if (sub.visibilityMode === 'all' || sub.visibilityMode === 'specific_users') {
+                    return true
+                  }
+                  return sub.visibleToRoles.includes(userRole)
+                })
               : []
 
             return (
