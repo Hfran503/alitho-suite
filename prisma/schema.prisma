@@ -44,6 +44,12 @@ model Tenant {
   shippingLabels         ShippingLabel[]
   switchPdfUploads       SwitchPdfUpload[]
   warehouses             Warehouse[]
+  warehouseLocations     WarehouseLocation[]
+  inventoryItems         InventoryItem[]
+  inventoryStock         InventoryStock[]
+  inventoryTransactions  InventoryTransaction[]
+  asns                   ASN[]
+  receivingRecords       ReceivingRecord[]
   gcuEnvelopeOrders      GcuEnvelopeOrder[]
 
   @@index([slug])
@@ -67,6 +73,8 @@ model User {
   JobSchedule           JobSchedule[]
   memberships           Membership[]
   sessions              Session[]
+  inventoryTransactions InventoryTransaction[]
+  receivingRecords      ReceivingRecord[]
 
   @@index([email])
   @@index([paceCustomerId])
@@ -497,10 +505,16 @@ model Warehouse {
   countryCode             String   @default("US")
   phone                   String?
   isDefault               Boolean  @default(false)
+  warehouseType           WarehouseType @default(SHIPPING_ORIGIN)
   tenantId                String
   tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+
+  // Warehouse Management relations
+  locations               WarehouseLocation[]
+  asns                    ASN[]
+  receivingRecords        ReceivingRecord[]
 
   @@index([tenantId])
   @@index([shipEngineWarehouseId])
@@ -1001,4 +1015,389 @@ enum BatchRowStatus {
   SUCCESS
   FAILED
   CANCELLED
+}
+
+// ============================================
+// WAREHOUSE MANAGEMENT SYSTEM ENUMS
+// ============================================
+
+enum LocationType {
+  RECEIVING   // Dock/receiving area
+  STORAGE     // Primary storage locations
+  SHIPPING    // Shipping/staging area
+  STAGING     // Temporary staging area
+  QUARANTINE  // Quality hold / damaged goods
+}
+
+enum WarehouseType {
+  SHIPPING_ORIGIN    // Ship-from address for labels (main app)
+  STORAGE_FACILITY   // Inventory storage (WMS)
+  BOTH               // Can be used for both shipping and storage
+}
+
+enum InventoryTransactionType {
+  RECEIVE     // Inbound from receiving
+  SHIP        // Outbound shipment
+  ADJUST      // Manual adjustment (cycle count, correction)
+  TRANSFER    // Transfer between locations
+  RESERVE     // Reserved for order
+  UNRESERVE   // Released from reservation
+  DAMAGE      // Marked as damaged
+}
+
+enum ASNStatus {
+  DRAFT              // Not yet submitted
+  PENDING            // Submitted, awaiting arrival
+  IN_TRANSIT         // Carrier has picked up
+  ARRIVED            // At receiving dock
+  RECEIVING          // Currently being received
+  RECEIVED           // Fully received
+  PARTIALLY_RECEIVED // Some items received, discrepancies
+  CANCELLED          // Cancelled
+}
+
+enum ReceivingStatus {
+  IN_PROGRESS                // Receiving in progress
+  COMPLETED                  // All items received as expected
+  COMPLETED_WITH_DISCREPANCY // Completed but with variance
+}
+
+enum FulfillmentTaskType {
+  PICK      // Pick items from locations
+  PACK      // Pack items for shipment
+  SHIP      // Generate label and ship
+  PUT_AWAY  // Put received items into storage
+  COUNT     // Cycle count / inventory count
+  TRANSFER  // Move inventory between locations
+}
+
+enum FulfillmentTaskStatus {
+  PENDING     // Not yet started
+  ASSIGNED    // Assigned to a user
+  IN_PROGRESS // Currently being worked on
+  COMPLETED   // Finished
+  CANCELLED   // Cancelled
+}
+
+// ============================================
+// WAREHOUSE MANAGEMENT SYSTEM MODELS
+// ============================================
+
+model WarehouseLocation {
+  id            String       @id @default(cuid())
+  tenantId      String
+  warehouseId   String
+
+  // Location identifiers
+  zone          String?      // e.g., "A", "B", "RECV"
+  aisle         String?      // e.g., "01", "02"
+  rack          String?      // e.g., "01", "02"
+  shelf         String?      // e.g., "A", "B", "C"
+  bin           String?      // e.g., "01", "02"
+
+  // Full location code (generated or manual)
+  barcode       String       // Scannable code, e.g., "A-01-02-B-03"
+  name          String?      // Human-friendly name, e.g., "Receiving Dock 1"
+
+  // Classification
+  locationType  LocationType @default(STORAGE)
+
+  // Capacity (optional)
+  maxCapacity   Int?         // Max units this location can hold
+
+  // Status
+  isActive      Boolean      @default(true)
+
+  // Timestamps
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  stockLevels     InventoryStock[]
+  transactions    InventoryTransaction[]
+  receivingItems  ReceivingItem[]
+
+  @@unique([tenantId, barcode])
+  @@index([tenantId])
+  @@index([warehouseId])
+  @@index([locationType])
+  @@index([isActive])
+  @@index([zone])
+}
+
+model InventoryItem {
+  id            String       @id @default(cuid())
+  tenantId      String
+
+  // Item identifiers
+  sku           String       // Stock Keeping Unit (unique per tenant)
+  upc           String?      // Universal Product Code (barcode)
+  name          String       // Item name
+  description   String?      @db.Text
+
+  // Classification
+  category      String?      // Product category
+
+  // Physical attributes
+  weight        Decimal?     @db.Decimal(10, 3) // Weight in lbs
+  dimensions    Json?        // { length, width, height, unit }
+
+  // Status
+  isActive      Boolean      @default(true)
+
+  // Additional data
+  metadata      Json?        // Custom fields, vendor info, etc.
+
+  // Timestamps
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stockLevels     InventoryStock[]
+  transactions    InventoryTransaction[]
+  asnItems        ASNItem[]
+  receivingItems  ReceivingItem[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([sku])
+  @@index([upc])
+  @@index([category])
+  @@index([isActive])
+  @@index([name])
+}
+
+model InventoryStock {
+  id              String             @id @default(cuid())
+  tenantId        String
+
+  // Item reference
+  itemId          String             // Reference to InventoryItem
+  locationId      String             // Reference to WarehouseLocation
+
+  // Quantity tracking
+  available       Int                @default(0) // Available for picking
+  reserved        Int                @default(0) // Reserved for orders
+  damaged         Int                @default(0) // Damaged/unsellable
+  onHold          Int                @default(0) // On hold for QC or other reasons
+
+  // Lot tracking (optional)
+  lotNumber       String?            // Lot/batch number
+  expirationDate  DateTime?          // Expiration date for perishables
+
+  // Timestamps
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Relations
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item            InventoryItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location        WarehouseLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, itemId, locationId, lotNumber])
+  @@index([tenantId])
+  @@index([itemId])
+  @@index([locationId])
+  @@index([lotNumber])
+  @@index([expirationDate])
+}
+
+model InventoryTransaction {
+  id              String                     @id @default(cuid())
+  tenantId        String
+
+  // What changed
+  itemId          String                     // Reference to InventoryItem
+  locationId      String                     // Reference to WarehouseLocation
+  type            InventoryTransactionType   // Type of transaction
+
+  // Quantity change
+  quantity        Int                        // Positive or negative
+  previousQty     Int                        // Quantity before change
+  newQty          Int                        // Quantity after change
+
+  // Reference to source document
+  referenceType   String?                    // 'ASN', 'ORDER', 'ADJUSTMENT', 'TRANSFER', etc.
+  referenceId     String?                    // ID of the source document
+
+  // Audit fields
+  userId          String?                    // Who made the change
+  notes           String?                    @db.Text
+
+  // Timestamps
+  createdAt       DateTime                   @default(now())
+
+  // Relations
+  tenant          Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item            InventoryItem              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location        WarehouseLocation          @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  user            User?                      @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([itemId])
+  @@index([locationId])
+  @@index([type])
+  @@index([referenceType, referenceId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ASN (Advanced Shipping Notice) - Inbound shipment notifications
+model ASN {
+  id              String     @id @default(cuid())
+  asnNumber       String     // Human-readable ASN number (e.g., ASN-2024-0001)
+  tenantId        String
+
+  // Vendor/Supplier info
+  vendorId        String?    // Reference to portal user/vendor (optional)
+  vendorName      String     // Vendor/supplier name (for display)
+  vendorEmail     String?    // Vendor contact email
+
+  // Shipment details
+  warehouseId     String     // Destination warehouse
+  expectedDate    DateTime   // Expected arrival date
+  carrier         String?    // Carrier name (FedEx, UPS, etc.)
+  trackingNumber  String?    // Tracking number
+  poNumber        String?    // Purchase order reference
+
+  // Status
+  status          ASNStatus  @default(DRAFT)
+
+  // Metadata
+  notes           String?    @db.Text
+  metadata        Json?      // Additional custom fields
+
+  // Timestamps
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  arrivedAt       DateTime?  // When shipment arrived
+  receivedAt      DateTime?  // When fully received
+
+  // Relations
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  items           ASNItem[]
+  receivingRecord ReceivingRecord? // One-to-one relation with receiving
+
+  @@unique([tenantId, asnNumber])
+  @@index([tenantId])
+  @@index([vendorId])
+  @@index([warehouseId])
+  @@index([status])
+  @@index([expectedDate])
+  @@index([poNumber])
+}
+
+// ASN Line Items - Individual items expected in the shipment
+model ASNItem {
+  id              String     @id @default(cuid())
+  asnId           String
+
+  // Item info (either linked to InventoryItem or manual entry)
+  itemId          String?    // Reference to InventoryItem (optional)
+  sku             String     // SKU (can be manual entry if item doesn't exist)
+  description     String     // Item description
+
+  // Quantities
+  expectedQty     Int        // Quantity expected
+  receivedQty     Int        @default(0) // Quantity received so far
+
+  // Lot tracking (optional)
+  lotNumber       String?
+  expirationDate  DateTime?
+
+  // Metadata
+  metadata        Json?
+
+  // Relations
+  asn             ASN        @relation(fields: [asnId], references: [id], onDelete: Cascade)
+  item            InventoryItem? @relation(fields: [itemId], references: [id])
+
+  @@index([asnId])
+  @@index([itemId])
+  @@index([sku])
+}
+
+// ============================================
+// RECEIVING MODELS
+// ============================================
+
+// Receiving Record - A receiving session for inbound goods
+model ReceivingRecord {
+  id                String           @id @default(cuid())
+  tenantId          String
+
+  // Link to ASN (optional - can receive without ASN)
+  asnId             String?          @unique // One receiving record per ASN
+
+  // Warehouse
+  warehouseId       String           // Where goods are being received
+
+  // Receiver info
+  receivedById      String           // User who performed receiving
+
+  // Status
+  status            ReceivingStatus  @default(IN_PROGRESS)
+
+  // Notes
+  notes             String?          @db.Text
+  discrepancyNotes  String?          @db.Text // Notes about variances
+
+  // Timestamps
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  completedAt       DateTime?        // When receiving was completed
+
+  // Relations
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asn               ASN?             @relation(fields: [asnId], references: [id])
+  warehouse         Warehouse        @relation(fields: [warehouseId], references: [id])
+  receivedBy        User             @relation(fields: [receivedById], references: [id])
+  items             ReceivingItem[]
+
+  @@index([tenantId])
+  @@index([asnId])
+  @@index([warehouseId])
+  @@index([receivedById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Receiving Item - Individual items received in a receiving session
+model ReceivingItem {
+  id                  String              @id @default(cuid())
+  receivingRecordId   String
+
+  // Item info
+  itemId              String?             // Reference to InventoryItem (optional)
+  sku                 String              // SKU
+  description         String              // Item description
+
+  // Quantities
+  expectedQty         Int                 @default(0) // Expected from ASN (0 if no ASN)
+  receivedQty         Int                 @default(0) // Actually received
+  damagedQty          Int                 @default(0) // Received but damaged
+
+  // Put-away location
+  putAwayLocationId   String?             // Where item was put away
+
+  // Lot tracking
+  lotNumber           String?
+  expirationDate      DateTime?
+
+  // Notes
+  notes               String?             @db.Text
+
+  // Relations
+  receivingRecord     ReceivingRecord     @relation(fields: [receivingRecordId], references: [id], onDelete: Cascade)
+  item                InventoryItem?      @relation(fields: [itemId], references: [id])
+  putAwayLocation     WarehouseLocation?  @relation(fields: [putAwayLocationId], references: [id])
+
+  @@index([receivingRecordId])
+  @@index([itemId])
+  @@index([sku])
+  @@index([putAwayLocationId])
 }

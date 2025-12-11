@@ -150,46 +150,24 @@ export default function ReadyToProcessPage() {
     setBatchPaceError(null);
 
     try {
-      let successCount = 0;
-      let errorCount = 0;
-      const errors: string[] = [];
+      // Send all selected order IDs to the batch endpoint
+      // The endpoint will group them by country and create one job per country
+      const response = await fetch('/api/atlassian/orders/send-selected-to-pace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: Array.from(selectedOrderIds) }),
+      });
 
-      const ordersToSend = orders.filter(
-        (o) =>
-          selectedOrderIds.has(o.id) &&
-          o.status !== 'sent_to_pace' &&
-          o.status !== 'potential_duplicate' &&
-          o.status !== 'archived' &&
-          !o.duplicateOfOrderId
-      );
+      const data = await response.json();
 
-      if (ordersToSend.length === 0) {
-        setBatchPaceError('No valid orders selected. Orders must not be duplicates, archived, or already sent to PACE.');
-        return;
-      }
+      if (data.success) {
+        const { totalOrdersProcessed, jobsCreated, ordersByCountry } = data.data;
+        const countryBreakdown = Object.entries(ordersByCountry as Record<string, number>)
+          .map(([country, count]) => `${country}: ${count}`)
+          .join(', ');
 
-      for (const order of ordersToSend) {
-        try {
-          const response = await fetch(`/api/atlassian/orders/${order.id}/send-to-pace`, {
-            method: 'POST',
-          });
-          const data = await response.json();
-
-          if (data.success) {
-            successCount++;
-          } else {
-            errorCount++;
-            errors.push(`${order.orderNumber}: ${data.error}`);
-          }
-        } catch {
-          errorCount++;
-          errors.push(`${order.orderNumber}: Network error`);
-        }
-      }
-
-      if (successCount > 0) {
         setBatchPaceSuccess(
-          `Successfully sent ${successCount} order(s) to PACE!${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+          `Successfully sent ${totalOrdersProcessed} order(s) to PACE in ${jobsCreated} job(s)! (${countryBreakdown})`
         );
         setTimeout(() => {
           fetchOrders();
@@ -197,10 +175,8 @@ export default function ReadyToProcessPage() {
           setSelectedOrderIds(new Set());
           setIsSelectMode(false);
         }, 3000);
-      }
-
-      if (errorCount > 0 && successCount === 0) {
-        setBatchPaceError(`Failed to send orders: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
+      } else {
+        setBatchPaceError(data.error || 'Failed to send orders to PACE');
       }
     } catch (err) {
       setBatchPaceError(err instanceof Error ? err.message : 'An error occurred');

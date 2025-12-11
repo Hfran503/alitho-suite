@@ -518,6 +518,40 @@ export async function createPaceJobComponent(jobComponentData: {
 }
 
 /**
+ * Update an existing Job in PACE
+ * @param jobData - Job data to update (must include job number)
+ */
+export async function updatePaceJob(jobData: {
+  job: string
+  adminStatus?: string
+  description?: string
+  description2?: string
+  [key: string]: any // Allow other fields
+}) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/UpdateObject/updateJob`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(jobData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
  * Check if PACE API is configured
  */
 export async function isPaceConfigured(): Promise<boolean> {

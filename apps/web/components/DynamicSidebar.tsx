@@ -130,12 +130,84 @@ function getDefaultMenu(): MenuItem[] {
       isActive: true
     },
     {
+      menuKey: 'warehouse',
+      label: 'Warehouse',
+      href: '/warehouse',
+      icon: 'warehouse',
+      parentKey: null,
+      order: 5,
+      visibleToRoles: ['full_admin', 'admin', 'logistics', 'warehouse'],
+      isActive: true,
+      submenu: [
+        {
+          menuKey: 'warehouse-overview',
+          label: 'Overview',
+          href: '/warehouse',
+          icon: 'home',
+          parentKey: 'warehouse',
+          order: 0,
+          visibleToRoles: ['full_admin', 'admin', 'logistics', 'warehouse'],
+          isActive: true
+        },
+        {
+          menuKey: 'warehouse-locations',
+          label: 'Locations',
+          href: '/warehouse/locations',
+          icon: 'location-marker',
+          parentKey: 'warehouse',
+          order: 1,
+          visibleToRoles: ['full_admin', 'admin', 'warehouse'],
+          isActive: true
+        },
+        {
+          menuKey: 'warehouse-inventory',
+          label: 'Inventory',
+          href: '/warehouse/inventory',
+          icon: 'cube',
+          parentKey: 'warehouse',
+          order: 2,
+          visibleToRoles: ['full_admin', 'admin', 'logistics', 'warehouse'],
+          isActive: true
+        },
+        {
+          menuKey: 'warehouse-asn',
+          label: 'ASN',
+          href: '/warehouse/asn',
+          icon: 'clipboard-list',
+          parentKey: 'warehouse',
+          order: 3,
+          visibleToRoles: ['full_admin', 'admin', 'logistics', 'warehouse'],
+          isActive: true
+        },
+        {
+          menuKey: 'warehouse-receiving',
+          label: 'Receiving',
+          href: '/warehouse/receiving',
+          icon: 'inbox-in',
+          parentKey: 'warehouse',
+          order: 4,
+          visibleToRoles: ['full_admin', 'admin', 'warehouse'],
+          isActive: true
+        },
+        {
+          menuKey: 'warehouse-fulfillment',
+          label: 'Fulfillment',
+          href: '/warehouse/fulfillment',
+          icon: 'truck',
+          parentKey: 'warehouse',
+          order: 5,
+          visibleToRoles: ['full_admin', 'admin', 'logistics', 'warehouse'],
+          isActive: true
+        }
+      ]
+    },
+    {
       menuKey: 'settings',
       label: 'Settings',
       href: '/settings',
       icon: 'settings',
       parentKey: null,
-      order: 5,
+      order: 6,
       visibleToRoles: ['full_admin', 'admin'],
       isActive: true
     }
@@ -198,6 +270,37 @@ const IconMap: Record<string, React.ReactNode> = {
   'clipboard-check': (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  ),
+  warehouse: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ),
+  'cube': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  ),
+  'inbox-in': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2m-4-1v8m0 0l3-3m-3 3L9 8m-5 5h2.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293h3.172a1 1 0 00.707-.293l2.414-2.414a1 1 0 01.707-.293H20" />
+    </svg>
+  ),
+  'clipboard-list': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
+  'truck': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  ),
+  'location-marker': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   ),
 }

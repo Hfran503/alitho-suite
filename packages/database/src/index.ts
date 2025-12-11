@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { PrismaClient, Prisma, InventoryTransactionType, LocationType, ASNStatus, ReceivingStatus } from '@prisma/client'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -36,4 +36,4 @@ export const db = new Proxy({} as PrismaClient, {
 })
 
 export type { PrismaClient }
-export { Prisma }
+export { Prisma, InventoryTransactionType, LocationType, ASNStatus, ReceivingStatus }

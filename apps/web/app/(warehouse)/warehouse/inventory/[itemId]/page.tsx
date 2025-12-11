@@ -1,0 +1,293 @@
+'use client'
+
+import { useState, useEffect, use } from 'react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+
+interface ItemStockData {
+  item: {
+    id: string
+    sku: string
+    name: string
+  } | null
+  totalAvailable: number
+  totalReserved: number
+  totalDamaged: number
+  totalOnHold: number
+  locations: Array<{
+    location: {
+      id: string
+      barcode: string
+      name: string | null
+      warehouseId: string
+    }
+    available: number
+    reserved: number
+    damaged: number
+    onHold: number
+    lotNumber: string | null
+  }>
+}
+
+interface Transaction {
+  id: string
+  type: string
+  quantity: number
+  previousQty: number
+  newQty: number
+  notes: string | null
+  createdAt: string
+  location: {
+    id: string
+    barcode: string
+    name: string | null
+  }
+  user: {
+    id: string
+    name: string | null
+    email: string
+  } | null
+}
+
+const TRANSACTION_TYPES: Record<string, { label: string; color: string }> = {
+  RECEIVE: { label: 'Receive', color: 'bg-green-100 text-green-800' },
+  SHIP: { label: 'Ship', color: 'bg-blue-100 text-blue-800' },
+  ADJUST: { label: 'Adjust', color: 'bg-yellow-100 text-yellow-800' },
+  TRANSFER: { label: 'Transfer', color: 'bg-purple-100 text-purple-800' },
+  RESERVE: { label: 'Reserve', color: 'bg-orange-100 text-orange-800' },
+  UNRESERVE: { label: 'Unreserve', color: 'bg-gray-100 text-gray-800' },
+  DAMAGE: { label: 'Damage', color: 'bg-red-100 text-red-800' },
+}
+
+export default function ItemInventoryPage({ params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = use(params)
+  const [stockData, setStockData] = useState<ItemStockData | null>(null)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch stock data
+        const stockResponse = await fetch(`/api/warehouse/inventory/item/${itemId}`)
+        if (!stockResponse.ok) {
+          throw new Error('Failed to fetch stock data')
+        }
+        const stockJson = await stockResponse.json()
+        setStockData(stockJson.data)
+
+        // Fetch recent transactions
+        const txnResponse = await fetch(`/api/warehouse/inventory/transactions?itemId=${itemId}&limit=20`)
+        if (txnResponse.ok) {
+          const txnJson = await txnResponse.json()
+          setTransactions(txnJson.data || [])
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [itemId])
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center gap-2">
+          <svg className="animate-spin h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          Loading...
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !stockData?.item) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <h2 className="text-lg font-semibold text-red-800 mb-2">Error</h2>
+        <p className="text-red-600">{error || 'Item not found'}</p>
+        <Link href="/warehouse/inventory" className="text-emerald-600 hover:underline mt-4 inline-block">
+          Back to Inventory
+        </Link>
+      </div>
+    )
+  }
+
+  const totalQty = stockData.totalAvailable + stockData.totalReserved + stockData.totalDamaged + stockData.totalOnHold
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+            <Link href="/warehouse/inventory" className="hover:text-emerald-600">
+              Inventory
+            </Link>
+            <span>/</span>
+            <span>{stockData.item.sku}</span>
+          </div>
+          <h1 className="text-2xl font-bold">{stockData.item.name}</h1>
+          <p className="text-gray-600 font-mono">{stockData.item.sku}</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href={`/warehouse/items/${stockData.item.id}`}>
+            <Button variant="outline">
+              Edit Item
+            </Button>
+          </Link>
+          <Link href={`/warehouse/inventory/adjust?itemId=${stockData.item.id}`}>
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              Adjust Stock
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Stock</p>
+          <p className="text-2xl font-bold">{totalQty}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Available</p>
+          <p className="text-2xl font-bold text-green-600">{stockData.totalAvailable}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Reserved</p>
+          <p className="text-2xl font-bold text-yellow-600">{stockData.totalReserved}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">On Hold</p>
+          <p className="text-2xl font-bold text-orange-600">{stockData.totalOnHold}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Damaged</p>
+          <p className="text-2xl font-bold text-red-600">{stockData.totalDamaged}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Stock by Location */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold">Stock by Location</h2>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Location</TableHead>
+                <TableHead className="text-right">Available</TableHead>
+                <TableHead className="text-right">Reserved</TableHead>
+                <TableHead className="text-right">Damaged</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stockData.locations.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                    No stock at any location
+                  </TableCell>
+                </TableRow>
+              ) : (
+                stockData.locations.map((loc, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <div className="font-mono">{loc.location.barcode}</div>
+                      {loc.lotNumber && (
+                        <div className="text-xs text-gray-500">Lot: {loc.lotNumber}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-green-600 font-medium">
+                      {loc.available}
+                    </TableCell>
+                    <TableCell className="text-right text-yellow-600">
+                      {loc.reserved}
+                    </TableCell>
+                    <TableCell className="text-right text-red-600">
+                      {loc.damaged}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Recent Transactions */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-4 border-b flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Recent Transactions</h2>
+            <Link href={`/warehouse/inventory/transactions?itemId=${stockData.item.id}`}>
+              <Button variant="ghost" size="sm">
+                View All
+              </Button>
+            </Link>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead className="text-right">Change</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transactions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                    No transactions yet
+                  </TableCell>
+                </TableRow>
+              ) : (
+                transactions.map((txn) => (
+                  <TableRow key={txn.id}>
+                    <TableCell className="text-sm text-gray-600">
+                      {formatDateTime(txn.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={TRANSACTION_TYPES[txn.type]?.color || 'bg-gray-100'}>
+                        {TRANSACTION_TYPES[txn.type]?.label || txn.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {txn.location.barcode}
+                    </TableCell>
+                    <TableCell className={`text-right font-medium ${txn.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {txn.quantity >= 0 ? '+' : ''}{txn.quantity}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -323,3 +323,9 @@ export const cartonSchema = z.object({
 
 export type Carton = z.infer<typeof cartonSchema>
 export type CartonContent = z.infer<typeof cartonContentSchema>
+
+// ============================================
+// WAREHOUSE MANAGEMENT SYSTEM TYPES
+// ============================================
+
+export * from './warehouse'
