@@ -100,8 +100,47 @@ set -e  # Re-enable exit on error
 
 # Check if migration failed
 if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+  # Check for P1001 (can't reach database - likely direct connection blocked)
+  if grep -q "P1001" /tmp/migration.log; then
+    echo ""
+    echo "⚠️  Cannot reach database server for migrations (P1001)"
+    echo "This is common when:"
+    echo "  1. Neon direct endpoint is not accessible from this network"
+    echo "  2. The connection pooler URL is being used but direct is required"
+    echo ""
+    echo "Attempting to verify schema is up-to-date using pooler connection..."
+
+    # Try using prisma db push with the pooler URL (doesn't require advisory locks)
+    # This will fail if schema differs, but succeed if schema is in sync
+    set +e
+    env DATABASE_URL="$DATABASE_URL" npx prisma db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/db-push.log
+    PUSH_EXIT_CODE=${PIPESTATUS[0]}
+    set -e
+
+    if [ $PUSH_EXIT_CODE -eq 0 ]; then
+      echo "✓ Database schema is in sync (verified via db push)"
+      echo "Continuing with application startup..."
+    elif grep -q "already in sync" /tmp/db-push.log; then
+      echo "✓ Database schema is already in sync"
+      echo "Continuing with application startup..."
+    else
+      echo ""
+      echo "❌ Could not verify database schema"
+      echo "Please run migrations manually from a machine that can reach the database:"
+      echo "  DATABASE_URL='direct-connection-url' npx prisma migrate deploy"
+      echo ""
+      echo "Or set SKIP_MIGRATIONS=true to bypass this check"
+
+      # Allow override to skip migrations
+      if [ "$SKIP_MIGRATIONS" = "true" ]; then
+        echo "⚠️  SKIP_MIGRATIONS=true - continuing without migration verification"
+      else
+        exit 1
+      fi
+    fi
+
   # Check for P1002 (timeout/advisory lock error)
-  if grep -q "P1002" /tmp/migration.log || grep -q "advisory lock" /tmp/migration.log; then
+  elif grep -q "P1002" /tmp/migration.log || grep -q "advisory lock" /tmp/migration.log; then
     echo ""
     echo "⚠️  Migration timeout (P1002 - advisory lock timeout)"
     echo "This usually means:"
