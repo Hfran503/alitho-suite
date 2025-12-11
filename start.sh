@@ -28,37 +28,10 @@ else
   echo "DATABASE_URL is set (${DATABASE_URL:0:30}...)"
 fi
 
-# Wait for database to be available (Neon databases auto-suspend and need time to wake up)
+# Skip TCP connectivity check - Hostinger blocks port 5432
+# The Neon serverless adapter uses HTTP/WebSocket (port 443) instead
 echo ""
-echo "Checking database connectivity..."
-MAX_RETRIES=10
-RETRY_DELAY=5
-
-for attempt in $(seq 1 $MAX_RETRIES); do
-  echo "  Attempt $attempt/$MAX_RETRIES: Testing database connection..."
-
-  # Use node to test the connection (faster than prisma commands)
-  if node -e "
-    const { Client } = require('pg');
-    const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000 });
-    client.connect()
-      .then(() => { client.end(); process.exit(0); })
-      .catch(() => process.exit(1));
-  " 2>/dev/null; then
-    echo "✓ Database is available"
-    break
-  else
-    if [ $attempt -eq $MAX_RETRIES ]; then
-      echo "⚠️  Could not connect to database after $MAX_RETRIES attempts"
-      echo "   The application will start but database operations may fail"
-      echo "   This is common with Neon's auto-suspend feature"
-      break
-    fi
-    echo "  Database not ready, waiting ${RETRY_DELAY}s before retry..."
-    sleep $RETRY_DELAY
-  fi
-done
-
+echo "Note: Using Neon serverless driver (HTTP) - skipping TCP connectivity check"
 echo ""
 
 # Generate Prisma client (ensures it's available for migrations, seeding, and runtime)
