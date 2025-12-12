@@ -20,10 +20,47 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface Warehouse {
   id: string
   name: string
+}
+
+interface StockLocation {
+  location: {
+    id: string
+    barcode: string
+    name: string | null
+    warehouseId: string
+    warehouse: { id: string; name: string }
+  }
+  available: number
+  reserved: number
+  damaged: number
+  onHold: number
+  lotNumber: string | null
+  referenceNumber: string | null
+}
+
+interface Transaction {
+  id: string
+  type: 'RECEIVE' | 'SHIP' | 'ADJUST' | 'TRANSFER' | 'RESERVE' | 'UNRESERVE' | 'DAMAGE' | 'PICK'
+  quantity: number
+  previousQty: number
+  newQty: number
+  referenceType: string | null
+  referenceNumber: string | null
+  lotNumber: string | null
+  notes: string | null
+  createdAt: string
+  location: { barcode: string; name: string | null }
+  user: { name: string | null } | null
 }
 
 interface InventoryItem {
@@ -40,6 +77,28 @@ interface InventoryItem {
   totalOnHold: number
   totalQuantity: number
   locationCount: number
+  locations: StockLocation[]
+  recentTransactions: Transaction[]
+}
+
+interface PendingOrder {
+  pickOrder: {
+    id: string
+    pickOrderNumber: string
+    status: string
+    priority: string
+    destination: string
+    createdAt: string
+  }
+  items: Array<{
+    id: string
+    referenceNumber: string | null
+    lotNumber: string | null
+    requestedQty: number
+    pickedQty: number
+    reservedQty: number
+  }>
+  totalReserved: number
 }
 
 interface PaginationInfo {
@@ -64,6 +123,34 @@ export default function InventoryPage() {
   const [warehouseFilter, setWarehouseFilter] = useState<string>('')
   const [lowStockFilter, setLowStockFilter] = useState(false)
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [quickViewItem, setQuickViewItem] = useState<InventoryItem | null>(null)
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([])
+  const [loadingPendingOrders, setLoadingPendingOrders] = useState(false)
+
+  // Fetch pending orders when quick view item changes
+  useEffect(() => {
+    if (!quickViewItem) {
+      setPendingOrders([])
+      return
+    }
+
+    async function fetchPendingOrders() {
+      setLoadingPendingOrders(true)
+      try {
+        const response = await fetch(`/api/warehouse/inventory/item/${quickViewItem.item.id}/pending-orders`)
+        if (response.ok) {
+          const data = await response.json()
+          setPendingOrders(data.data?.pendingOrders || [])
+        }
+      } catch (err) {
+        console.error('Error fetching pending orders:', err)
+      } finally {
+        setLoadingPendingOrders(false)
+      }
+    }
+
+    fetchPendingOrders()
+  }, [quickViewItem])
 
   // Debounce search
   useEffect(() => {
@@ -279,7 +366,11 @@ export default function InventoryPage() {
               </TableRow>
             ) : (
               inventory.map((inv) => (
-                <TableRow key={inv.item.id}>
+                <TableRow
+                  key={inv.item.id}
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => setQuickViewItem(inv)}
+                >
                   <TableCell className="font-mono font-medium">{inv.item.sku}</TableCell>
                   <TableCell>
                     <div>
@@ -312,11 +403,16 @@ export default function InventoryPage() {
                     {getStockStatusBadge(inv.totalAvailable, inv.totalReserved)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/warehouse/inventory/${inv.item.id}`}>
-                      <Button variant="ghost" size="sm">
-                        View Details
-                      </Button>
-                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        window.location.href = `/warehouse/inventory/${inv.item.id}`
+                      }}
+                    >
+                      Full Details
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -353,6 +449,285 @@ export default function InventoryPage() {
           </div>
         )}
       </div>
+
+      {/* Quick View Modal */}
+      <Dialog open={!!quickViewItem} onOpenChange={(open) => !open && setQuickViewItem(null)}>
+        <DialogContent className="!w-[98vw] !max-w-[1600px] !h-[92vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <span className="font-mono text-emerald-600">{quickViewItem?.item.sku}</span>
+              <span className="text-gray-400">|</span>
+              <span>{quickViewItem?.item.name}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {quickViewItem && (
+            <div className="flex-1 overflow-y-auto space-y-4">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-green-600">{quickViewItem.totalAvailable}</div>
+                  <div className="text-xs text-gray-600">Available</div>
+                </div>
+                <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-yellow-600">{quickViewItem.totalReserved}</div>
+                  <div className="text-xs text-gray-600">Reserved</div>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-red-600">{quickViewItem.totalDamaged}</div>
+                  <div className="text-xs text-gray-600">Damaged</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-600">{quickViewItem.locationCount}</div>
+                  <div className="text-xs text-gray-600">Location{quickViewItem.locationCount !== 1 ? 's' : ''}</div>
+                </div>
+              </div>
+
+              {/* Two column layout for Location and Transactions */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Stock by Location */}
+                <div>
+                  <h3 className="font-semibold mb-2 text-gray-700">Stock by Location</h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead>Location</TableHead>
+                          <TableHead>Ref # (PO)</TableHead>
+                          <TableHead className="text-right">Avail</TableHead>
+                          <TableHead className="text-right">Rsvd</TableHead>
+                          <TableHead className="text-right">Dmgd</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {quickViewItem.locations.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-4 text-gray-500">
+                              No stock at any location
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          quickViewItem.locations.map((loc, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <div className="font-mono text-sm">{loc.location.barcode}</div>
+                                {loc.lotNumber && (
+                                  <div className="text-xs text-gray-500">Lot: {loc.lotNumber}</div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {loc.referenceNumber ? (
+                                  <Badge variant="outline" className="font-mono text-xs">
+                                    {loc.referenceNumber}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-green-600 font-medium">
+                                {loc.available}
+                              </TableCell>
+                              <TableCell className="text-right text-yellow-600">
+                                {loc.reserved}
+                              </TableCell>
+                              <TableCell className="text-right text-red-600">
+                                {loc.damaged}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Recent Transactions */}
+                <div>
+                  <h3 className="font-semibold mb-2 text-gray-700">Recent Transactions (Last 10)</h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Ref #</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead>Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {quickViewItem.recentTransactions.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-4 text-gray-500">
+                              No recent transactions
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          quickViewItem.recentTransactions.map((tx) => (
+                            <TableRow key={tx.id}>
+                              <TableCell className="text-xs text-gray-600">
+                                {new Date(tx.createdAt).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    tx.type === 'RECEIVE' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    tx.type === 'SHIP' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    tx.type === 'ADJUST' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                    tx.type === 'TRANSFER' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
+                                    tx.type === 'DAMAGE' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                  }
+                                >
+                                  {tx.type}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {tx.referenceNumber ? (
+                                  <Badge variant="outline" className="font-mono text-xs">
+                                    {tx.referenceNumber}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className={`text-right font-medium ${tx.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {tx.quantity >= 0 ? '+' : ''}{tx.quantity}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-600 max-w-[150px] truncate" title={tx.notes || ''}>
+                                {tx.notes || '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pending Pick Orders */}
+              {quickViewItem.totalReserved > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-gray-700">
+                    Pending Pick Orders ({pendingOrders.length})
+                    <span className="font-normal text-sm text-yellow-600 ml-2">
+                      {quickViewItem.totalReserved} units reserved
+                    </span>
+                  </h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-yellow-50">
+                          <TableHead>Pick Order</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Destination</TableHead>
+                          <TableHead>Ref #</TableHead>
+                          <TableHead className="text-right">Reserved</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loadingPendingOrders ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-4 text-gray-500">
+                              Loading...
+                            </TableCell>
+                          </TableRow>
+                        ) : pendingOrders.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-4 text-gray-500">
+                              No pending pick orders
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          pendingOrders.map((order) => (
+                            <TableRow key={order.pickOrder.id}>
+                              <TableCell>
+                                <span className="font-mono font-medium text-emerald-600">
+                                  {order.pickOrder.pickOrderNumber}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    order.pickOrder.status === 'PENDING'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                  }
+                                >
+                                  {order.pickOrder.status.replace('_', ' ')}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {order.pickOrder.destination}
+                              </TableCell>
+                              <TableCell>
+                                {order.items.map((item, idx) => (
+                                  <div key={idx}>
+                                    {item.referenceNumber ? (
+                                      <Badge variant="outline" className="font-mono text-xs">
+                                        {item.referenceNumber}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">-</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-yellow-600">
+                                {order.totalReserved}
+                              </TableCell>
+                              <TableCell>
+                                <Link href={`/warehouse/pick-orders/${order.pickOrder.id}`}>
+                                  <Button variant="ghost" size="sm" className="text-xs">
+                                    View
+                                  </Button>
+                                </Link>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setQuickViewItem(null)
+                    window.location.href = `/warehouse/inventory/adjust?itemId=${quickViewItem.item.id}`
+                  }}
+                >
+                  Adjust Stock
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setQuickViewItem(null)
+                    window.location.href = `/warehouse/inventory/transfer?itemId=${quickViewItem.item.id}`
+                  }}
+                >
+                  Transfer
+                </Button>
+                <Link href={`/warehouse/inventory/${quickViewItem.item.id}`}>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                    View Full Details
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -20,6 +20,7 @@ export interface RecordItemParams {
   putAwayLocationId?: string
   lotNumber?: string
   expirationDate?: Date
+  referenceNumber?: string
   notes?: string
 }
 
@@ -128,6 +129,9 @@ export async function startReceiving(params: StartReceivingParams) {
     })
 
     return receivingRecord
+  }, {
+    timeout: 30000, // 30 seconds timeout
+    maxWait: 5000,
   })
 }
 
@@ -144,15 +148,17 @@ export async function recordItem(params: RecordItemParams) {
     putAwayLocationId,
     lotNumber,
     expirationDate,
+    referenceNumber,
     notes,
   } = params
 
-  // Check if item already exists in this receiving record
+  // Check if item already exists in this receiving record (match by sku, lot, and reference)
   const existingItem = await db.receivingItem.findFirst({
     where: {
       receivingRecordId,
       sku,
       lotNumber: lotNumber || null,
+      referenceNumber: referenceNumber || null,
     },
   })
 
@@ -167,7 +173,7 @@ export async function recordItem(params: RecordItemParams) {
         notes,
       },
       include: {
-        item: { select: { id: true, sku: true, name: true } },
+        item: { select: { id: true, sku: true, name: true, trackByReference: true } },
         putAwayLocation: { select: { id: true, barcode: true, name: true } },
       },
     })
@@ -186,10 +192,11 @@ export async function recordItem(params: RecordItemParams) {
       putAwayLocationId,
       lotNumber,
       expirationDate,
+      referenceNumber,
       notes,
     },
     include: {
-      item: { select: { id: true, sku: true, name: true } },
+      item: { select: { id: true, sku: true, name: true, trackByReference: true } },
       putAwayLocation: { select: { id: true, barcode: true, name: true } },
     },
   })
@@ -226,6 +233,7 @@ export async function deleteReceivingItem(itemId: string) {
 export async function completeReceiving(params: CompleteReceivingParams) {
   const { receivingRecordId, tenantId, userId, discrepancyNotes } = params
 
+  // Use longer timeout for transactions with many items
   return db.$transaction(async (tx) => {
     // Get receiving record with items
     const receivingRecord = await tx.receivingRecord.findUnique({
@@ -307,13 +315,14 @@ export async function completeReceiving(params: CompleteReceivingParams) {
           }
         }
 
-        // Get or create stock record
+        // Get or create stock record (include referenceNumber in lookup)
         let stock = await tx.inventoryStock.findFirst({
           where: {
             tenantId,
             itemId: inventoryItemId,
             locationId: item.putAwayLocationId,
             lotNumber: item.lotNumber || null,
+            referenceNumber: item.referenceNumber || null,
           },
         })
 
@@ -325,6 +334,7 @@ export async function completeReceiving(params: CompleteReceivingParams) {
               locationId: item.putAwayLocationId,
               lotNumber: item.lotNumber || null,
               expirationDate: item.expirationDate,
+              referenceNumber: item.referenceNumber || null,
               available: 0,
               reserved: 0,
               damaged: 0,
@@ -354,6 +364,8 @@ export async function completeReceiving(params: CompleteReceivingParams) {
             newQty: newAvailable,
             referenceType: 'RECEIVING',
             referenceId: receivingRecordId,
+            lotNumber: item.lotNumber || null,
+            referenceNumber: item.referenceNumber || null,
             userId,
             notes: `Received from receiving session${receivingRecord.asnId ? ` (ASN)` : ''}`,
           },
@@ -380,6 +392,8 @@ export async function completeReceiving(params: CompleteReceivingParams) {
               newQty: newDamaged,
               referenceType: 'RECEIVING',
               referenceId: receivingRecordId,
+              lotNumber: item.lotNumber || null,
+              referenceNumber: item.referenceNumber || null,
               userId,
               notes: `Damaged items from receiving session`,
             },
@@ -436,6 +450,9 @@ export async function completeReceiving(params: CompleteReceivingParams) {
         status,
       },
     }
+  }, {
+    timeout: 60000, // 60 seconds timeout for large imports
+    maxWait: 10000, // 10 seconds to wait for connection
   })
 }
 

@@ -42,7 +42,7 @@ export async function getStockByItem(
   tenantId: string,
   itemId: string
 ): Promise<{
-  item: { id: string; sku: string; name: string } | null
+  item: { id: string; sku: string; name: string; trackByReference: boolean } | null
   totalAvailable: number
   totalReserved: number
   totalDamaged: number
@@ -54,12 +54,13 @@ export async function getStockByItem(
     damaged: number
     onHold: number
     lotNumber: string | null
+    referenceNumber: string | null
   }>
 }> {
   const stockRecords = await db.inventoryStock.findMany({
     where: { tenantId, itemId },
     include: {
-      item: { select: { id: true, sku: true, name: true } },
+      item: { select: { id: true, sku: true, name: true, trackByReference: true } },
       location: { select: { id: true, barcode: true, name: true, warehouseId: true } },
     },
   })
@@ -67,7 +68,7 @@ export async function getStockByItem(
   if (stockRecords.length === 0) {
     const item = await db.inventoryItem.findFirst({
       where: { id: itemId, tenantId },
-      select: { id: true, sku: true, name: true },
+      select: { id: true, sku: true, name: true, trackByReference: true },
     })
     return {
       item,
@@ -99,6 +100,7 @@ export async function getStockByItem(
       damaged: record.damaged,
       onHold: record.onHold,
       lotNumber: record.lotNumber,
+      referenceNumber: record.referenceNumber,
     })),
   }
 }
@@ -114,6 +116,7 @@ export async function getStockByLocation(
   damaged: number
   onHold: number
   lotNumber: string | null
+  referenceNumber: string | null
 }>> {
   const stockRecords = await db.inventoryStock.findMany({
     where: { tenantId, locationId },
@@ -129,6 +132,7 @@ export async function getStockByLocation(
     damaged: record.damaged,
     onHold: record.onHold,
     lotNumber: record.lotNumber,
+    referenceNumber: record.referenceNumber,
   }))
 }
 

@@ -63,7 +63,7 @@ apps/web/components/warehouse/
 | Module 2: Inventory Items | ✅ Completed | 2025-12-10 | InventoryItem model, CRUD, form component |
 | Module 3: Inventory Stock | ✅ Completed | 2025-12-10 | Stock levels, transactions, adjust/transfer |
 | Module 4: ASN | ✅ Completed | 2025-12-10 | ASN/ASNItem models, status workflow, UI |
-| Module 5: Receiving | ⬜ Not Started | - | Receiving dock operations |
+| Module 5: Receiving | ✅ Completed | 2025-12-11 | ReceivingRecord/Item models, dock operations UI |
 | Module 6: Fulfillment | ⬜ Not Started | - | Pick/Pack/Ship tasks |
 | Module 7: Portal | ⬜ Not Started | - | Vendor & Customer views |
 | Module 8: Background Jobs | ⬜ Not Started | - | Automation & notifications |
@@ -750,6 +750,20 @@ Use this section to track notes between sessions:
   - UI pages: ASN list with filters, create form with line items, detail with status timeline
   - Fixed warehouse dropdown (endpoint was `/api/warehouse/warehouses` should be `/api/warehouses`)
 
+### Session 5 (2025-12-11)
+- **Module 5 (Receiving) Completed:**
+  - Created `ReceivingRecord` model with asnId (unique 1:1 with ASN), warehouseId, receivedById, status
+  - Created `ReceivingItem` model with expectedQty, receivedQty, damagedQty, putAwayLocationId, lotNumber
+  - Added ReceivingStatus enum export to `@repo/database`
+  - Receiving service (`apps/web/lib/services/receiving.ts`) with:
+    - `startReceiving()` - Create session from ASN or standalone
+    - `recordItem()` - Add/update received items
+    - `completeReceiving()` - Complete session, update inventory stock, create transactions
+  - API routes: CRUD, items management, complete receiving, start from ASN
+  - UI pages: Receiving dashboard (pending ASNs, active sessions), new session, session detail with item entry
+  - ASN integration: "Start Receiving" button on ASN detail page, status auto-updates
+  - Inventory updates on completion: Creates stock records, logs RECEIVE/DAMAGE transactions
+
 ---
 
 ## Recommended Implementation Order
@@ -774,4 +788,4 @@ Module 1 (Locations) ──→ Module 2 (Items)
 
 ---
 
-*Last updated: 2025-12-10 (Session 4)*
+*Last updated: 2025-12-11 (Session 5)*

@@ -51,14 +51,91 @@ export default async function WarehouseDashboardPage() {
     )
   }
 
-  // Placeholder stats - will be populated as modules are built
+  // Fetch real stats from database
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const [
+    pendingAsns,
+    activeReceiving,
+    openPickOrders,
+    totalLocations,
+    totalSkus,
+    totalStock,
+    receivedToday,
+    pickedToday,
+  ] = await Promise.all([
+    // Pending ASNs (PENDING or IN_TRANSIT status)
+    db.aSN.count({
+      where: {
+        tenantId: membership.tenantId,
+        status: { in: ['PENDING', 'IN_TRANSIT', 'ARRIVED'] },
+      },
+    }),
+    // Active receiving sessions (IN_PROGRESS)
+    db.receivingRecord.count({
+      where: {
+        tenantId: membership.tenantId,
+        status: 'IN_PROGRESS',
+      },
+    }),
+    // Open pick orders (PENDING or IN_PROGRESS)
+    db.pickOrder.count({
+      where: {
+        tenantId: membership.tenantId,
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+      },
+    }),
+    // Total active locations
+    db.warehouseLocation.count({
+      where: {
+        tenantId: membership.tenantId,
+        isActive: true,
+      },
+    }),
+    // Total active SKUs
+    db.inventoryItem.count({
+      where: {
+        tenantId: membership.tenantId,
+        isActive: true,
+      },
+    }),
+    // Total stock (sum of available + reserved)
+    db.inventoryStock.aggregate({
+      where: { tenantId: membership.tenantId },
+      _sum: { available: true, reserved: true },
+    }),
+    // Received today (RECEIVE transactions)
+    db.inventoryTransaction.aggregate({
+      where: {
+        tenantId: membership.tenantId,
+        type: 'RECEIVE',
+        createdAt: { gte: today },
+      },
+      _sum: { quantity: true },
+    }),
+    // Picked today (PICK transactions)
+    db.inventoryTransaction.aggregate({
+      where: {
+        tenantId: membership.tenantId,
+        type: 'PICK',
+        createdAt: { gte: today },
+      },
+      _sum: { quantity: true },
+    }),
+  ])
+
   const stats = {
-    pendingAsns: 0,
-    activeReceiving: 0,
-    openTasks: 0,
-    lowStockAlerts: 0,
-    totalLocations: 0,
-    totalSkus: 0,
+    pendingAsns,
+    activeReceiving,
+    openTasks: openPickOrders,
+    lowStockAlerts: 0, // TODO: Implement when reorder points are added
+    totalLocations,
+    totalSkus,
+    totalAvailable: totalStock._sum.available || 0,
+    totalReserved: totalStock._sum.reserved || 0,
+    receivedToday: receivedToday._sum.quantity || 0,
+    pickedToday: Math.abs(pickedToday._sum.quantity || 0), // PICK transactions are negative
   }
 
   return (
@@ -131,6 +208,14 @@ export default async function WarehouseDashboardPage() {
               <p className="text-sm text-gray-600">Total SKUs</p>
               <p className="text-2xl font-bold text-teal-700">{stats.totalSkus}</p>
             </div>
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-gray-600">Available Stock</p>
+              <p className="text-2xl font-bold text-blue-700">{stats.totalAvailable.toLocaleString()}</p>
+            </div>
+            <div className="p-4 bg-orange-50 rounded-lg">
+              <p className="text-sm text-gray-600">Reserved Stock</p>
+              <p className="text-2xl font-bold text-orange-700">{stats.totalReserved.toLocaleString()}</p>
+            </div>
           </div>
         </div>
 
@@ -139,15 +224,15 @@ export default async function WarehouseDashboardPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Received Today</span>
-              <span className="font-semibold">0 items</span>
+              <span className="font-semibold text-emerald-600">{stats.receivedToday.toLocaleString()} items</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Shipped Today</span>
-              <span className="font-semibold">0 items</span>
+              <span className="text-gray-600">Picked Today</span>
+              <span className="font-semibold text-blue-600">{stats.pickedToday.toLocaleString()} items</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Tasks Completed</span>
-              <span className="font-semibold">0 tasks</span>
+              <span className="text-gray-600">Open Pick Orders</span>
+              <span className="font-semibold text-orange-600">{stats.openTasks} orders</span>
             </div>
           </div>
         </div>

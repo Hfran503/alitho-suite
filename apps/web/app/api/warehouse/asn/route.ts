@@ -5,6 +5,7 @@ import { db, ASNStatus } from '@repo/database'
 import { z } from 'zod'
 
 const createASNSchema = z.object({
+  customerId: z.string().optional().nullable(),
   vendorName: z.string().min(1),
   vendorEmail: z.string().email().optional().nullable(),
   warehouseId: z.string().min(1),
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           warehouse: { select: { id: true, name: true } },
+          customer: { select: { id: true, name: true, company: true, paceCustomerId: true } },
           items: { select: { id: true, sku: true, expectedQty: true, receivedQty: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -151,6 +153,7 @@ export async function POST(request: NextRequest) {
       data: {
         asnNumber,
         tenantId: membership.tenantId,
+        customerId: validatedData.customerId || null,
         vendorName: validatedData.vendorName,
         vendorEmail: validatedData.vendorEmail,
         warehouseId: validatedData.warehouseId,
@@ -173,6 +176,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         warehouse: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, company: true, paceCustomerId: true } },
         items: true,
       },
     })

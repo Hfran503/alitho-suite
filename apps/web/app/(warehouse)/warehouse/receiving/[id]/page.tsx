@@ -45,6 +45,7 @@ interface ReceivingItem {
   receivedQty: number
   damagedQty: number
   lotNumber: string | null
+  referenceNumber: string | null
   expirationDate: string | null
   notes: string | null
   putAwayLocation: WarehouseLocation | null
@@ -127,6 +128,7 @@ export default function ReceivingDetailPage() {
     putAwayLocationId: '',
     lotNumber: '',
     expirationDate: '',
+    referenceNumber: '',
     notes: '',
   })
 
@@ -228,6 +230,7 @@ export default function ReceivingDetailPage() {
           putAwayLocationId: newItem.putAwayLocationId || undefined,
           lotNumber: newItem.lotNumber || undefined,
           expirationDate: newItem.expirationDate || undefined,
+          referenceNumber: newItem.referenceNumber || undefined,
           notes: newItem.notes || undefined,
         }),
       })
@@ -243,6 +246,7 @@ export default function ReceivingDetailPage() {
           putAwayLocationId: '',
           lotNumber: '',
           expirationDate: '',
+          referenceNumber: '',
           notes: '',
         })
         fetchRecord()
@@ -434,12 +438,14 @@ export default function ReceivingDetailPage() {
               <TableHead className="w-[120px]">Damaged</TableHead>
               <TableHead className="w-[200px]">Put-Away Location</TableHead>
               <TableHead>Lot #</TableHead>
+              <TableHead>Ref # (PO)</TableHead>
+              <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {record.items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                   No items to receive. {isEditable && 'Click "Add Item" to start.'}
                 </TableCell>
               </TableRow>
@@ -501,6 +507,10 @@ export default function ReceivingDetailPage() {
                     )}
                   </TableCell>
                   <TableCell>{item.lotNumber || '-'}</TableCell>
+                  <TableCell className="font-mono text-sm">{item.referenceNumber || '-'}</TableCell>
+                  <TableCell className="text-sm text-gray-600 max-w-[150px] truncate" title={item.notes || undefined}>
+                    {item.notes || '-'}
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -591,6 +601,16 @@ export default function ReceivingDetailPage() {
                   placeholder="Optional"
                 />
               </div>
+            </div>
+
+            <div>
+              <Label>Reference Number (PO#)</Label>
+              <Input
+                value={newItem.referenceNumber}
+                onChange={(e) => setNewItem((prev) => ({ ...prev, referenceNumber: e.target.value }))}
+                placeholder="PO number or other reference"
+              />
+              <p className="text-xs text-gray-500 mt-1">Required for items with reference tracking enabled</p>
             </div>
 
             <div>

@@ -12,6 +12,7 @@ const dimensionsSchema = z.object({
 }).optional().nullable()
 
 const createItemSchema = z.object({
+  customerId: z.string().optional().nullable(),
   sku: z.string().min(1, 'SKU is required'),
   upc: z.string().optional().nullable(),
   name: z.string().min(1, 'Name is required'),
@@ -20,6 +21,7 @@ const createItemSchema = z.object({
   weight: z.number().positive().optional().nullable(),
   dimensions: dimensionsSchema,
   isActive: z.boolean().default(true),
+  trackByReference: z.boolean().default(false),
   metadata: z.record(z.any()).optional().nullable(),
 })
 
@@ -74,6 +76,11 @@ export async function GET(request: NextRequest) {
     const [items, total] = await Promise.all([
       db.inventoryItem.findMany({
         where,
+        include: {
+          customer: {
+            select: { id: true, name: true, company: true, paceCustomerId: true },
+          },
+        },
         orderBy: [
           { name: 'asc' },
         ],
@@ -159,6 +166,7 @@ export async function POST(request: NextRequest) {
     const item = await db.inventoryItem.create({
       data: {
         tenantId: membership.tenantId,
+        customerId: validatedData.customerId || null,
         sku: validatedData.sku,
         upc: validatedData.upc,
         name: validatedData.name,
@@ -167,7 +175,13 @@ export async function POST(request: NextRequest) {
         weight: validatedData.weight,
         dimensions: validatedData.dimensions === null ? Prisma.JsonNull : validatedData.dimensions,
         isActive: validatedData.isActive,
+        trackByReference: validatedData.trackByReference,
         metadata: validatedData.metadata === null ? Prisma.JsonNull : validatedData.metadata,
+      },
+      include: {
+        customer: {
+          select: { id: true, name: true, company: true, paceCustomerId: true },
+        },
       },
     })
 

@@ -52,6 +52,8 @@ model Tenant {
   asns                   ASN[]
   receivingRecords       ReceivingRecord[]
   gcuEnvelopeOrders      GcuEnvelopeOrder[]
+  warehouseCustomers     WarehouseCustomer[]
+  pickOrders             PickOrder[]
 
   @@index([slug])
   @@index([status])
@@ -76,6 +78,7 @@ model User {
   sessions              Session[]
   inventoryTransactions InventoryTransaction[]
   receivingRecords      ReceivingRecord[]
+  pickOrdersCreated     PickOrder[]            @relation("PickOrderCreatedBy")
 
   @@index([email])
   @@index([paceCustomerId])
@@ -1044,6 +1047,15 @@ enum InventoryTransactionType {
   RESERVE     // Reserved for order
   UNRESERVE   // Released from reservation
   DAMAGE      // Marked as damaged
+  PICK        // Picked for internal use (fulfillment job, etc.)
+}
+
+enum PickOrderStatus {
+  DRAFT       // Not yet ready to pick
+  PENDING     // Ready to be picked
+  IN_PROGRESS // Currently being picked
+  COMPLETED   // All items picked
+  CANCELLED   // Cancelled
 }
 
 enum ASNStatus {
@@ -1119,6 +1131,7 @@ model WarehouseLocation {
   stockLevels     InventoryStock[]
   transactions    InventoryTransaction[]
   receivingItems  ReceivingItem[]
+  pickOrderItems  PickOrderItem[]
 
   @@unique([tenantId, barcode])
   @@index([tenantId])
@@ -1131,6 +1144,9 @@ model WarehouseLocation {
 model InventoryItem {
   id            String       @id @default(cuid())
   tenantId      String
+
+  // Customer ownership (optional - for 3PL operations)
+  customerId    String?      // Reference to WarehouseCustomer
 
   // Item identifiers
   sku           String       // Stock Keeping Unit (unique per tenant)
@@ -1148,6 +1164,9 @@ model InventoryItem {
   // Status
   isActive      Boolean      @default(true)
 
+  // Tracking requirements
+  trackByReference  Boolean  @default(false)  // If true, inventory must be tracked by PO/reference number
+
   // Additional data
   metadata      Json?        // Custom fields, vendor info, etc.
 
@@ -1156,14 +1175,17 @@ model InventoryItem {
   updatedAt     DateTime     @updatedAt
 
   // Relations
-  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        WarehouseCustomer? @relation(fields: [customerId], references: [id])
   stockLevels     InventoryStock[]
   transactions    InventoryTransaction[]
   asnItems        ASNItem[]
   receivingItems  ReceivingItem[]
+  pickOrderItems  PickOrderItem[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
+  @@index([customerId])
   @@index([sku])
   @@index([upc])
   @@index([category])
@@ -1189,6 +1211,9 @@ model InventoryStock {
   lotNumber       String?            // Lot/batch number
   expirationDate  DateTime?          // Expiration date for perishables
 
+  // Reference tracking (optional - for PO#, job#, etc.)
+  referenceNumber String?            // PO number, job number, or other reference
+
   // Timestamps
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -1198,11 +1223,12 @@ model InventoryStock {
   item            InventoryItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
   location        WarehouseLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, itemId, locationId, lotNumber])
+  @@unique([tenantId, itemId, locationId, lotNumber, referenceNumber])
   @@index([tenantId])
   @@index([itemId])
   @@index([locationId])
   @@index([lotNumber])
+  @@index([referenceNumber])
   @@index([expirationDate])
 }
 
@@ -1224,6 +1250,10 @@ model InventoryTransaction {
   referenceType   String?                    // 'ASN', 'ORDER', 'ADJUSTMENT', 'TRANSFER', etc.
   referenceId     String?                    // ID of the source document
 
+  // Tracking fields (for filtering by lot/PO)
+  lotNumber       String?                    // Lot/batch number
+  referenceNumber String?                    // PO number, job number, or other reference
+
   // Audit fields
   userId          String?                    // Who made the change
   notes           String?                    @db.Text
@@ -1242,6 +1272,8 @@ model InventoryTransaction {
   @@index([locationId])
   @@index([type])
   @@index([referenceType, referenceId])
+  @@index([lotNumber])
+  @@index([referenceNumber])
   @@index([userId])
   @@index([createdAt])
 }
@@ -1251,6 +1283,9 @@ model ASN {
   id              String     @id @default(cuid())
   asnNumber       String     // Human-readable ASN number (e.g., ASN-2024-0001)
   tenantId        String
+
+  // Customer (optional - for 3PL operations, whose inventory is this?)
+  customerId      String?    // Reference to WarehouseCustomer
 
   // Vendor/Supplier info
   vendorId        String?    // Reference to portal user/vendor (optional)
@@ -1278,13 +1313,15 @@ model ASN {
   receivedAt      DateTime?  // When fully received
 
   // Relations
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        WarehouseCustomer? @relation(fields: [customerId], references: [id])
+  warehouse       Warehouse          @relation(fields: [warehouseId], references: [id])
   items           ASNItem[]
-  receivingRecord ReceivingRecord? // One-to-one relation with receiving
+  receivingRecord ReceivingRecord?   // One-to-one relation with receiving
 
   @@unique([tenantId, asnNumber])
   @@index([tenantId])
+  @@index([customerId])
   @@index([vendorId])
   @@index([warehouseId])
   @@index([status])
@@ -1389,6 +1426,9 @@ model ReceivingItem {
   lotNumber           String?
   expirationDate      DateTime?
 
+  // Reference tracking (PO#, job#, etc.)
+  referenceNumber     String?
+
   // Notes
   notes               String?             @db.Text
 
@@ -1399,6 +1439,129 @@ model ReceivingItem {
 
   @@index([receivingRecordId])
   @@index([itemId])
+  @@index([referenceNumber])
   @@index([sku])
   @@index([putAwayLocationId])
+}
+
+// ============================================
+// WAREHOUSE CUSTOMER (PACE Customer Cache)
+// ============================================
+
+// WarehouseCustomer - Locally cached PACE customers enabled for warehouse operations
+model WarehouseCustomer {
+  id              String    @id @default(cuid())
+  tenantId        String
+
+  // PACE Integration
+  paceCustomerId  String    // ID from PACE system
+  name            String    // Customer name from PACE
+  company         String?   // Company name
+
+  // Status
+  isActive        Boolean   @default(true)
+
+  // Sync tracking
+  lastSyncedAt    DateTime  @default(now())
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inventoryItems  InventoryItem[]
+  asns            ASN[]
+
+  @@unique([tenantId, paceCustomerId])
+  @@index([tenantId])
+  @@index([paceCustomerId])
+  @@index([isActive])
+  @@index([name])
+}
+
+// ============================================
+// PICK ORDER MODELS (Module 6 - Fulfillment)
+// ============================================
+
+// PickOrder - Request to pick items from warehouse for fulfillment/internal use
+model PickOrder {
+  id              String          @id @default(cuid())
+  pickOrderNumber String          // Human-readable number (e.g., PO-2024-0001)
+  tenantId        String
+
+  // Status
+  status          PickOrderStatus @default(DRAFT)
+
+  // Destination info (where items are going)
+  destination     String          // Destination name/description (e.g., "Press Room", "Fulfillment Area", "External Warehouse")
+  destinationNotes String?        @db.Text
+
+  // Priority
+  priority        String          @default("normal") // low, normal, high, urgent
+
+  // Notes
+  notes           String?         @db.Text
+
+  // Created by user
+  createdById     String?
+
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  completedAt     DateTime?       // When all items were picked
+
+  // Relations
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy       User?           @relation("PickOrderCreatedBy", fields: [createdById], references: [id])
+  items           PickOrderItem[]
+
+  @@unique([tenantId, pickOrderNumber])
+  @@index([tenantId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([createdById])
+}
+
+// PickOrderItem - Individual items to pick
+model PickOrderItem {
+  id              String          @id @default(cuid())
+  pickOrderId     String
+
+  // Item info
+  itemId          String          // Reference to InventoryItem
+
+  // Location to pick from (can be null = system will suggest or user chooses)
+  locationId      String?         // Reference to WarehouseLocation
+
+  // Reference tracking (for items tracked by PO#)
+  referenceNumber String?         // PO number to pick from
+  lotNumber       String?         // Lot number to pick from
+
+  // Quantities
+  requestedQty    Int             // Quantity requested to pick
+  pickedQty       Int             @default(0) // Quantity actually picked
+
+  // Status
+  isPicked        Boolean         @default(false) // True when item is fully picked
+
+  // Notes
+  notes           String?         @db.Text
+
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  pickedAt        DateTime?       // When item was picked
+
+  // Relations
+  pickOrder       PickOrder       @relation(fields: [pickOrderId], references: [id], onDelete: Cascade)
+  item            InventoryItem   @relation(fields: [itemId], references: [id])
+  location        WarehouseLocation? @relation(fields: [locationId], references: [id])
+
+  @@index([pickOrderId])
+  @@index([itemId])
+  @@index([locationId])
+  @@index([referenceNumber])
+  @@index([isPicked])
 }

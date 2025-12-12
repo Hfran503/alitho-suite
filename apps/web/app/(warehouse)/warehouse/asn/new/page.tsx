@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { CustomerSelect } from '@/components/warehouse/customers/CustomerSelect'
 
 interface Warehouse {
   id: string
@@ -52,6 +53,7 @@ export default function NewASNPage() {
   const [itemSearch, setItemSearch] = useState('')
 
   const [formData, setFormData] = useState({
+    customerId: null as string | null,
     vendorName: '',
     vendorEmail: '',
     warehouseId: '',
@@ -165,6 +167,7 @@ export default function NewASNPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          customerId: formData.customerId || null,
           vendorName: formData.vendorName,
           vendorEmail: formData.vendorEmail || null,
           warehouseId: formData.warehouseId,
@@ -246,6 +249,19 @@ export default function NewASNPage() {
                   onChange={(e) => setFormData((prev) => ({ ...prev, vendorEmail: e.target.value }))}
                   placeholder="vendor@example.com"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="customer">Customer (Optional)</Label>
+                <CustomerSelect
+                  value={formData.customerId}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, customerId: value }))}
+                  placeholder="Select customer..."
+                  showNoneOption={true}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  For 3PL: whose inventory is this shipment?
+                </p>
               </div>
 
               <div>

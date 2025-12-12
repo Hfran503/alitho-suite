@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
             name: true,
             category: true,
             isActive: true,
+            trackByReference: true,
           },
         },
         location: {
@@ -86,6 +87,7 @@ export async function GET(request: NextRequest) {
       totalOnHold: number
       totalQuantity: number
       locationCount: number
+      locationIds: Set<string>
       locations: Array<{
         location: typeof stockRecords[0]['location']
         available: number
@@ -93,6 +95,7 @@ export async function GET(request: NextRequest) {
         damaged: number
         onHold: number
         lotNumber: string | null
+        referenceNumber: string | null
       }>
     }>()
 
@@ -105,6 +108,7 @@ export async function GET(request: NextRequest) {
         damaged: record.damaged,
         onHold: record.onHold,
         lotNumber: record.lotNumber,
+        referenceNumber: record.referenceNumber,
       }
 
       if (existing) {
@@ -113,9 +117,11 @@ export async function GET(request: NextRequest) {
         existing.totalDamaged += record.damaged
         existing.totalOnHold += record.onHold
         existing.totalQuantity += record.available + record.reserved + record.damaged + record.onHold
-        existing.locationCount += 1
+        existing.locationIds.add(record.locationId)
+        existing.locationCount = existing.locationIds.size
         existing.locations.push(locationData)
       } else {
+        const locationIds = new Set<string>([record.locationId])
         itemMap.set(record.itemId, {
           item: record.item,
           totalAvailable: record.available,
@@ -124,6 +130,7 @@ export async function GET(request: NextRequest) {
           totalOnHold: record.onHold,
           totalQuantity: record.available + record.reserved + record.damaged + record.onHold,
           locationCount: 1,
+          locationIds,
           locations: [locationData],
         })
       }
@@ -150,9 +157,62 @@ export async function GET(request: NextRequest) {
     const total = items.length
     const paginatedItems = items.slice(skip, skip + limit)
 
+    // Get item IDs for fetching transactions
+    const itemIds = paginatedItems.map((item) => item.item.id)
+
+    // Fetch last 10 transactions for each item
+    const recentTransactions = await db.inventoryTransaction.findMany({
+      where: {
+        tenantId: membership.tenantId,
+        itemId: { in: itemIds },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: itemIds.length * 10, // Get enough to have ~10 per item
+      select: {
+        id: true,
+        itemId: true,
+        type: true,
+        quantity: true,
+        previousQty: true,
+        newQty: true,
+        referenceType: true,
+        referenceNumber: true,
+        lotNumber: true,
+        notes: true,
+        createdAt: true,
+        location: {
+          select: {
+            barcode: true,
+            name: true,
+          },
+        },
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    })
+
+    // Group transactions by item (max 10 each)
+    const transactionsByItem = new Map<string, typeof recentTransactions>()
+    for (const tx of recentTransactions) {
+      const existing = transactionsByItem.get(tx.itemId) || []
+      if (existing.length < 10) {
+        existing.push(tx)
+        transactionsByItem.set(tx.itemId, existing)
+      }
+    }
+
+    // Clean up response (remove Set objects that can't be serialized) and add transactions
+    const cleanedItems = paginatedItems.map(({ locationIds, ...rest }) => ({
+      ...rest,
+      recentTransactions: transactionsByItem.get(rest.item.id) || [],
+    }))
+
     return NextResponse.json({
       success: true,
-      data: paginatedItems,
+      data: cleanedItems,
       pagination: {
         page,
         limit,

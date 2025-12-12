@@ -15,6 +15,7 @@ const addItemSchema = z.object({
   putAwayLocationId: z.string().optional(),
   lotNumber: z.string().optional(),
   expirationDate: z.string().optional(),
+  referenceNumber: z.string().optional(),
   notes: z.string().optional(),
 })
 
@@ -132,6 +133,7 @@ export async function POST(
       putAwayLocationId: data.putAwayLocationId,
       lotNumber: data.lotNumber,
       expirationDate: data.expirationDate ? new Date(data.expirationDate) : undefined,
+      referenceNumber: data.referenceNumber,
       notes: data.notes,
     })
 

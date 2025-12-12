@@ -18,6 +18,7 @@ interface ItemStockData {
     id: string
     sku: string
     name: string
+    trackByReference: boolean
   } | null
   totalAvailable: number
   totalReserved: number
@@ -35,6 +36,7 @@ interface ItemStockData {
     damaged: number
     onHold: number
     lotNumber: string | null
+    referenceNumber: string | null
   }>
 }
 
@@ -46,6 +48,8 @@ interface Transaction {
   newQty: number
   notes: string | null
   createdAt: string
+  lotNumber: string | null
+  referenceNumber: string | null
   location: {
     id: string
     barcode: string
@@ -58,6 +62,26 @@ interface Transaction {
   } | null
 }
 
+interface PendingOrder {
+  pickOrder: {
+    id: string
+    pickOrderNumber: string
+    status: string
+    priority: string
+    destination: string
+    createdAt: string
+  }
+  items: Array<{
+    id: string
+    referenceNumber: string | null
+    lotNumber: string | null
+    requestedQty: number
+    pickedQty: number
+    reservedQty: number
+  }>
+  totalReserved: number
+}
+
 const TRANSACTION_TYPES: Record<string, { label: string; color: string }> = {
   RECEIVE: { label: 'Receive', color: 'bg-green-100 text-green-800' },
   SHIP: { label: 'Ship', color: 'bg-blue-100 text-blue-800' },
@@ -66,12 +90,14 @@ const TRANSACTION_TYPES: Record<string, { label: string; color: string }> = {
   RESERVE: { label: 'Reserve', color: 'bg-orange-100 text-orange-800' },
   UNRESERVE: { label: 'Unreserve', color: 'bg-gray-100 text-gray-800' },
   DAMAGE: { label: 'Damage', color: 'bg-red-100 text-red-800' },
+  PICK: { label: 'Pick', color: 'bg-indigo-100 text-indigo-800' },
 }
 
 export default function ItemInventoryPage({ params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = use(params)
   const [stockData, setStockData] = useState<ItemStockData | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -91,6 +117,13 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
         if (txnResponse.ok) {
           const txnJson = await txnResponse.json()
           setTransactions(txnJson.data || [])
+        }
+
+        // Fetch pending orders
+        const pendingResponse = await fetch(`/api/warehouse/inventory/item/${itemId}/pending-orders`)
+        if (pendingResponse.ok) {
+          const pendingJson = await pendingResponse.json()
+          setPendingOrders(pendingJson.data?.pendingOrders || [])
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')
@@ -196,11 +229,15 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
         <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b">
             <h2 className="text-lg font-semibold">Stock by Location</h2>
+            {stockData.item?.trackByReference && (
+              <p className="text-sm text-gray-500">This item is tracked by reference number (PO#)</p>
+            )}
           </div>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Location</TableHead>
+                {stockData.item?.trackByReference && <TableHead>Ref # (PO)</TableHead>}
                 <TableHead className="text-right">Available</TableHead>
                 <TableHead className="text-right">Reserved</TableHead>
                 <TableHead className="text-right">Damaged</TableHead>
@@ -209,7 +246,7 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
             <TableBody>
               {stockData.locations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={stockData.item?.trackByReference ? 5 : 4} className="text-center py-8 text-gray-500">
                     No stock at any location
                   </TableCell>
                 </TableRow>
@@ -222,6 +259,17 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
                         <div className="text-xs text-gray-500">Lot: {loc.lotNumber}</div>
                       )}
                     </TableCell>
+                    {stockData.item?.trackByReference && (
+                      <TableCell>
+                        {loc.referenceNumber ? (
+                          <Badge variant="outline" className="font-mono">
+                            {loc.referenceNumber}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right text-green-600 font-medium">
                       {loc.available}
                     </TableCell>
@@ -253,14 +301,15 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead className="text-right">Change</TableHead>
+                <TableHead>Ref #</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead>Notes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                     No transactions yet
                   </TableCell>
                 </TableRow>
@@ -275,11 +324,20 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
                         {TRANSACTION_TYPES[txn.type]?.label || txn.type}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {txn.location.barcode}
+                    <TableCell>
+                      {txn.referenceNumber ? (
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {txn.referenceNumber}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
                     </TableCell>
                     <TableCell className={`text-right font-medium ${txn.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {txn.quantity >= 0 ? '+' : ''}{txn.quantity}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600 max-w-[150px] truncate" title={txn.notes || ''}>
+                      {txn.notes || '-'}
                     </TableCell>
                   </TableRow>
                 ))
@@ -288,6 +346,106 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
           </Table>
         </div>
       </div>
+
+      {/* Pending Pick Orders */}
+      {stockData.totalReserved > 0 && (
+        <div className="bg-white rounded-lg shadow mt-6">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold">
+              Pending Pick Orders
+              <span className="font-normal text-sm text-yellow-600 ml-2">
+                {stockData.totalReserved} units reserved across {pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''}
+              </span>
+            </h2>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Pick Order</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Ref #</TableHead>
+                <TableHead className="text-right">Reserved Qty</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingOrders.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    No pending pick orders
+                  </TableCell>
+                </TableRow>
+              ) : (
+                pendingOrders.map((order) => (
+                  <TableRow key={order.pickOrder.id}>
+                    <TableCell>
+                      <span className="font-mono font-medium text-emerald-600">
+                        {order.pickOrder.pickOrderNumber}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          order.pickOrder.status === 'PENDING'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                        }
+                      >
+                        {order.pickOrder.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          order.pickOrder.priority === 'urgent' ? 'bg-red-50 text-red-700 border-red-200' :
+                          order.pickOrder.priority === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          'bg-gray-50 text-gray-700 border-gray-200'
+                        }
+                      >
+                        {order.pickOrder.priority}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {order.pickOrder.destination}
+                    </TableCell>
+                    <TableCell>
+                      {order.items.map((item, idx) => (
+                        <div key={idx}>
+                          {item.referenceNumber ? (
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {item.referenceNumber}
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                          )}
+                        </div>
+                      ))}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-yellow-600">
+                      {order.totalReserved}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {formatDateTime(order.pickOrder.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/warehouse/pick-orders/${order.pickOrder.id}`}>
+                        <Button variant="ghost" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   )
 }

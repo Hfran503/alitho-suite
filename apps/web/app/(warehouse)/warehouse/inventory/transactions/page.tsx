@@ -63,6 +63,7 @@ const TRANSACTION_TYPES = [
   { value: 'RESERVE', label: 'Reserve', color: 'bg-orange-100 text-orange-800' },
   { value: 'UNRESERVE', label: 'Unreserve', color: 'bg-gray-100 text-gray-800' },
   { value: 'DAMAGE', label: 'Damage', color: 'bg-red-100 text-red-800' },
+  { value: 'PICK', label: 'Pick', color: 'bg-indigo-100 text-indigo-800' },
 ]
 
 export default function TransactionsPage() {

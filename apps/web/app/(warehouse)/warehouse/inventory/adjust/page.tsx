@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ImportAdjustmentDialog } from '@/components/warehouse/inventory/ImportAdjustmentDialog'
 
 interface InventoryItem {
   id: string
@@ -41,6 +42,7 @@ export default function AdjustStockPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   const [items, setItems] = useState<InventoryItem[]>([])
   const [locations, setLocations] = useState<WarehouseLocation[]>([])
@@ -143,16 +145,24 @@ export default function AdjustStockPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <Link href="/warehouse/inventory" className="hover:text-emerald-600">
-            Inventory
-          </Link>
-          <span>/</span>
-          <span>Adjust Stock</span>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+            <Link href="/warehouse/inventory" className="hover:text-emerald-600">
+              Inventory
+            </Link>
+            <span>/</span>
+            <span>Adjust Stock</span>
+          </div>
+          <h1 className="text-2xl font-bold">Adjust Stock</h1>
+          <p className="text-gray-600">Add or adjust inventory stock levels</p>
         </div>
-        <h1 className="text-2xl font-bold">Adjust Stock</h1>
-        <p className="text-gray-600">Add or adjust inventory stock levels</p>
+        <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Import from CSV
+        </Button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -306,6 +316,15 @@ export default function AdjustStockPage() {
           </div>
         </div>
       </form>
+
+      {/* Import Dialog */}
+      <ImportAdjustmentDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImportComplete={() => {
+          router.push('/warehouse/inventory')
+        }}
+      />
     </div>
   )
 }

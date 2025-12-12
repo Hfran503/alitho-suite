@@ -12,6 +12,7 @@ const dimensionsSchema = z.object({
 }).optional().nullable()
 
 const updateItemSchema = z.object({
+  customerId: z.string().optional().nullable(),
   sku: z.string().min(1).optional(),
   upc: z.string().optional().nullable(),
   name: z.string().min(1).optional(),
@@ -20,6 +21,7 @@ const updateItemSchema = z.object({
   weight: z.number().positive().optional().nullable(),
   dimensions: dimensionsSchema,
   isActive: z.boolean().optional(),
+  trackByReference: z.boolean().optional(),
   metadata: z.record(z.any()).optional().nullable(),
 })
 
@@ -49,6 +51,11 @@ export async function GET(
       where: {
         id,
         tenantId: membership.tenantId,
+      },
+      include: {
+        customer: {
+          select: { id: true, name: true, company: true, paceCustomerId: true },
+        },
       },
     })
 
@@ -133,6 +140,7 @@ export async function PATCH(
 
     // Build update data with proper null handling for JSON fields
     const updateData: Prisma.InventoryItemUpdateInput = {
+      ...(validatedData.customerId !== undefined && { customerId: validatedData.customerId }),
       ...(validatedData.sku !== undefined && { sku: validatedData.sku }),
       ...(validatedData.upc !== undefined && { upc: validatedData.upc }),
       ...(validatedData.name !== undefined && { name: validatedData.name }),
@@ -140,6 +148,7 @@ export async function PATCH(
       ...(validatedData.category !== undefined && { category: validatedData.category }),
       ...(validatedData.weight !== undefined && { weight: validatedData.weight }),
       ...(validatedData.isActive !== undefined && { isActive: validatedData.isActive }),
+      ...(validatedData.trackByReference !== undefined && { trackByReference: validatedData.trackByReference }),
       // Handle JSON fields with proper Prisma null type
       ...(validatedData.dimensions !== undefined && {
         dimensions: validatedData.dimensions === null ? Prisma.JsonNull : validatedData.dimensions,
@@ -153,6 +162,11 @@ export async function PATCH(
     const item = await db.inventoryItem.update({
       where: { id },
       data: updateData,
+      include: {
+        customer: {
+          select: { id: true, name: true, company: true, paceCustomerId: true },
+        },
+      },
     })
 
     return NextResponse.json({

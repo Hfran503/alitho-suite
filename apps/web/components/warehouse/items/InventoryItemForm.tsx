@@ -13,9 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CustomerSelect } from '@/components/warehouse/customers/CustomerSelect'
+import { DEFAULT_ITEM_CATEGORIES } from '@/lib/warehouse/constants'
 
 interface InventoryItemFormData {
   id?: string
+  customerId: string | null
   sku: string
   upc: string
   name: string
@@ -27,22 +30,13 @@ interface InventoryItemFormData {
   height: string
   dimensionUnit: 'in' | 'cm'
   isActive: boolean
+  trackByReference: boolean
 }
 
 interface InventoryItemFormProps {
   initialData?: InventoryItemFormData
   isEdit?: boolean
 }
-
-const COMMON_CATEGORIES = [
-  'Raw Materials',
-  'Finished Goods',
-  'Packaging',
-  'Components',
-  'Supplies',
-  'Equipment',
-  'Other',
-]
 
 export function InventoryItemForm({ initialData, isEdit = false }: InventoryItemFormProps) {
   const router = useRouter()
@@ -51,6 +45,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
 
   const [formData, setFormData] = useState<InventoryItemFormData>(
     initialData || {
+      customerId: null,
       sku: '',
       upc: '',
       name: '',
@@ -62,10 +57,11 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
       height: '',
       dimensionUnit: 'in',
       isActive: true,
+      trackByReference: false,
     }
   )
 
-  const handleChange = (field: keyof InventoryItemFormData, value: string | boolean) => {
+  const handleChange = (field: keyof InventoryItemFormData, value: string | boolean | null) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -95,6 +91,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          customerId: formData.customerId || null,
           sku: formData.sku,
           upc: formData.upc || null,
           name: formData.name,
@@ -103,6 +100,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
           weight: formData.weight ? parseFloat(formData.weight) : null,
           dimensions,
           isActive: formData.isActive,
+          trackByReference: formData.trackByReference,
         }),
       })
 
@@ -186,6 +184,19 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
             </div>
 
             <div>
+              <Label htmlFor="customer">Customer (Optional)</Label>
+              <CustomerSelect
+                value={formData.customerId}
+                onValueChange={(value) => handleChange('customerId', value)}
+                placeholder="Select customer..."
+                showNoneOption={true}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Leave empty for company-owned inventory
+              </p>
+            </div>
+
+            <div>
               <Label htmlFor="category">Category</Label>
               <Select
                 value={formData.category || '_none'}
@@ -196,7 +207,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">No Category</SelectItem>
-                  {COMMON_CATEGORIES.map((cat) => (
+                  {DEFAULT_ITEM_CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
                     </SelectItem>
@@ -224,6 +235,38 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
               <Label htmlFor="isActive" className="cursor-pointer">
                 Active item
               </Label>
+            </div>
+          </div>
+        </div>
+
+        {/* Tracking Options */}
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold border-b pb-2">Tracking Options</h2>
+
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={formData.trackByReference}
+              onClick={() => handleChange('trackByReference', !formData.trackByReference)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 mt-0.5 ${
+                formData.trackByReference ? 'bg-emerald-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  formData.trackByReference ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <div>
+              <Label className="cursor-pointer font-medium">
+                Track by Reference Number (PO#)
+              </Label>
+              <p className="text-sm text-gray-500 mt-1">
+                When enabled, inventory of this item will be tracked separately by PO# or reference number.
+                Useful for customer goods where you need to see quantities per PO.
+              </p>
             </div>
           </div>
         </div>

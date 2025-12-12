@@ -20,6 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ImportItemsDialog } from '@/components/warehouse/items/ImportItemsDialog'
 
 interface InventoryItem {
   id: string
@@ -61,6 +68,7 @@ export default function InventoryItemsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [availableCategories, setAvailableCategories] = useState<string[]>([])
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   // Debounce search
   useEffect(() => {
@@ -135,6 +143,16 @@ export default function InventoryItemsPage() {
     return `${length || 0} x ${width || 0} x ${height || 0} ${unit}`
   }
 
+  const handleExport = () => {
+    // Build export URL with current filters
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (categoryFilter) params.set('category', categoryFilter)
+    if (statusFilter) params.set('activeOnly', statusFilter === 'true' ? 'true' : 'false')
+
+    window.location.href = `/api/warehouse/items/export?${params.toString()}`
+  }
+
   return (
     <div>
       {/* Header */}
@@ -143,14 +161,40 @@ export default function InventoryItemsPage() {
           <h1 className="text-2xl font-bold">Inventory Items</h1>
           <p className="text-gray-600">Manage SKUs and product master data</p>
         </div>
-        <Link href="/warehouse/items/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Item
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Import / Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Import from CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExport}>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export to CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Link href="/warehouse/items/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Item
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -325,6 +369,13 @@ export default function InventoryItemsPage() {
           </div>
         )}
       </div>
+
+      {/* Import Dialog */}
+      <ImportItemsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImportComplete={fetchItems}
+      />
     </div>
   )
 }

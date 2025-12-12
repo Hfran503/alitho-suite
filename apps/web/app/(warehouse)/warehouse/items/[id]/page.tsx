@@ -6,6 +6,7 @@ import { InventoryItemForm } from '@/components/warehouse/items/InventoryItemFor
 
 interface InventoryItemData {
   id: string
+  customerId: string | null
   sku: string
   upc: string | null
   name: string
@@ -19,6 +20,7 @@ interface InventoryItemData {
     unit?: 'in' | 'cm'
   } | null
   isActive: boolean
+  trackByReference: boolean
 }
 
 export default function EditInventoryItemPage({ params }: { params: Promise<{ id: string }> }) {
@@ -89,6 +91,7 @@ export default function EditInventoryItemPage({ params }: { params: Promise<{ id
       <InventoryItemForm
         initialData={{
           id: item.id,
+          customerId: item.customerId || null,
           sku: item.sku,
           upc: item.upc || '',
           name: item.name,
@@ -100,6 +103,7 @@ export default function EditInventoryItemPage({ params }: { params: Promise<{ id
           height: item.dimensions?.height?.toString() || '',
           dimensionUnit: item.dimensions?.unit || 'in',
           isActive: item.isActive,
+          trackByReference: item.trackByReference,
         }}
         isEdit
       />
