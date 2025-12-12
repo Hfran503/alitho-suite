@@ -55,6 +55,15 @@ export async function GET(request: NextRequest) {
             category: true,
             isActive: true,
             trackByReference: true,
+            // Bulk ordering fields
+            canOrderInBulk: true,
+            bulkUnitName: true,
+            unitsPerBulk: true,
+            _count: {
+              select: {
+                addOns: true,
+              },
+            },
           },
         },
         location: {

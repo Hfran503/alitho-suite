@@ -1058,6 +1058,13 @@ enum PickOrderStatus {
   CANCELLED   // Cancelled
 }
 
+enum ItemType {
+  STANDARD           // Regular item, sold/used alone
+  KIT_COMPONENT      // Only used as part of kits
+  KIT_AND_COMPONENT  // Can be used alone AND as part of kits
+  KIT                // Assembled product with components
+}
+
 enum ASNStatus {
   DRAFT              // Not yet submitted
   PENDING            // Submitted, awaiting arrival
@@ -1156,10 +1163,20 @@ model InventoryItem {
 
   // Classification
   category      String?      // Product category
+  itemType      ItemType     @default(STANDARD) // Item type (standard, kit, component, etc.)
 
   // Physical attributes
   weight        Decimal?     @db.Decimal(10, 3) // Weight in lbs
   dimensions    Json?        // { length, width, height, unit }
+
+  // Pricing
+  sellPrice       Decimal?   @db.Decimal(10, 2) // Price per individual unit
+
+  // Bulk/Case ordering
+  canOrderInBulk  Boolean    @default(false)  // Can this item be ordered in bulk (cases)?
+  bulkUnitName    String?    // Name of bulk unit (e.g., "Case", "Carton", "Box", "Pallet")
+  unitsPerBulk    Int?       // How many individual units per bulk unit
+  bulkSellPrice   Decimal?   @db.Decimal(10, 2) // Price per bulk unit (e.g., per case)
 
   // Status
   isActive      Boolean      @default(true)
@@ -1183,12 +1200,21 @@ model InventoryItem {
   receivingItems  ReceivingItem[]
   pickOrderItems  PickOrderItem[]
 
+  // Kit relations
+  kitComponents   KitComponent[]     @relation("Kit")        // Components that make up this kit
+  usedInKits      KitComponent[]     @relation("Component")  // Kits that use this item
+
+  // Add-on relations
+  addOns          ItemAddOn[]        @relation("ParentItem")  // Add-ons for this item
+  addOnFor        ItemAddOn[]        @relation("AddOnItem")   // Items this is an add-on for
+
   @@unique([tenantId, sku])
   @@index([tenantId])
   @@index([customerId])
   @@index([sku])
   @@index([upc])
   @@index([category])
+  @@index([itemType])
   @@index([isActive])
   @@index([name])
 }
@@ -1564,4 +1590,85 @@ model PickOrderItem {
   @@index([locationId])
   @@index([referenceNumber])
   @@index([isPicked])
+}
+
+// ============================================
+// KIT/ASSEMBLY MODELS
+// ============================================
+
+// KitComponent - Bill of Materials for Kit items
+model KitComponent {
+  id           String        @id @default(cuid())
+
+  // The kit this component belongs to
+  kitId        String
+  kit          InventoryItem @relation("Kit", fields: [kitId], references: [id], onDelete: Cascade)
+
+  // The component item
+  componentId  String
+  component    InventoryItem @relation("Component", fields: [componentId], references: [id], onDelete: Cascade)
+
+  // Quantity of this component per kit
+  quantity     Int           // How many of this component needed per 1 kit
+
+  // Assembly order (for pick lists)
+  sortOrder    Int           @default(0)
+
+  // Notes for assembly
+  notes        String?       @db.Text
+
+  // Timestamps
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([kitId, componentId])
+  @@index([kitId])
+  @@index([componentId])
+}
+
+// ============================================
+// ITEM ADD-ONS MODELS
+// ============================================
+
+enum AddOnApplyTo {
+  INDIVIDUAL_ONLY  // Only include add-on when ordering individually
+  BULK_ONLY        // Only include add-on when ordering in bulk
+  BOTH             // Include add-on in both individual and bulk orders
+}
+
+// ItemAddOn - Bundled/included items that are automatically added to an item
+model ItemAddOn {
+  id              String        @id @default(cuid())
+
+  // The parent item that has this add-on
+  parentItemId    String
+  parentItem      InventoryItem @relation("ParentItem", fields: [parentItemId], references: [id], onDelete: Cascade)
+
+  // The add-on item that gets included
+  addOnItemId     String
+  addOnItem       InventoryItem @relation("AddOnItem", fields: [addOnItemId], references: [id], onDelete: Cascade)
+
+  // When does this add-on apply?
+  applyTo         AddOnApplyTo  @default(BOTH)
+
+  // Quantity of add-on per parent item (for individual orders)
+  quantity        Int           @default(1)
+
+  // Optional: Different quantity for bulk orders (if null, uses regular quantity)
+  bulkQuantity    Int?          // Quantity per bulk unit (e.g., 5 add-ons per case)
+
+  // Display order
+  sortOrder       Int           @default(0)
+
+  // Notes
+  notes           String?       @db.Text
+
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([parentItemId, addOnItemId])
+  @@index([parentItemId])
+  @@index([addOnItemId])
+  @@index([applyTo])
 }

@@ -43,11 +43,10 @@ export async function GET(request: NextRequest) {
 
     const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
 
-    // Search for active customers by name
-    // XPath query: active customers with name containing search term (case-sensitive)
+    // Search for active customers by ID or name
+    // XPath query: active customers with ID or name containing search term (case-sensitive)
     // Note: PACE doesn't support lower-case() function, so search is case-sensitive
-    // Note: PACE Customer object doesn't have a searchable 'company' field at the top level
-    const xpath = `@id != "" and customerStatus/@customerActive = "true" and contains(@custName, "${search}")`
+    const xpath = `@id != "" and customerStatus/@customerActive = "true" and (contains(@id, "${search}") or contains(@custName, "${search}"))`
 
     const findQueryParams = new URLSearchParams({
       type: 'Customer',

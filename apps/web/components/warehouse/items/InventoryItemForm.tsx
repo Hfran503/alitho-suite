@@ -14,7 +14,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CustomerSelect } from '@/components/warehouse/customers/CustomerSelect'
+import { ItemAddOnsManager } from '@/components/warehouse/items/ItemAddOnsManager'
 import { DEFAULT_ITEM_CATEGORIES } from '@/lib/warehouse/constants'
+
+type ItemType = 'STANDARD' | 'KIT_COMPONENT' | 'KIT_AND_COMPONENT' | 'KIT'
 
 interface InventoryItemFormData {
   id?: string
@@ -24,6 +27,7 @@ interface InventoryItemFormData {
   name: string
   description: string
   category: string
+  itemType: ItemType
   weight: string
   length: string
   width: string
@@ -31,6 +35,13 @@ interface InventoryItemFormData {
   dimensionUnit: 'in' | 'cm'
   isActive: boolean
   trackByReference: boolean
+  // Pricing
+  sellPrice: string
+  // Bulk ordering
+  canOrderInBulk: boolean
+  bulkUnitName: string
+  unitsPerBulk: string
+  bulkSellPrice: string
 }
 
 interface InventoryItemFormProps {
@@ -51,6 +62,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
       name: '',
       description: '',
       category: '',
+      itemType: 'STANDARD',
       weight: '',
       length: '',
       width: '',
@@ -58,6 +70,11 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
       dimensionUnit: 'in',
       isActive: true,
       trackByReference: false,
+      sellPrice: '',
+      canOrderInBulk: false,
+      bulkUnitName: '',
+      unitsPerBulk: '',
+      bulkSellPrice: '',
     }
   )
 
@@ -97,10 +114,18 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
           name: formData.name,
           description: formData.description || null,
           category: formData.category || null,
+          itemType: formData.itemType,
           weight: formData.weight ? parseFloat(formData.weight) : null,
           dimensions,
           isActive: formData.isActive,
           trackByReference: formData.trackByReference,
+          // Pricing
+          sellPrice: formData.sellPrice ? parseFloat(formData.sellPrice) : null,
+          // Bulk ordering fields
+          canOrderInBulk: formData.canOrderInBulk,
+          bulkUnitName: formData.canOrderInBulk ? formData.bulkUnitName || null : null,
+          unitsPerBulk: formData.canOrderInBulk && formData.unitsPerBulk ? parseInt(formData.unitsPerBulk) : null,
+          bulkSellPrice: formData.canOrderInBulk && formData.bulkSellPrice ? parseFloat(formData.bulkSellPrice) : null,
         }),
       })
 
@@ -216,6 +241,30 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
               </Select>
             </div>
 
+            <div>
+              <Label htmlFor="itemType">Item Type</Label>
+              <Select
+                value={formData.itemType}
+                onValueChange={(v) => handleChange('itemType', v as ItemType)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select item type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="STANDARD">Standard Item</SelectItem>
+                  <SelectItem value="KIT_COMPONENT">Kit Component Only</SelectItem>
+                  <SelectItem value="KIT_AND_COMPONENT">Kit & Standalone</SelectItem>
+                  <SelectItem value="KIT">Kit (Assembly)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                {formData.itemType === 'STANDARD' && 'Regular item that is used/sold on its own'}
+                {formData.itemType === 'KIT_COMPONENT' && 'Only used as part of kits, not sold separately'}
+                {formData.itemType === 'KIT_AND_COMPONENT' && 'Can be sold alone and used in kits'}
+                {formData.itemType === 'KIT' && 'Assembled product made from components'}
+              </p>
+            </div>
+
             <div className="flex items-center gap-3 pt-6">
               <button
                 type="button"
@@ -270,6 +319,160 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
             </div>
           </div>
         </div>
+
+        {/* Pricing */}
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold border-b pb-2">Pricing</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="sellPrice">Sell Price (per unit)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                <Input
+                  id="sellPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.sellPrice}
+                  onChange={(e) => handleChange('sellPrice', e.target.value)}
+                  placeholder="0.00"
+                  className="pl-7"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Price when selling individual units
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bulk/Case Ordering */}
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold border-b pb-2">Bulk/Case Ordering</h2>
+
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={formData.canOrderInBulk}
+              onClick={() => handleChange('canOrderInBulk', !formData.canOrderInBulk)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 mt-0.5 ${
+                formData.canOrderInBulk ? 'bg-emerald-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  formData.canOrderInBulk ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <div>
+              <Label className="cursor-pointer font-medium">
+                Enable Bulk/Case Ordering
+              </Label>
+              <p className="text-sm text-gray-500 mt-1">
+                Allow this item to be ordered in bulk units (cases, cartons, pallets, etc.)
+              </p>
+            </div>
+          </div>
+
+          {formData.canOrderInBulk && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t mt-4">
+              <div>
+                <Label htmlFor="bulkUnitName">Bulk Unit Name *</Label>
+                <Select
+                  value={formData.bulkUnitName || '_custom'}
+                  onValueChange={(v) => handleChange('bulkUnitName', v === '_custom' ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select or enter bulk unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Case">Case</SelectItem>
+                    <SelectItem value="Carton">Carton</SelectItem>
+                    <SelectItem value="Box">Box</SelectItem>
+                    <SelectItem value="Pallet">Pallet</SelectItem>
+                    <SelectItem value="Pack">Pack</SelectItem>
+                    <SelectItem value="Bundle">Bundle</SelectItem>
+                    <SelectItem value="_custom">Custom...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formData.bulkUnitName === '' && (
+                  <Input
+                    className="mt-2"
+                    value={formData.bulkUnitName}
+                    onChange={(e) => handleChange('bulkUnitName', e.target.value)}
+                    placeholder="Enter custom unit name"
+                  />
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="unitsPerBulk">Units per {formData.bulkUnitName || 'Bulk Unit'} *</Label>
+                <Input
+                  id="unitsPerBulk"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.unitsPerBulk}
+                  onChange={(e) => handleChange('unitsPerBulk', e.target.value)}
+                  placeholder="e.g., 24"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  How many individual units are in one {formData.bulkUnitName?.toLowerCase() || 'bulk unit'}
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="bulkSellPrice">Sell Price per {formData.bulkUnitName || 'Bulk Unit'}</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                  <Input
+                    id="bulkSellPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.bulkSellPrice}
+                    onChange={(e) => handleChange('bulkSellPrice', e.target.value)}
+                    placeholder="0.00"
+                    className="pl-7"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Price when selling by {formData.bulkUnitName?.toLowerCase() || 'bulk unit'}
+                </p>
+              </div>
+
+              {formData.bulkUnitName && formData.unitsPerBulk && (
+                <div className="md:col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                  <p className="text-sm text-blue-800">
+                    <strong>Example:</strong> Ordering 2 {formData.bulkUnitName.toLowerCase()}s = {parseInt(formData.unitsPerBulk) * 2} units
+                  </p>
+                  {formData.sellPrice && formData.bulkSellPrice && formData.unitsPerBulk && (
+                    <p className="text-sm text-blue-800">
+                      <strong>Savings:</strong> ${((parseFloat(formData.sellPrice) * parseInt(formData.unitsPerBulk)) - parseFloat(formData.bulkSellPrice)).toFixed(2)} per {formData.bulkUnitName.toLowerCase()} vs. buying individually
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Add-Ons Section (only in edit mode) */}
+        {isEdit && initialData?.id && (
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <h2 className="text-lg font-semibold border-b pb-2">Add-Ons / Bundled Items</h2>
+            <p className="text-sm text-gray-600 -mt-2">
+              Configure items that should be automatically included when this item is ordered.
+            </p>
+            <ItemAddOnsManager
+              itemId={initialData.id}
+              canOrderInBulk={formData.canOrderInBulk}
+            />
+          </div>
+        )}
 
         {/* Physical Attributes */}
         <div className="bg-white rounded-lg shadow p-6 space-y-4">

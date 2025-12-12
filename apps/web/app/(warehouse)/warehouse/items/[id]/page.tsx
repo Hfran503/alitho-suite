@@ -4,6 +4,8 @@ import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { InventoryItemForm } from '@/components/warehouse/items/InventoryItemForm'
 
+type ItemType = 'STANDARD' | 'KIT_COMPONENT' | 'KIT_AND_COMPONENT' | 'KIT'
+
 interface InventoryItemData {
   id: string
   customerId: string | null
@@ -12,6 +14,7 @@ interface InventoryItemData {
   name: string
   description: string | null
   category: string | null
+  itemType: ItemType
   weight: number | null
   dimensions: {
     length?: number
@@ -21,6 +24,13 @@ interface InventoryItemData {
   } | null
   isActive: boolean
   trackByReference: boolean
+  // Pricing
+  sellPrice: number | null
+  // Bulk ordering
+  canOrderInBulk: boolean
+  bulkUnitName: string | null
+  unitsPerBulk: number | null
+  bulkSellPrice: number | null
 }
 
 export default function EditInventoryItemPage({ params }: { params: Promise<{ id: string }> }) {
@@ -97,6 +107,7 @@ export default function EditInventoryItemPage({ params }: { params: Promise<{ id
           name: item.name,
           description: item.description || '',
           category: item.category || '',
+          itemType: item.itemType || 'STANDARD',
           weight: item.weight?.toString() || '',
           length: item.dimensions?.length?.toString() || '',
           width: item.dimensions?.width?.toString() || '',
@@ -104,6 +115,11 @@ export default function EditInventoryItemPage({ params }: { params: Promise<{ id
           dimensionUnit: item.dimensions?.unit || 'in',
           isActive: item.isActive,
           trackByReference: item.trackByReference,
+          sellPrice: item.sellPrice?.toString() || '',
+          canOrderInBulk: item.canOrderInBulk || false,
+          bulkUnitName: item.bulkUnitName || '',
+          unitsPerBulk: item.unitsPerBulk?.toString() || '',
+          bulkSellPrice: item.bulkSellPrice?.toString() || '',
         }}
         isEdit
       />

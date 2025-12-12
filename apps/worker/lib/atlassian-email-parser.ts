@@ -116,6 +116,7 @@ function categorizeCountry(country?: string): string {
   const countryCategories: Record<string, string> = {
     philippines: 'Philippines',
     australia: 'Australia',
+    'new zealand': 'Australia',
     india: 'India',
     'united states of america': 'United States of America',
     'united states': 'United States of America',

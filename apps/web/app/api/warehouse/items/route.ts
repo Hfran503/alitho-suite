@@ -11,6 +11,8 @@ const dimensionsSchema = z.object({
   unit: z.enum(['in', 'cm']).default('in'),
 }).optional().nullable()
 
+const itemTypeSchema = z.enum(['STANDARD', 'KIT_COMPONENT', 'KIT_AND_COMPONENT', 'KIT'])
+
 const createItemSchema = z.object({
   customerId: z.string().optional().nullable(),
   sku: z.string().min(1, 'SKU is required'),
@@ -18,10 +20,18 @@ const createItemSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
+  itemType: itemTypeSchema.default('STANDARD'),
   weight: z.number().positive().optional().nullable(),
   dimensions: dimensionsSchema,
   isActive: z.boolean().default(true),
   trackByReference: z.boolean().default(false),
+  // Pricing
+  sellPrice: z.number().nonnegative().optional().nullable(),
+  // Bulk ordering fields
+  canOrderInBulk: z.boolean().default(false),
+  bulkUnitName: z.string().optional().nullable(),
+  unitsPerBulk: z.number().int().positive().optional().nullable(),
+  bulkSellPrice: z.number().nonnegative().optional().nullable(),
   metadata: z.record(z.any()).optional().nullable(),
 })
 
@@ -172,10 +182,18 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         description: validatedData.description,
         category: validatedData.category,
+        itemType: validatedData.itemType,
         weight: validatedData.weight,
         dimensions: validatedData.dimensions === null ? Prisma.JsonNull : validatedData.dimensions,
         isActive: validatedData.isActive,
         trackByReference: validatedData.trackByReference,
+        // Pricing
+        sellPrice: validatedData.sellPrice,
+        // Bulk ordering fields
+        canOrderInBulk: validatedData.canOrderInBulk,
+        bulkUnitName: validatedData.bulkUnitName,
+        unitsPerBulk: validatedData.unitsPerBulk,
+        bulkSellPrice: validatedData.bulkSellPrice,
         metadata: validatedData.metadata === null ? Prisma.JsonNull : validatedData.metadata,
       },
       include: {

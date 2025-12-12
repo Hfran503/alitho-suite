@@ -11,6 +11,8 @@ const dimensionsSchema = z.object({
   unit: z.enum(['in', 'cm']).default('in'),
 }).optional().nullable()
 
+const itemTypeSchema = z.enum(['STANDARD', 'KIT_COMPONENT', 'KIT_AND_COMPONENT', 'KIT'])
+
 const updateItemSchema = z.object({
   customerId: z.string().optional().nullable(),
   sku: z.string().min(1).optional(),
@@ -18,10 +20,18 @@ const updateItemSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
+  itemType: itemTypeSchema.optional(),
   weight: z.number().positive().optional().nullable(),
   dimensions: dimensionsSchema,
   isActive: z.boolean().optional(),
   trackByReference: z.boolean().optional(),
+  // Pricing
+  sellPrice: z.number().nonnegative().optional().nullable(),
+  // Bulk ordering fields
+  canOrderInBulk: z.boolean().optional(),
+  bulkUnitName: z.string().optional().nullable(),
+  unitsPerBulk: z.number().int().positive().optional().nullable(),
+  bulkSellPrice: z.number().nonnegative().optional().nullable(),
   metadata: z.record(z.any()).optional().nullable(),
 })
 
@@ -146,9 +156,17 @@ export async function PATCH(
       ...(validatedData.name !== undefined && { name: validatedData.name }),
       ...(validatedData.description !== undefined && { description: validatedData.description }),
       ...(validatedData.category !== undefined && { category: validatedData.category }),
+      ...(validatedData.itemType !== undefined && { itemType: validatedData.itemType }),
       ...(validatedData.weight !== undefined && { weight: validatedData.weight }),
       ...(validatedData.isActive !== undefined && { isActive: validatedData.isActive }),
       ...(validatedData.trackByReference !== undefined && { trackByReference: validatedData.trackByReference }),
+      // Pricing
+      ...(validatedData.sellPrice !== undefined && { sellPrice: validatedData.sellPrice }),
+      // Bulk ordering fields
+      ...(validatedData.canOrderInBulk !== undefined && { canOrderInBulk: validatedData.canOrderInBulk }),
+      ...(validatedData.bulkUnitName !== undefined && { bulkUnitName: validatedData.bulkUnitName }),
+      ...(validatedData.unitsPerBulk !== undefined && { unitsPerBulk: validatedData.unitsPerBulk }),
+      ...(validatedData.bulkSellPrice !== undefined && { bulkSellPrice: validatedData.bulkSellPrice }),
       // Handle JSON fields with proper Prisma null type
       ...(validatedData.dimensions !== undefined && {
         dimensions: validatedData.dimensions === null ? Prisma.JsonNull : validatedData.dimensions,
