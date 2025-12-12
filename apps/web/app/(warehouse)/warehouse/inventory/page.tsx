@@ -135,6 +135,8 @@ export default function InventoryPage() {
     }
 
     async function fetchPendingOrders() {
+      if (!quickViewItem) return
+
       setLoadingPendingOrders(true)
       try {
         const response = await fetch(`/api/warehouse/inventory/item/${quickViewItem.item.id}/pending-orders`)

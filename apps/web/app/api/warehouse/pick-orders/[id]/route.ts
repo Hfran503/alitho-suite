@@ -380,9 +380,6 @@ export async function PATCH(
       )
     }
 
-    // Determine which stock to use (reserved takes priority)
-    const useReserved = hasReservedStock
-
     // Update pick order item
     const updatedItem = await db.pickOrderItem.update({
       where: { id: itemId },

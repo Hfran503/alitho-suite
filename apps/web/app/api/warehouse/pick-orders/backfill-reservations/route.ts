@@ -5,7 +5,7 @@ import { db } from '@repo/database'
 
 // POST /api/warehouse/pick-orders/backfill-reservations
 // Backfill stock reservations for existing PENDING/IN_PROGRESS pick orders
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
