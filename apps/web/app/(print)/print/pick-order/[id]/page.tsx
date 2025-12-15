@@ -78,7 +78,7 @@ export default async function PickOrderPrintPage({ params }: PrintPageProps) {
 
   // Get available stock for items without assigned locations
   const itemsWithStock = await Promise.all(
-    pickOrder.items.map(async (orderItem) => {
+    pickOrder.items.map(async (orderItem: (typeof pickOrder.items)[number]) => {
       if (orderItem.locationId) {
         return { ...orderItem, suggestedLocations: [] }
       }
