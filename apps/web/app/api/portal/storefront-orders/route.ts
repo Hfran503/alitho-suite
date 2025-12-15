@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
+    const myOrdersOnly = searchParams.get('myOrders') === 'true'
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
@@ -112,6 +113,11 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       where.status = status
+    }
+
+    // Filter to only show orders created by the current user
+    if (myOrdersOnly) {
+      where.createdById = session.user.id
     }
 
     const [orders, total] = await Promise.all([

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, Search, ChevronRight, Plus, Loader2, AlertCircle } from 'lucide-react'
+import { Package, Search, ChevronRight, Plus, Loader2, AlertCircle, User, Users } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -69,10 +69,11 @@ export default function PortalOrdersPage() {
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [myOrdersOnly, setMyOrdersOnly] = useState(false)
 
   useEffect(() => {
     fetchOrders()
-  }, [statusFilter])
+  }, [statusFilter, myOrdersOnly])
 
   const fetchOrders = async () => {
     try {
@@ -81,6 +82,9 @@ export default function PortalOrdersPage() {
       const params = new URLSearchParams()
       if (statusFilter !== 'all') {
         params.append('status', statusFilter)
+      }
+      if (myOrdersOnly) {
+        params.append('myOrders', 'true')
       }
 
       const response = await fetch(`/api/portal/storefront-orders?${params.toString()}`)
@@ -100,8 +104,7 @@ export default function PortalOrdersPage() {
   }
 
   const filteredOrders = orders.filter((order) =>
-    order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (order.paceJobNumber && order.paceJobNumber.toLowerCase().includes(searchQuery.toLowerCase()))
+    order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const formatDate = (dateString: string) => {
@@ -113,7 +116,7 @@ export default function PortalOrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -130,29 +133,58 @@ export default function PortalOrdersPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by order number..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+        <div className="flex flex-col gap-4">
+          {/* My Orders / All Orders Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMyOrdersOnly(false)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                !myOrdersOnly
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              All Orders
+            </button>
+            <button
+              onClick={() => setMyOrdersOnly(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                myOrdersOnly
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <User className="h-4 w-4" />
+              My Orders
+            </button>
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-48 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">All Orders</option>
-            <option value="CREATED">Pending</option>
-            <option value="PROCESSING">Processing</option>
-            <option value="SHIPPED">Shipped</option>
-            <option value="DELIVERED">Delivered</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+
+          {/* Search and Status Filter */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by order number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full sm:w-48 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Statuses</option>
+              <option value="CREATED">Pending</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="SHIPPED">Shipped</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -184,7 +216,9 @@ export default function PortalOrdersPage() {
           <p className="text-gray-600 mb-6">
             {searchQuery || statusFilter !== 'all'
               ? 'Try adjusting your filters'
-              : 'Create your first order to get started'}
+              : myOrdersOnly
+                ? "You haven't placed any orders yet"
+                : 'Create your first order to get started'}
           </p>
           {!searchQuery && statusFilter === 'all' && (
             <Link href="/portal/orders/new">
@@ -215,11 +249,6 @@ export default function PortalOrdersPage() {
                       >
                         {statusLabels[order.status] || order.status}
                       </Badge>
-                      {order.paceJobNumber && (
-                        <Badge variant="secondary" className="text-xs">
-                          PACE: {order.paceJobNumber}
-                        </Badge>
-                      )}
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
                       <span>{formatDate(order.createdAt)}</span>

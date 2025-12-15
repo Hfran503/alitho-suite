@@ -548,12 +548,6 @@ export default function PortalNewOrderPage() {
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link
-                href="/portal/orders"
-                className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 text-gray-600" />
-              </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Create New Order</h1>
                 {customer && (

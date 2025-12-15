@@ -85,11 +85,22 @@ export function PortalSidebar() {
           </div>
         ) : (
           navigation.map((item) => {
-            // For the Welcome page, only match exact path
-            const isActive =
+            // Check if this item matches the current path
+            const matchesPath =
               item.href === '/portal'
                 ? pathname === '/portal'
                 : pathname === item.href || pathname?.startsWith(item.href + '/')
+
+            // Check if there's a more specific match in navigation
+            // (another item with a longer href that also matches)
+            const hasMoreSpecificMatch = navigation.some(
+              (other) =>
+                other.href !== item.href &&
+                other.href.length > item.href.length &&
+                (pathname === other.href || pathname?.startsWith(other.href + '/') || pathname === other.href)
+            )
+
+            const isActive = matchesPath && !hasMoreSpecificMatch
             const Icon = item.icon
 
             return (
