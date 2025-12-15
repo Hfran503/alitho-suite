@@ -1,23 +1,53 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, Search, ChevronRight } from 'lucide-react'
+import { Package, Search, ChevronRight, Plus, Loader2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
-interface Order {
+interface OrderItem {
+  id: string
+  quantity: number
+  item: {
+    id: string
+    itemCode: string | null
+    sku: string | null
+    name: string
+  }
+}
+
+interface StorefrontOrder {
   id: string
   orderNumber: string
   status: string
-  customerName: string
-  total: number
-  currency: string
+  paceJobNumber: string | null
+  shipToName: string | null
+  shipToCity: string | null
+  shipToState: string | null
+  notes: string | null
   createdAt: string
+  updatedAt: string
+  customer: {
+    id: string
+    name: string
+    company: string | null
+    paceCustomerId: string
+  }
+  items: OrderItem[]
+  totalItems: number
   _count: {
     items: number
   }
 }
 
-const statusColors = {
+const statusColors: Record<string, string> = {
+  CREATED: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  PROCESSING: 'bg-blue-100 text-blue-800 border-blue-200',
+  SHIPPED: 'bg-purple-100 text-purple-800 border-purple-200',
+  DELIVERED: 'bg-green-100 text-green-800 border-green-200',
+  CANCELLED: 'bg-red-100 text-red-800 border-red-200',
+  // Lowercase fallbacks
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   processing: 'bg-blue-100 text-blue-800 border-blue-200',
   shipped: 'bg-purple-100 text-purple-800 border-purple-200',
@@ -25,9 +55,18 @@ const statusColors = {
   cancelled: 'bg-red-100 text-red-800 border-red-200',
 }
 
+const statusLabels: Record<string, string> = {
+  CREATED: 'Pending',
+  PROCESSING: 'Processing',
+  SHIPPED: 'Shipped',
+  DELIVERED: 'Delivered',
+  CANCELLED: 'Cancelled',
+}
+
 export default function PortalOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<StorefrontOrder[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -38,18 +77,23 @@ export default function PortalOrdersPage() {
   const fetchOrders = async () => {
     try {
       setLoading(true)
+      setError(null)
       const params = new URLSearchParams()
       if (statusFilter !== 'all') {
         params.append('status', statusFilter)
       }
 
-      const response = await fetch(`/api/portal/orders?${params.toString()}`)
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data.orders || [])
+      const response = await fetch(`/api/portal/storefront-orders?${params.toString()}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setOrders(data.data || [])
+      } else {
+        setError(data.error || 'Failed to load orders')
       }
-    } catch (error) {
-      console.error('Error fetching orders:', error)
+    } catch (err) {
+      console.error('Error fetching orders:', err)
+      setError('Failed to load orders')
     } finally {
       setLoading(false)
     }
@@ -57,15 +101,8 @@ export default function PortalOrdersPage() {
 
   const filteredOrders = orders.filter((order) =>
     order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+    (order.paceJobNumber && order.paceJobNumber.toLowerCase().includes(searchQuery.toLowerCase()))
   )
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-    }).format(amount)
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -78,9 +115,17 @@ export default function PortalOrdersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
-        <p className="text-gray-600 mt-2">View and track all your orders</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
+          <p className="text-gray-600 mt-2">View and track all your orders</p>
+        </div>
+        <Link href="/portal/orders/new">
+          <Button className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            New Order
+          </Button>
+        </Link>
       </div>
 
       {/* Filters */}
@@ -90,7 +135,7 @@ export default function PortalOrdersPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search orders..."
+              placeholder="Search by order number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -102,32 +147,55 @@ export default function PortalOrdersPage() {
             className="w-full sm:w-48 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="all">All Orders</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="shipped">Shipped</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="CREATED">Pending</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="SHIPPED">Shipped</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
         </div>
       </div>
 
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+          <p className="text-red-700">{error}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={fetchOrders}
+          >
+            Try Again
+          </Button>
+        </div>
+      )}
+
       {/* Orders List */}
       {loading ? (
         <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
           <p className="mt-4 text-gray-600">Loading orders...</p>
         </div>
-      ) : filteredOrders.length === 0 ? (
+      ) : !error && filteredOrders.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
           <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-6">
             {searchQuery || statusFilter !== 'all'
               ? 'Try adjusting your filters'
-              : 'Your orders will appear here'}
+              : 'Create your first order to get started'}
           </p>
+          {!searchQuery && statusFilter === 'all' && (
+            <Link href="/portal/orders/new">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Order
+              </Button>
+            </Link>
+          )}
         </div>
-      ) : (
+      ) : !error && (
         <div className="grid gap-4">
           {filteredOrders.map((order) => (
             <Link key={order.id} href={`/portal/orders/${order.id}`}>
@@ -138,22 +206,41 @@ export default function PortalOrdersPage() {
                       <h3 className="font-semibold text-lg text-gray-900">
                         {order.orderNumber}
                       </h3>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                          statusColors[order.status as keyof typeof statusColors] ||
-                          'bg-gray-100 text-gray-800'
-                        }`}
+                      <Badge
+                        variant="outline"
+                        className={
+                          statusColors[order.status] ||
+                          'bg-gray-100 text-gray-800 border-gray-200'
+                        }
                       >
-                        {order.status}
-                      </span>
+                        {statusLabels[order.status] || order.status}
+                      </Badge>
+                      {order.paceJobNumber && (
+                        <Badge variant="secondary" className="text-xs">
+                          PACE: {order.paceJobNumber}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
                       <span>{formatDate(order.createdAt)}</span>
-                      <span>{order._count.items} items</span>
-                      <span className="font-semibold text-gray-900">
-                        {formatCurrency(order.total, order.currency)}
-                      </span>
+                      <span>{order.totalItems || order._count?.items || 0} items</span>
+                      {order.shipToCity && order.shipToState && (
+                        <span>Ship to: {order.shipToCity}, {order.shipToState}</span>
+                      )}
                     </div>
+                    {order.items && order.items.length > 0 && (
+                      <div className="mt-2 text-sm text-gray-500">
+                        {order.items.slice(0, 3).map((item, idx) => (
+                          <span key={item.id}>
+                            {idx > 0 && ', '}
+                            {item.item.name} ({item.quantity})
+                          </span>
+                        ))}
+                        {order.items.length > 3 && (
+                          <span className="text-gray-400"> +{order.items.length - 3} more</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <ChevronRight className="h-5 w-5 text-gray-400" />
                 </div>

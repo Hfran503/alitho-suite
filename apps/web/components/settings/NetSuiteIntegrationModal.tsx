@@ -2,6 +2,26 @@
 
 import { useState, useEffect } from 'react'
 import { Modal } from '../Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Briefcase,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Trash2,
+  Loader2,
+  FlaskConical,
+  Rocket,
+  Webhook,
+  Shield,
+  Info,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface NetSuiteIntegrationModalProps {
   isOpen: boolean
@@ -57,42 +77,19 @@ export function NetSuiteIntegrationModal({
         setSandboxEnabled(data.data?.sandboxEnabled || false)
         setProductionEnabled(data.data?.productionEnabled || false)
 
-        // Load credentials (masked values for security - show first 4 and last 4)
-        if (data.data?.sandboxAccountId) {
-          setSandboxAccountId(data.data.sandboxAccountId)
-        }
-        if (data.data?.sandboxConsumerKey) {
-          setSandboxConsumerKey(data.data.sandboxConsumerKey)
-        }
-        if (data.data?.sandboxConsumerSecret) {
-          setSandboxConsumerSecret(data.data.sandboxConsumerSecret)
-        }
-        if (data.data?.sandboxTokenId) {
-          setSandboxTokenId(data.data.sandboxTokenId)
-        }
-        if (data.data?.sandboxTokenSecret) {
-          setSandboxTokenSecret(data.data.sandboxTokenSecret)
-        }
+        if (data.data?.sandboxAccountId) setSandboxAccountId(data.data.sandboxAccountId)
+        if (data.data?.sandboxConsumerKey) setSandboxConsumerKey(data.data.sandboxConsumerKey)
+        if (data.data?.sandboxConsumerSecret) setSandboxConsumerSecret(data.data.sandboxConsumerSecret)
+        if (data.data?.sandboxTokenId) setSandboxTokenId(data.data.sandboxTokenId)
+        if (data.data?.sandboxTokenSecret) setSandboxTokenSecret(data.data.sandboxTokenSecret)
 
-        if (data.data?.productionAccountId) {
-          setProductionAccountId(data.data.productionAccountId)
-        }
-        if (data.data?.productionConsumerKey) {
-          setProductionConsumerKey(data.data.productionConsumerKey)
-        }
-        if (data.data?.productionConsumerSecret) {
-          setProductionConsumerSecret(data.data.productionConsumerSecret)
-        }
-        if (data.data?.productionTokenId) {
-          setProductionTokenId(data.data.productionTokenId)
-        }
-        if (data.data?.productionTokenSecret) {
-          setProductionTokenSecret(data.data.productionTokenSecret)
-        }
+        if (data.data?.productionAccountId) setProductionAccountId(data.data.productionAccountId)
+        if (data.data?.productionConsumerKey) setProductionConsumerKey(data.data.productionConsumerKey)
+        if (data.data?.productionConsumerSecret) setProductionConsumerSecret(data.data.productionConsumerSecret)
+        if (data.data?.productionTokenId) setProductionTokenId(data.data.productionTokenId)
+        if (data.data?.productionTokenSecret) setProductionTokenSecret(data.data.productionTokenSecret)
 
-        if (data.data?.webhookToken) {
-          setWebhookToken(data.data.webhookToken)
-        }
+        if (data.data?.webhookToken) setWebhookToken(data.data.webhookToken)
       }
     } catch (error) {
       console.error('Error checking configuration:', error)
@@ -105,8 +102,6 @@ export function NetSuiteIntegrationModal({
     setError('')
     setSuccess('')
 
-    // Validate that required fields are filled for the mode being enabled
-    // (Allow masked values - they indicate existing credentials)
     if (currentMode === 'sandbox' && sandboxEnabled) {
       if (!sandboxAccountId.trim() || !sandboxConsumerKey.trim() || !sandboxConsumerSecret.trim() || !sandboxTokenId.trim() || !sandboxTokenSecret.trim()) {
         setError('Please fill in all sandbox credentials')
@@ -124,7 +119,6 @@ export function NetSuiteIntegrationModal({
     }
 
     try {
-      // Helper function to check if a value is masked (either full mask or partial mask)
       const isMaskedValue = (value: string): boolean => {
         return value === '••••••••' || /^.{0,4}••••.{0,4}$/.test(value)
       }
@@ -135,21 +129,18 @@ export function NetSuiteIntegrationModal({
         productionEnabled,
       }
 
-      // Only include sandbox credentials if they're being updated (not empty and not masked)
       if (sandboxAccountId && !isMaskedValue(sandboxAccountId)) requestBody.sandboxAccountId = sandboxAccountId
       if (sandboxConsumerKey && !isMaskedValue(sandboxConsumerKey)) requestBody.sandboxConsumerKey = sandboxConsumerKey
       if (sandboxConsumerSecret && !isMaskedValue(sandboxConsumerSecret)) requestBody.sandboxConsumerSecret = sandboxConsumerSecret
       if (sandboxTokenId && !isMaskedValue(sandboxTokenId)) requestBody.sandboxTokenId = sandboxTokenId
       if (sandboxTokenSecret && !isMaskedValue(sandboxTokenSecret)) requestBody.sandboxTokenSecret = sandboxTokenSecret
 
-      // Only include production credentials if they're being updated (not empty and not masked)
       if (productionAccountId && !isMaskedValue(productionAccountId)) requestBody.productionAccountId = productionAccountId
       if (productionConsumerKey && !isMaskedValue(productionConsumerKey)) requestBody.productionConsumerKey = productionConsumerKey
       if (productionConsumerSecret && !isMaskedValue(productionConsumerSecret)) requestBody.productionConsumerSecret = productionConsumerSecret
       if (productionTokenId && !isMaskedValue(productionTokenId)) requestBody.productionTokenId = productionTokenId
       if (productionTokenSecret && !isMaskedValue(productionTokenSecret)) requestBody.productionTokenSecret = productionTokenSecret
 
-      // Include webhook token if provided (not empty and not masked)
       if (webhookToken && !isMaskedValue(webhookToken)) requestBody.webhookToken = webhookToken
 
       const response = await fetch('/api/integrations/netsuite', {
@@ -210,412 +201,334 @@ export function NetSuiteIntegrationModal({
     }
   }
 
+  const CredentialInput = ({
+    label,
+    value,
+    onChange,
+    disabled,
+    placeholder,
+    required = true
+  }: {
+    label: string
+    value: string
+    onChange: (v: string) => void
+    disabled: boolean
+    placeholder: string
+    required?: boolean
+  }) => (
+    <div className="space-y-2">
+      <Label className="text-xs text-gray-500">
+        {label} {required && <span className="text-red-500">*</span>}
+      </Label>
+      <Input
+        type={showSecrets ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className={cn('h-10 font-mono text-sm bg-white', disabled && 'bg-gray-50 cursor-not-allowed')}
+        placeholder={placeholder}
+      />
+    </div>
+  )
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="NetSuite Integration" size="xl">
-      <form onSubmit={handleSave} className="space-y-6">
+    <Modal isOpen={isOpen} onClose={onClose} title="NetSuite Integration" size="2xl">
+      <form onSubmit={handleSave} className="space-y-8">
+        {/* Alerts */}
+        {success && (
+          <Alert className="bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-800 font-medium">{success}</AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert className="bg-gradient-to-r from-red-50 to-rose-50 border-red-200">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800 font-medium">{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Info Banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-blue-800">OAuth 2.0 Token-Based Authentication</h3>
-              <p className="mt-1 text-sm text-blue-700">
-                Configure your NetSuite integration using OAuth credentials. You can set up both Sandbox and Production environments.
-              </p>
-            </div>
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200">
+          <div className="p-2 bg-violet-100 rounded-lg">
+            <Info className="h-4 w-4 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-violet-900">OAuth 2.0 Token-Based Authentication</h3>
+            <p className="mt-1 text-sm text-violet-700">
+              Configure your NetSuite integration using OAuth credentials. You can set up both Sandbox and Production environments.
+            </p>
           </div>
         </div>
 
-        {/* Current Mode Selection */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <label className="block text-sm font-semibold text-gray-900 mb-3">
-            Active Environment
-          </label>
-          <div className="grid grid-cols-2 gap-3">
+        {/* Environment Selection */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-violet-500" />
+            <h3 className="font-semibold text-gray-900">Active Environment</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
               onClick={() => setCurrentMode('sandbox')}
-              className={`relative flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all ${
+              className={cn(
+                'relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200',
                 currentMode === 'sandbox'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-              }`}
+                  ? 'border-amber-400 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-lg shadow-amber-500/10'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              )}
             >
-              <div className="flex flex-col items-center">
-                <span className="font-semibold text-base">Sandbox</span>
-                {sandboxEnabled && (
-                  <span className="text-xs mt-1 text-green-600">● Configured</span>
-                )}
+              <div className={cn('p-2.5 rounded-lg', currentMode === 'sandbox' ? 'bg-amber-100' : 'bg-gray-100')}>
+                <FlaskConical className={cn('h-5 w-5', currentMode === 'sandbox' ? 'text-amber-600' : 'text-gray-400')} />
               </div>
+              <div className="text-left flex-1">
+                <p className={cn('font-medium', currentMode === 'sandbox' ? 'text-amber-900' : 'text-gray-700')}>Sandbox</p>
+                <p className="text-xs text-gray-500">Development testing</p>
+              </div>
+              {sandboxEnabled && (
+                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Configured</Badge>
+              )}
               {currentMode === 'sandbox' && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
+                <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-amber-500" />
               )}
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentMode('production')}
-              className={`relative flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all ${
+              className={cn(
+                'relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200',
                 currentMode === 'production'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-              }`}
+                  ? 'border-emerald-400 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-500/10'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              )}
             >
-              <div className="flex flex-col items-center">
-                <span className="font-semibold text-base">Production</span>
-                {productionEnabled && (
-                  <span className="text-xs mt-1 text-green-600">● Configured</span>
-                )}
+              <div className={cn('p-2.5 rounded-lg', currentMode === 'production' ? 'bg-emerald-100' : 'bg-gray-100')}>
+                <Rocket className={cn('h-5 w-5', currentMode === 'production' ? 'text-emerald-600' : 'text-gray-400')} />
               </div>
+              <div className="text-left flex-1">
+                <p className={cn('font-medium', currentMode === 'production' ? 'text-emerald-900' : 'text-gray-700')}>Production</p>
+                <p className="text-xs text-gray-500">Live environment</p>
+              </div>
+              {productionEnabled && (
+                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Configured</Badge>
+              )}
               {currentMode === 'production' && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
+                <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-emerald-500" />
               )}
             </button>
           </div>
         </div>
 
         {/* Sandbox Credentials */}
-        <div className={`border-2 rounded-lg p-5 transition-all ${
-          currentMode === 'sandbox' ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-gray-50'
-        }`}>
+        <div className={cn(
+          'rounded-2xl border-2 p-5 transition-all duration-200',
+          currentMode === 'sandbox'
+            ? 'border-amber-200 bg-gradient-to-br from-amber-50/50 to-yellow-50/30'
+            : 'border-gray-200 bg-gray-50/50'
+        )}>
           <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-gray-900">Sandbox Environment</h3>
+            <div className="flex items-center gap-3">
+              <div className={cn('p-2 rounded-lg', currentMode === 'sandbox' ? 'bg-amber-100' : 'bg-gray-200')}>
+                <FlaskConical className={cn('h-5 w-5', currentMode === 'sandbox' ? 'text-amber-600' : 'text-gray-400')} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Sandbox Environment</h3>
+                <p className="text-xs text-gray-500">Development and testing credentials</p>
+              </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sandboxEnabled}
-                onChange={(e) => setSandboxEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              <span className="ml-3 text-sm font-medium text-gray-700">
-                {sandboxEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </label>
+            <button
+              type="button"
+              onClick={() => setSandboxEnabled(!sandboxEnabled)}
+              className={cn(
+                'relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300',
+                sandboxEnabled ? 'bg-gradient-to-r from-amber-500 to-yellow-500' : 'bg-gray-200'
+              )}
+            >
+              <span className={cn(
+                'pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 mt-0.5',
+                sandboxEnabled ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+              )} />
+            </button>
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Account ID <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={sandboxAccountId}
-                  onChange={(e) => setSandboxAccountId(e.target.value)}
-                  disabled={!sandboxEnabled}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                  placeholder="e.g., 1234567_SB1"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-gray-500">Account ID <span className="text-red-500">*</span></Label>
+              <Input
+                type="text"
+                value={sandboxAccountId}
+                onChange={(e) => setSandboxAccountId(e.target.value)}
+                disabled={!sandboxEnabled}
+                className={cn('h-10 bg-white', !sandboxEnabled && 'bg-gray-100 cursor-not-allowed')}
+                placeholder="e.g., 1234567_SB1"
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Consumer Key <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={sandboxConsumerKey}
-                    onChange={(e) => setSandboxConsumerKey(e.target.value)}
-                    disabled={!sandboxEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter consumer key"
-                  />
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CredentialInput label="Consumer Key" value={sandboxConsumerKey} onChange={setSandboxConsumerKey} disabled={!sandboxEnabled} placeholder="Enter consumer key" />
+              <CredentialInput label="Consumer Secret" value={sandboxConsumerSecret} onChange={setSandboxConsumerSecret} disabled={!sandboxEnabled} placeholder="Enter consumer secret" />
+            </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Consumer Secret <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={sandboxConsumerSecret}
-                    onChange={(e) => setSandboxConsumerSecret(e.target.value)}
-                    disabled={!sandboxEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter consumer secret"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Token ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={sandboxTokenId}
-                    onChange={(e) => setSandboxTokenId(e.target.value)}
-                    disabled={!sandboxEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter token ID"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Token Secret <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={sandboxTokenSecret}
-                    onChange={(e) => setSandboxTokenSecret(e.target.value)}
-                    disabled={!sandboxEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter token secret"
-                  />
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CredentialInput label="Token ID" value={sandboxTokenId} onChange={setSandboxTokenId} disabled={!sandboxEnabled} placeholder="Enter token ID" />
+              <CredentialInput label="Token Secret" value={sandboxTokenSecret} onChange={setSandboxTokenSecret} disabled={!sandboxEnabled} placeholder="Enter token secret" />
             </div>
           </div>
         </div>
 
         {/* Production Credentials */}
-        <div className={`border-2 rounded-lg p-5 transition-all ${
-          currentMode === 'production' ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-gray-50'
-        }`}>
+        <div className={cn(
+          'rounded-2xl border-2 p-5 transition-all duration-200',
+          currentMode === 'production'
+            ? 'border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-green-50/30'
+            : 'border-gray-200 bg-gray-50/50'
+        )}>
           <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-gray-900">Production Environment</h3>
+            <div className="flex items-center gap-3">
+              <div className={cn('p-2 rounded-lg', currentMode === 'production' ? 'bg-emerald-100' : 'bg-gray-200')}>
+                <Rocket className={cn('h-5 w-5', currentMode === 'production' ? 'text-emerald-600' : 'text-gray-400')} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Production Environment</h3>
+                <p className="text-xs text-gray-500">Live production credentials</p>
+              </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={productionEnabled}
-                onChange={(e) => setProductionEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              <span className="ml-3 text-sm font-medium text-gray-700">
-                {productionEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </label>
+            <button
+              type="button"
+              onClick={() => setProductionEnabled(!productionEnabled)}
+              className={cn(
+                'relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300',
+                productionEnabled ? 'bg-gradient-to-r from-emerald-500 to-green-500' : 'bg-gray-200'
+              )}
+            >
+              <span className={cn(
+                'pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 mt-0.5',
+                productionEnabled ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+              )} />
+            </button>
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Account ID <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={productionAccountId}
-                  onChange={(e) => setProductionAccountId(e.target.value)}
-                  disabled={!productionEnabled}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                  placeholder="e.g., 1234567"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-gray-500">Account ID <span className="text-red-500">*</span></Label>
+              <Input
+                type="text"
+                value={productionAccountId}
+                onChange={(e) => setProductionAccountId(e.target.value)}
+                disabled={!productionEnabled}
+                className={cn('h-10 bg-white', !productionEnabled && 'bg-gray-100 cursor-not-allowed')}
+                placeholder="e.g., 1234567"
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Consumer Key <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={productionConsumerKey}
-                    onChange={(e) => setProductionConsumerKey(e.target.value)}
-                    disabled={!productionEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter consumer key"
-                  />
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CredentialInput label="Consumer Key" value={productionConsumerKey} onChange={setProductionConsumerKey} disabled={!productionEnabled} placeholder="Enter consumer key" />
+              <CredentialInput label="Consumer Secret" value={productionConsumerSecret} onChange={setProductionConsumerSecret} disabled={!productionEnabled} placeholder="Enter consumer secret" />
+            </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Consumer Secret <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={productionConsumerSecret}
-                    onChange={(e) => setProductionConsumerSecret(e.target.value)}
-                    disabled={!productionEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter consumer secret"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Token ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={productionTokenId}
-                    onChange={(e) => setProductionTokenId(e.target.value)}
-                    disabled={!productionEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter token ID"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Token Secret <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showSecrets ? 'text' : 'password'}
-                    value={productionTokenSecret}
-                    onChange={(e) => setProductionTokenSecret(e.target.value)}
-                    disabled={!productionEnabled}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    placeholder="Enter token secret"
-                  />
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CredentialInput label="Token ID" value={productionTokenId} onChange={setProductionTokenId} disabled={!productionEnabled} placeholder="Enter token ID" />
+              <CredentialInput label="Token Secret" value={productionTokenSecret} onChange={setProductionTokenSecret} disabled={!productionEnabled} placeholder="Enter token secret" />
             </div>
           </div>
         </div>
 
-        {/* Webhook Token Section */}
-        <div className="border-2 rounded-lg p-5 border-gray-200 bg-gray-50">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Webhook Authentication</h3>
+        {/* Webhook Token */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Webhook className="h-5 w-5 text-blue-500" />
+            <h3 className="font-semibold text-gray-900">Webhook Authentication</h3>
+          </div>
+          <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-3">
             <p className="text-sm text-gray-600">
-              Configure a Bearer token for authenticating incoming webhooks from NetSuite scheduled scripts (e.g., vendor bill exports).
+              Configure a Bearer token for authenticating incoming webhooks from NetSuite scheduled scripts.
             </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Webhook Token
-            </label>
-            <input
-              type={showSecrets ? 'text' : 'password'}
-              value={webhookToken}
-              onChange={(e) => setWebhookToken(e.target.value)}
-              className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-              placeholder="Enter webhook authentication token"
-            />
-            <p className="mt-1.5 text-xs text-gray-500">
-              This token will be used to authenticate incoming webhook requests from NetSuite. Configure the same token in your NetSuite scheduled script parameters.
-            </p>
+            <div className="space-y-2">
+              <Label className="text-xs text-gray-500">Webhook Token</Label>
+              <div className="relative">
+                <Input
+                  type={showSecrets ? 'text' : 'password'}
+                  value={webhookToken}
+                  onChange={(e) => setWebhookToken(e.target.value)}
+                  className="h-10 font-mono text-sm pr-10 bg-white"
+                  placeholder="Enter webhook authentication token"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSecrets(!showSecrets)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                >
+                  {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Shield className="h-3.5 w-3.5" />
+              <span>Credentials are encrypted and stored in AWS Secrets Manager</span>
+            </div>
           </div>
         </div>
 
-        {/* Show/Hide Secrets Toggle */}
-        <div className="bg-gray-50 rounded-lg p-3">
-          <label className="flex items-center cursor-pointer justify-center">
-            <input
-              type="checkbox"
-              checked={showSecrets}
-              onChange={(e) => setShowSecrets(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-            />
-            <span className="ml-2 text-sm font-medium text-gray-700">
-              {showSecrets ? 'Hide credentials' : 'Show credentials'}
-            </span>
-          </label>
-          {isConfigured && (
-            <p className="text-xs text-gray-500 text-center mt-2">
-              Saved credentials show first 4 and last 4 characters (e.g., ABCD••••WXYZ). Enter new values to update them.
-            </p>
-          )}
+        {/* Show/Hide Toggle */}
+        <div className="flex items-center justify-center gap-2 p-3 bg-gray-50 rounded-xl">
+          <input
+            type="checkbox"
+            id="showSecrets"
+            checked={showSecrets}
+            onChange={(e) => setShowSecrets(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+          />
+          <Label htmlFor="showSecrets" className="text-sm text-gray-600 cursor-pointer">
+            {showSecrets ? 'Hide all credentials' : 'Show all credentials'}
+          </Label>
         </div>
 
-        {/* Error/Success Messages */}
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-red-800">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-green-800">{success}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-between items-center gap-3 pt-4 border-t border-gray-200">
+        {/* Actions */}
+        <div className="flex items-center justify-between gap-3 pt-6 border-t border-gray-100">
           {isConfigured && (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={handleDelete}
               disabled={isLoading}
-              className="px-4 py-2.5 text-sm font-medium text-red-700 bg-white border-2 border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
             >
-              <span className="flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                Remove Integration
-              </span>
-            </button>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Remove Integration
+            </Button>
           )}
 
           <div className="flex gap-3 ml-auto">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
               disabled={isLoading}
-              className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isLoading}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 border-2 border-blue-600 rounded-lg hover:bg-blue-700 hover:border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="px-6 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-lg shadow-violet-500/25"
             >
-              <span className="flex items-center gap-2">
-                {isLoading ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Save Configuration
-                  </>
-                )}
-              </span>
-            </button>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Save Configuration
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </form>

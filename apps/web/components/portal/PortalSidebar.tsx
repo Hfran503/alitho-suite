@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Truck, Home, Package, FileText, LucideIcon } from 'lucide-react'
+import { Truck, Home, Package, FileText, PlusCircle, ShoppingCart, LucideIcon } from 'lucide-react'
 
 interface PortalPage {
   pageKey: string
@@ -19,6 +19,8 @@ const iconMap: Record<string, LucideIcon> = {
   truck: Truck,
   package: Package,
   document: FileText,
+  plus: PlusCircle,
+  cart: ShoppingCart,
 }
 
 // Fallback navigation in case API fails

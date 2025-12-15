@@ -2,6 +2,34 @@
 
 import { useState, useEffect } from 'react'
 import { Modal } from '../Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Mail,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Loader2,
+  Send,
+  Server,
+  Cloud,
+  Shield,
+  ExternalLink,
+  Inbox,
+  Info,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface SendEmailIntegrationModalProps {
   isOpen: boolean
@@ -10,6 +38,13 @@ interface SendEmailIntegrationModalProps {
 }
 
 type EmailProvider = 'smtp' | 'sendgrid' | 'ses' | 'resend'
+
+const providerConfig = {
+  smtp: { name: 'SMTP', icon: Server, color: 'text-gray-600', gradient: 'from-gray-500 to-slate-600' },
+  sendgrid: { name: 'SendGrid', icon: Send, color: 'text-blue-600', gradient: 'from-blue-500 to-cyan-500' },
+  ses: { name: 'AWS SES', icon: Cloud, color: 'text-amber-600', gradient: 'from-amber-500 to-orange-500' },
+  resend: { name: 'Resend', icon: Mail, color: 'text-violet-600', gradient: 'from-violet-500 to-purple-500' },
+}
 
 export function SendEmailIntegrationModal({
   isOpen,
@@ -67,34 +102,22 @@ export function SendEmailIntegrationModal({
         setIsConfigured(data.data?.configured || false)
         setEnabled(data.data?.enabled || false)
 
-        if (data.data?.provider) {
-          setProvider(data.data.provider)
-        }
+        if (data.data?.provider) setProvider(data.data.provider)
 
-        // Load all saved configuration (non-sensitive fields)
         if (data.data?.credentials) {
           const creds = data.data.credentials
-
-          // Common fields
           if (creds.fromEmail) setFromEmail(creds.fromEmail)
           if (creds.fromName) setFromName(creds.fromName)
-
-          // SMTP fields
           if (creds.smtpHost) setSmtpHost(creds.smtpHost)
           if (creds.smtpPort) setSmtpPort(creds.smtpPort.toString())
           if (creds.smtpSecure !== undefined) setSmtpSecure(creds.smtpSecure)
           if (creds.smtpUser) setSmtpUser(creds.smtpUser)
-
-          // AWS SES fields
           if (creds.sesRegion) setSesRegion(creds.sesRegion)
           if (creds.sesAccessKeyId) setSesAccessKeyId(creds.sesAccessKeyId)
-
-          // IMAP fields
           if (creds.imapServer) setImapServer(creds.imapServer)
           if (creds.imapUser) setImapUser(creds.imapUser)
         }
 
-        // Show masked credentials if they exist
         if (data.data?.maskedCredentials) {
           const masked = data.data.maskedCredentials
           if (masked.smtpPassword) setSmtpPassword(masked.smtpPassword)
@@ -121,20 +144,14 @@ export function SendEmailIntegrationModal({
     }
 
     try {
-      const testData: any = {
-        provider,
-        fromEmail,
-        testEmail,
-      }
+      const testData: any = { provider, fromEmail, testEmail }
 
       if (provider === 'smtp') {
-        // Don't send masked password
         if (smtpPassword === '••••••••' || smtpPassword.includes('•')) {
-          setError('Please enter your actual password (click the password field to update it)')
+          setError('Please enter your actual password to test')
           setIsTesting(false)
           return
         }
-
         testData.smtpHost = smtpHost
         testData.smtpPort = parseInt(smtpPort)
         testData.smtpSecure = smtpSecure
@@ -161,12 +178,10 @@ export function SendEmailIntegrationModal({
       if (response.ok && data.success) {
         setSuccess(data.message || 'Test email sent successfully!')
       } else {
-        const errorMessage = data.error || 'Failed to send test email'
-        console.error('Test email failed:', data)
-        setError(errorMessage)
+        setError(data.error || 'Failed to send test email')
       }
     } catch (error) {
-      setError('Failed to test email configuration. Please try again.')
+      setError('Failed to test email configuration')
       console.error('Error testing email:', error)
     } finally {
       setIsTesting(false)
@@ -179,38 +194,28 @@ export function SendEmailIntegrationModal({
     setError('')
     setSuccess('')
 
-    // Validate common fields
     if (!fromEmail) {
       setError('From email address is required')
       setIsLoading(false)
       return
     }
 
-    // Validate provider-specific fields
-    if (provider === 'smtp') {
-      if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-        setError('All SMTP fields are required')
-        setIsLoading(false)
-        return
-      }
-    } else if (provider === 'sendgrid') {
-      if (!sendgridApiKey) {
-        setError('SendGrid API key is required')
-        setIsLoading(false)
-        return
-      }
-    } else if (provider === 'ses') {
-      if (!sesRegion || !sesAccessKeyId || !sesSecretAccessKey) {
-        setError('All AWS SES fields are required')
-        setIsLoading(false)
-        return
-      }
-    } else if (provider === 'resend') {
-      if (!resendApiKey) {
-        setError('Resend API key is required')
-        setIsLoading(false)
-        return
-      }
+    if (provider === 'smtp' && (!smtpHost || !smtpPort || !smtpUser || !smtpPassword)) {
+      setError('All SMTP fields are required')
+      setIsLoading(false)
+      return
+    } else if (provider === 'sendgrid' && !sendgridApiKey) {
+      setError('SendGrid API key is required')
+      setIsLoading(false)
+      return
+    } else if (provider === 'ses' && (!sesRegion || !sesAccessKeyId || !sesSecretAccessKey)) {
+      setError('All AWS SES fields are required')
+      setIsLoading(false)
+      return
+    } else if (provider === 'resend' && !resendApiKey) {
+      setError('Resend API key is required')
+      setIsLoading(false)
+      return
     }
 
     try {
@@ -265,256 +270,242 @@ export function SendEmailIntegrationModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Email Integration" size="xl">
-      <form onSubmit={handleSave} className="space-y-6">
+    <Modal isOpen={isOpen} onClose={onClose} title="Email Integration" size="2xl">
+      <form onSubmit={handleSave} className="space-y-8">
+        {/* Alerts */}
+        {success && (
+          <Alert className="bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-800 font-medium">{success}</AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert className="bg-gradient-to-r from-red-50 to-rose-50 border-red-200">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800 font-medium">{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Configuration Status */}
         {isConfigured && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-blue-600 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-blue-900">
-                  Currently configured with {provider.toUpperCase()}
-                </p>
-                {fromEmail && (
-                  <p className="text-xs text-blue-700 mt-1">
-                    Sending from: {fromEmail}
-                    {fromName && ` (${fromName})`}
-                  </p>
-                )}
-              </div>
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Info className="h-4 w-4 text-blue-600" />
             </div>
-          </div>
-        )}
-
-        {/* Success Message */}
-        {success && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-green-600 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <p className="text-sm text-green-800">{success}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-red-600 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Enable/Disable Toggle */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-medium text-gray-900">Enable Integration</h4>
-              <p className="text-xs text-gray-500 mt-1">
-                {enabled
-                  ? 'Email sending is active'
-                  : 'Integration is disabled. Enable to start sending emails'}
+              <p className="text-sm font-semibold text-blue-900">
+                Currently configured with {providerConfig[provider].name}
               </p>
+              {fromEmail && (
+                <p className="text-xs text-blue-700 mt-1">
+                  Sending from: {fromEmail} {fromName && `(${fromName})`}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Enable Toggle */}
+        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-5">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                'p-3 rounded-xl transition-all duration-300',
+                enabled
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25'
+                  : 'bg-gray-100'
+              )}>
+                <Mail className={cn('h-6 w-6', enabled ? 'text-white' : 'text-gray-400')} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-gray-900">Enable Email Sending</h4>
+                  {enabled && (
+                    <Badge className="bg-emerald-100 text-emerald-700 border-0">Active</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {enabled ? 'Email sending is active' : 'Enable to start sending emails'}
+                </p>
+              </div>
             </div>
             <button
               type="button"
               onClick={() => setEnabled(!enabled)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                enabled ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
+              className={cn(
+                'relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300',
+                enabled ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gray-200'
+              )}
             >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  enabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
+              <span className={cn(
+                'pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 mt-0.5',
+                enabled ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+              )} />
             </button>
           </div>
         </div>
 
-        {/* Provider Selector */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email Provider
-            <span className="text-red-500 ml-1">*</span>
-          </label>
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as EmailProvider)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          >
-            <option value="smtp">SMTP</option>
-            <option value="sendgrid">SendGrid</option>
-            <option value="ses">AWS SES</option>
-            <option value="resend">Resend</option>
-          </select>
+        {/* Provider Selection */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Send className="h-5 w-5 text-blue-500" />
+            <h3 className="font-semibold text-gray-900">Email Provider</h3>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            {(Object.keys(providerConfig) as EmailProvider[]).map((p) => {
+              const config = providerConfig[p]
+              const Icon = config.icon
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setProvider(p)}
+                  className={cn(
+                    'relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200',
+                    provider === p
+                      ? 'border-blue-400 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-lg shadow-blue-500/10'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                  )}
+                >
+                  <div className={cn(
+                    'p-2 rounded-lg',
+                    provider === p ? `bg-gradient-to-br ${config.gradient}` : 'bg-gray-100'
+                  )}>
+                    <Icon className={cn('h-5 w-5', provider === p ? 'text-white' : 'text-gray-400')} />
+                  </div>
+                  <span className={cn(
+                    'text-sm font-medium',
+                    provider === p ? 'text-blue-900' : 'text-gray-600'
+                  )}>
+                    {config.name}
+                  </span>
+                  {provider === p && (
+                    <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-blue-500" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Common Fields */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              From Email
-              <span className="text-red-500 ml-1">*</span>
-            </label>
-            <input
-              type="email"
-              value={fromEmail}
-              onChange={(e) => setFromEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="noreply@example.com"
-              required
-            />
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-emerald-500" />
+            <h3 className="font-semibold text-gray-900">Sender Information</h3>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">From Name</label>
-            <input
-              type="text"
-              value={fromName}
-              onChange={(e) => setFromName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Calitho Suite"
-            />
+          <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">From Email <span className="text-red-500">*</span></Label>
+                <Input
+                  type="email"
+                  value={fromEmail}
+                  onChange={(e) => setFromEmail(e.target.value)}
+                  className="h-10 bg-white"
+                  placeholder="noreply@example.com"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">From Name</Label>
+                <Input
+                  type="text"
+                  value={fromName}
+                  onChange={(e) => setFromName(e.target.value)}
+                  className="h-10 bg-white"
+                  placeholder="Calitho Suite"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Provider-specific fields */}
         {provider === 'smtp' && (
-          <div className="space-y-4 pt-4 border-t">
-            <h4 className="text-sm font-semibold text-gray-900">SMTP Configuration</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  SMTP Host
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={smtpHost}
-                  onChange={(e) => setSmtpHost(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="smtp.gmail.com"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  SMTP Port
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={smtpPort}
-                  onChange={(e) => setSmtpPort(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="587"
-                  required
-                />
-              </div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Server className="h-5 w-5 text-gray-500" />
+              <h3 className="font-semibold text-gray-900">SMTP Configuration</h3>
             </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="smtpSecure"
-                checked={smtpSecure}
-                onChange={(e) => setSmtpSecure(e.target.checked)}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="smtpSecure" className="ml-2 text-sm text-gray-700">
-                Use SSL/TLS (port 465)
-              </label>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Username
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={smtpUser}
-                  onChange={(e) => setSmtpUser(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="username@example.com"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={smtpPassword}
-                    onChange={(e) => setSmtpPassword(e.target.value)}
-                    onFocus={(e) => {
-                      // Clear masked password on focus
-                      if (smtpPassword === '••••••••' || smtpPassword.includes('•')) {
-                        e.target.select() // Select all so typing replaces it
-                        setTimeout(() => setSmtpPassword(''), 0)
-                      }
-                    }}
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter your password"
+            <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500">SMTP Host <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    className="h-10 bg-white"
+                    placeholder="smtp.gmail.com"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500">SMTP Port <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="number"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    className="h-10 bg-white"
+                    placeholder="587"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="smtpSecure"
+                  checked={smtpSecure}
+                  onChange={(e) => setSmtpSecure(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <Label htmlFor="smtpSecure" className="text-sm text-gray-600 cursor-pointer">
+                  Use SSL/TLS (port 465)
+                </Label>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500">Username <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    className="h-10 bg-white"
+                    placeholder="username@example.com"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500">Password <span className="text-red-500">*</span></Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      onFocus={(e) => {
+                        if (smtpPassword.includes('•')) {
+                          e.target.select()
+                          setTimeout(() => setSmtpPassword(''), 0)
+                        }
+                      }}
+                      className="h-10 pr-10 bg-white"
+                      placeholder="Enter your password"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -522,253 +513,285 @@ export function SendEmailIntegrationModal({
         )}
 
         {provider === 'sendgrid' && (
-          <div className="space-y-4 pt-4 border-t">
-            <h4 className="text-sm font-semibold text-gray-900">SendGrid Configuration</h4>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key
-                <span className="text-red-500 ml-1">*</span>
-              </label>
-              <input
-                type="password"
-                value={sendgridApiKey}
-                onChange={(e) => setSendgridApiKey(e.target.value)}
-                onFocus={() => {
-                  // Clear masked API key on focus
-                  if (sendgridApiKey.includes('••••••••')) {
-                    setSendgridApiKey('')
-                  }
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                placeholder="SG.••••••••"
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Get your API key from{' '}
-                <a
-                  href="https://app.sendgrid.com/settings/api_keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-700 underline"
-                >
-                  SendGrid Dashboard
-                </a>
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-blue-500" />
+              <h3 className="font-semibold text-gray-900">SendGrid Configuration</h3>
+            </div>
+            <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">API Key <span className="text-red-500">*</span></Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={sendgridApiKey}
+                    onChange={(e) => setSendgridApiKey(e.target.value)}
+                    onFocus={() => {
+                      if (sendgridApiKey.includes('•')) setSendgridApiKey('')
+                    }}
+                    className="h-10 font-mono text-sm pr-10 bg-white"
+                    placeholder="SG.••••••••"
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <a
+                href="https://app.sendgrid.com/settings/api_keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+              >
+                Get API Key from SendGrid Dashboard <ExternalLink className="h-3 w-3" />
+              </a>
             </div>
           </div>
         )}
 
         {provider === 'ses' && (
-          <div className="space-y-4 pt-4 border-t">
-            <h4 className="text-sm font-semibold text-gray-900">AWS SES Configuration</h4>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                AWS Region
-                <span className="text-red-500 ml-1">*</span>
-              </label>
-              <select
-                value={sesRegion}
-                onChange={(e) => setSesRegion(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="us-east-1">US East (N. Virginia)</option>
-                <option value="us-west-2">US West (Oregon)</option>
-                <option value="eu-west-1">EU (Ireland)</option>
-              </select>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-amber-500" />
+              <h3 className="font-semibold text-gray-900">AWS SES Configuration</h3>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Access Key ID
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={sesAccessKeyId}
-                  onChange={(e) => setSesAccessKeyId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  placeholder="AKIA••••••••"
-                  required
-                />
+            <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">AWS Region <span className="text-red-500">*</span></Label>
+                <Select value={sesRegion} onValueChange={setSesRegion}>
+                  <SelectTrigger className="h-10 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="us-east-1">US East (N. Virginia)</SelectItem>
+                    <SelectItem value="us-west-2">US West (Oregon)</SelectItem>
+                    <SelectItem value="eu-west-1">EU (Ireland)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Secret Access Key
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={sesSecretAccessKey}
-                  onChange={(e) => setSesSecretAccessKey(e.target.value)}
-                  onFocus={() => {
-                    // Clear masked secret key on focus
-                    if (sesSecretAccessKey === '••••••••') {
-                      setSesSecretAccessKey('')
-                    }
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  placeholder="••••••••"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500">Access Key ID <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    value={sesAccessKeyId}
+                    onChange={(e) => setSesAccessKeyId(e.target.value)}
+                    className="h-10 font-mono text-sm bg-white"
+                    placeholder="AKIA••••••••"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500">Secret Access Key <span className="text-red-500">*</span></Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      value={sesSecretAccessKey}
+                      onChange={(e) => setSesSecretAccessKey(e.target.value)}
+                      onFocus={() => {
+                        if (sesSecretAccessKey === '••••••••') setSesSecretAccessKey('')
+                      }}
+                      className="h-10 font-mono text-sm pr-10 bg-white"
+                      placeholder="••••••••"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {provider === 'resend' && (
-          <div className="space-y-4 pt-4 border-t">
-            <h4 className="text-sm font-semibold text-gray-900">Resend Configuration</h4>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key
-                <span className="text-red-500 ml-1">*</span>
-              </label>
-              <input
-                type="password"
-                value={resendApiKey}
-                onChange={(e) => setResendApiKey(e.target.value)}
-                onFocus={() => {
-                  // Clear masked API key on focus
-                  if (resendApiKey.includes('••••••••')) {
-                    setResendApiKey('')
-                  }
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                placeholder="re_••••••••"
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Get your API key from{' '}
-                <a
-                  href="https://resend.com/api-keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-700 underline"
-                >
-                  Resend Dashboard
-                </a>
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-violet-500" />
+              <h3 className="font-semibold text-gray-900">Resend Configuration</h3>
+            </div>
+            <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">API Key <span className="text-red-500">*</span></Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={resendApiKey}
+                    onChange={(e) => setResendApiKey(e.target.value)}
+                    onFocus={() => {
+                      if (resendApiKey.includes('•')) setResendApiKey('')
+                    }}
+                    className="h-10 font-mono text-sm pr-10 bg-white"
+                    placeholder="re_••••••••"
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <a
+                href="https://resend.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700"
+              >
+                Get API Key from Resend Dashboard <ExternalLink className="h-3 w-3" />
+              </a>
             </div>
           </div>
         )}
 
-        {/* IMAP Configuration Section */}
-        <div className="space-y-4 pt-4 border-t">
-          <h4 className="text-sm font-semibold text-gray-900">IMAP Configuration (Email Monitoring)</h4>
-          <p className="text-xs text-gray-500">
-            Configure IMAP settings to monitor incoming emails. These credentials are securely stored in AWS Secrets Manager.
-          </p>
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                IMAP Server
-              </label>
-              <input
+        {/* IMAP Configuration */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Inbox className="h-5 w-5 text-rose-500" />
+            <h3 className="font-semibold text-gray-900">IMAP Configuration</h3>
+            <Badge variant="secondary" className="text-xs">Optional</Badge>
+          </div>
+          <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-4">
+            <p className="text-xs text-gray-500">
+              Configure IMAP settings to monitor incoming emails. Credentials are securely stored in AWS Secrets Manager.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-xs text-gray-500">IMAP Server</Label>
+              <Input
                 type="text"
                 value={imapServer}
                 onChange={(e) => setImapServer(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="h-10 bg-white"
                 placeholder="imap.hostinger.com"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  IMAP Username
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">IMAP Username</Label>
+                <Input
                   type="email"
                   value={imapUser}
                   onChange={(e) => setImapUser(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="h-10 bg-white"
                   placeholder="info@calithosuite.com"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  IMAP Password
-                </label>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">IMAP Password</Label>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showPassword ? 'text' : 'password'}
                     value={imapPassword}
                     onChange={(e) => setImapPassword(e.target.value)}
                     onFocus={(e) => {
-                      // Clear masked password on focus
-                      if (imapPassword === '••••••••' || imapPassword.includes('•')) {
+                      if (imapPassword.includes('•')) {
                         e.target.select()
                         setTimeout(() => setImapPassword(''), 0)
                       }
                     }}
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="h-10 pr-10 bg-white"
                     placeholder="Enter IMAP password"
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
                   >
-                    {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Test Email Section */}
-        <div className="space-y-4 pt-4 border-t">
-          <h4 className="text-sm font-semibold text-gray-900">Test SMTP Configuration</h4>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              value={testEmail}
-              onChange={(e) => setTestEmail(e.target.value)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="test@example.com"
-            />
-            <button
-              type="button"
-              onClick={handleTestConnection}
-              disabled={isTesting}
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium transition-colors"
-            >
-              {isTesting ? 'Sending...' : 'Send Test'}
-            </button>
+        {/* Test Email */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Send className="h-5 w-5 text-indigo-500" />
+            <h3 className="font-semibold text-gray-900">Test Configuration</h3>
           </div>
-          <p className="text-xs text-gray-500">
-            Send a test email to verify your configuration. Credentials are securely stored in AWS
-            Secrets Manager.
-          </p>
+          <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-3">
+            <div className="flex gap-3">
+              <Input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                className="h-10 flex-1 bg-white"
+                placeholder="test@example.com"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleTestConnection}
+                disabled={isTesting}
+                className="px-6"
+              >
+                {isTesting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Test
+                  </>
+                )}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Shield className="h-3.5 w-3.5" />
+              <span>Credentials are encrypted and stored in AWS Secrets Manager</span>
+            </div>
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-          <button
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-100">
+          <Button
             type="button"
+            variant="outline"
             onClick={onClose}
             disabled={isLoading}
-            className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
+            className="px-6"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={isLoading}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-sm"
+            className="px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/25"
           >
-            {isLoading ? 'Saving...' : isConfigured ? 'Update Configuration' : 'Save Configuration'}
-          </button>
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              isConfigured ? 'Update Configuration' : 'Save Configuration'
+            )}
+          </Button>
         </div>
       </form>
     </Modal>

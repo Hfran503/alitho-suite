@@ -2,6 +2,30 @@
 
 import { useState, useEffect } from 'react'
 import { Modal } from '../Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Ship,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Plus,
+  Trash2,
+  Loader2,
+  Zap,
+  FlaskConical,
+  Rocket,
+  Key,
+  Truck,
+  MapPin,
+  ExternalLink,
+  Shield,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface ShipStationIntegrationModalProps {
   isOpen: boolean
@@ -29,7 +53,6 @@ export default function ShipStationIntegrationModal({
   const [isConfigured, setIsConfigured] = useState(false)
   const [enabled, setEnabled] = useState(false)
 
-  // Default ship-from address
   const [defaultFromAddress, setDefaultFromAddress] = useState({
     name: '',
     company: '',
@@ -59,7 +82,6 @@ export default function ShipStationIntegrationModal({
         if (data.data?.config) {
           setMode(data.data.config.mode || 'test')
 
-          // Load carriers from config
           if (data.data.config.carriers && Array.isArray(data.data.config.carriers)) {
             setCarriers(
               data.data.config.carriers.length > 0
@@ -73,17 +95,14 @@ export default function ShipStationIntegrationModal({
                 : [{ id: '', name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' }]
             )
           } else if (data.data.config.carrierIds) {
-            // Legacy support: convert old carrierIds array to new format
             setCarriers(data.data.config.carrierIds.map((id: string) => ({ id, name: '', estimateRateMarkup: 0, estimateRateMarkupDollar: 0, trackingUrlTemplate: '' })))
           }
 
-          // Load default ship-from address
           if (data.data.config.defaultFromAddress) {
             setDefaultFromAddress(data.data.config.defaultFromAddress)
           }
         }
 
-        // Show masked keys as placeholders if they exist
         if (data.data?.maskedTestKey) {
           setTestApiKey(data.data.maskedTestKey)
         }
@@ -103,24 +122,18 @@ export default function ShipStationIntegrationModal({
     setIsLoading(true)
 
     try {
-      // Check if EasyPost is active - mutual exclusivity
       const easypostResponse = await fetch('/api/integrations/easypost')
       if (easypostResponse.ok) {
         const easypostData = await easypostResponse.json()
         if (easypostData.data?.enabled) {
-          setError(
-            'EasyPost integration is currently active. Please disable EasyPost before enabling ShipStation.'
-          )
+          setError('EasyPost integration is currently active. Please disable EasyPost before enabling ShipStation.')
           setIsLoading(false)
           return
         }
       }
 
-      // Only send API keys if they're not masked (i.e., they've been changed)
       const isMaskedTest = testApiKey.includes('...')
       const isMaskedProduction = productionApiKey.includes('...')
-
-      // Filter out empty carriers
       const filteredCarriers = carriers.filter((c) => c.id.trim() !== '')
 
       if (filteredCarriers.length === 0) {
@@ -134,13 +147,11 @@ export default function ShipStationIntegrationModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           testApiKey: !isMaskedTest && testApiKey.trim() ? testApiKey.trim() : undefined,
-          productionApiKey:
-            !isMaskedProduction && productionApiKey.trim() ? productionApiKey.trim() : undefined,
+          productionApiKey: !isMaskedProduction && productionApiKey.trim() ? productionApiKey.trim() : undefined,
           enabled,
           config: {
             mode,
             carriers: filteredCarriers,
-            // Also send carrierIds for backwards compatibility with the rates endpoint
             carrierIds: filteredCarriers.map((c) => c.id),
             defaultFromAddress,
           },
@@ -172,11 +183,8 @@ export default function ShipStationIntegrationModal({
     try {
       const apiKey = mode === 'test' ? testApiKey : productionApiKey
 
-      // Don't allow testing with masked keys
       if (apiKey.includes('...')) {
-        setError(
-          `Please enter a new ${mode} API key to test. The current key is masked for security.`
-        )
+        setError(`Please enter a new ${mode} API key to test. The current key is masked for security.`)
         setIsTesting(false)
         return
       }
@@ -229,420 +237,410 @@ export default function ShipStationIntegrationModal({
   const setCurrentApiKey = mode === 'test' ? setTestApiKey : setProductionApiKey
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="ShipStation Integration Settings" size="xl">
-      <form onSubmit={handleSave} className="space-y-6">
-        {/* Success Message */}
+    <Modal isOpen={isOpen} onClose={onClose} title="ShipStation Integration" size="2xl">
+      <form onSubmit={handleSave} className="space-y-8">
+        {/* Alerts */}
         {success && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-green-600 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <p className="text-sm text-green-800">{success}</p>
-            </div>
-          </div>
+          <Alert className="bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-800 font-medium">{success}</AlertDescription>
+          </Alert>
         )}
 
-        {/* Error Message */}
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-red-600 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          </div>
+          <Alert className="bg-gradient-to-r from-red-50 to-rose-50 border-red-200">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800 font-medium">{error}</AlertDescription>
+          </Alert>
         )}
 
-        {/* Enable/Disable Toggle */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-gray-900">Enable Integration</h4>
-              <p className="text-xs text-gray-500 mt-1">
-                {enabled
-                  ? 'ShipStation is active and will be used for shipping'
-                  : 'Integration is disabled. Enable to start using ShipStation'}
-              </p>
+        {/* Enable Toggle */}
+        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-5">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                'p-3 rounded-xl transition-all duration-300',
+                enabled
+                  ? 'bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/25'
+                  : 'bg-gray-100'
+              )}>
+                <Ship className={cn('h-6 w-6', enabled ? 'text-white' : 'text-gray-400')} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-gray-900">Enable ShipStation</h4>
+                  {enabled && (
+                    <Badge className="bg-emerald-100 text-emerald-700 border-0">Active</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {enabled ? 'Integration is active and processing shipments' : 'Enable to start using ShipStation for shipping'}
+                </p>
+              </div>
             </div>
             <button
               type="button"
               onClick={() => setEnabled(!enabled)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                enabled ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
+              className={cn(
+                'relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                enabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-200'
+              )}
             >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  enabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
+              <span className={cn(
+                'pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out mt-0.5',
+                enabled ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+              )} />
             </button>
           </div>
         </div>
 
-        {/* Mode Selector */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <label className="block text-sm font-medium text-gray-900 mb-3">
-            Environment Mode
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label
-              className={`relative flex items-center justify-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+        {/* Environment Mode */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-amber-500" />
+            <h3 className="font-semibold text-gray-900">Environment</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setMode('test')}
+              className={cn(
+                'relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200',
                 mode === 'test'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
+                  ? 'border-amber-400 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-lg shadow-amber-500/10'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              )}
             >
-              <input
-                type="radio"
-                value="test"
-                checked={mode === 'test'}
-                onChange={(e) => setMode(e.target.value as 'test' | 'production')}
-                className="sr-only"
-              />
-              <div className="text-center">
-                <div className="text-sm font-medium text-gray-900">Test Mode</div>
-                <div className="text-xs text-gray-500 mt-1">Sandbox environment</div>
+              <div className={cn(
+                'p-2.5 rounded-lg',
+                mode === 'test' ? 'bg-amber-100' : 'bg-gray-100'
+              )}>
+                <FlaskConical className={cn('h-5 w-5', mode === 'test' ? 'text-amber-600' : 'text-gray-400')} />
+              </div>
+              <div className="text-left">
+                <p className={cn('font-medium', mode === 'test' ? 'text-amber-900' : 'text-gray-700')}>Test Mode</p>
+                <p className="text-xs text-gray-500">Sandbox environment</p>
               </div>
               {mode === 'test' && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
+                <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-amber-500" />
               )}
-            </label>
-            <label
-              className={`relative flex items-center justify-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode('production')}
+              className={cn(
+                'relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200',
                 mode === 'production'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
+                  ? 'border-emerald-400 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-500/10'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              )}
             >
-              <input
-                type="radio"
-                value="production"
-                checked={mode === 'production'}
-                onChange={(e) => setMode(e.target.value as 'test' | 'production')}
-                className="sr-only"
-              />
-              <div className="text-center">
-                <div className="text-sm font-medium text-gray-900">Production</div>
-                <div className="text-xs text-gray-500 mt-1">Live environment</div>
+              <div className={cn(
+                'p-2.5 rounded-lg',
+                mode === 'production' ? 'bg-emerald-100' : 'bg-gray-100'
+              )}>
+                <Rocket className={cn('h-5 w-5', mode === 'production' ? 'text-emerald-600' : 'text-gray-400')} />
+              </div>
+              <div className="text-left">
+                <p className={cn('font-medium', mode === 'production' ? 'text-emerald-900' : 'text-gray-700')}>Production</p>
+                <p className="text-xs text-gray-500">Live environment</p>
               </div>
               {mode === 'production' && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
+                <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-emerald-500" />
               )}
-            </label>
+            </button>
           </div>
         </div>
 
-        {/* API Key Input - Only show for selected mode */}
-        <div>
-          <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-2">
-            {mode === 'test' ? 'Test' : 'Production'} API Key
-            <span className="text-red-500 ml-1">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type={showApiKey ? 'text' : 'password'}
-              id="apiKey"
-              value={currentApiKey}
-              onChange={(e) => setCurrentApiKey(e.target.value)}
-              className="w-full px-4 py-3 pr-24 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-              placeholder={mode === 'test' ? 'TEST_xxxxx...' : 'PROD_xxxxx...'}
-              required
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleTestConnection}
-                disabled={isTesting || !currentApiKey.trim()}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        {/* API Key */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Key className="h-5 w-5 text-violet-500" />
+            <h3 className="font-semibold text-gray-900">API Authentication</h3>
+          </div>
+          <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 space-y-3">
+            <Label htmlFor="apiKey" className="text-sm font-medium text-gray-700">
+              {mode === 'test' ? 'Test' : 'Production'} API Key
+              <span className="text-red-500 ml-1">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                type={showApiKey ? 'text' : 'password'}
+                id="apiKey"
+                value={currentApiKey}
+                onChange={(e) => setCurrentApiKey(e.target.value)}
+                className="pr-28 font-mono text-sm h-11 bg-white"
+                placeholder={mode === 'test' ? 'TEST_xxxxx...' : 'PROD_xxxxx...'}
+                required
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleTestConnection}
+                  disabled={isTesting || !currentApiKey.trim()}
+                  className="h-7 px-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                >
+                  {isTesting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Test'}
+                </Button>
+                <div className="w-px h-4 bg-gray-200" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Shield className="h-3.5 w-3.5" />
+              <span>Keys are encrypted and stored in AWS Secrets Manager</span>
+              <a
+                href="https://www.shipengine.com/docs/auth/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 ml-auto"
               >
-                {isTesting ? 'Testing...' : 'Test'}
-              </button>
-              <div className="w-px h-4 bg-gray-300" />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                {showApiKey ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    />
-                  </svg>
-                )}
-              </button>
+                Get API Key <ExternalLink className="h-3 w-3" />
+              </a>
             </div>
           </div>
-          <p className="mt-2 text-xs text-gray-500">
-            Get your API key from{' '}
-            <a
-              href="https://www.shipengine.com/docs/auth/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-700 underline"
-            >
-              ShipStation Dashboard
-            </a>
-            . Keys are securely stored in AWS Secrets Manager.
-          </p>
         </div>
 
         {/* Carriers */}
-        <div className="space-y-3 pt-6 border-t border-gray-200">
-          <div>
-            <h4 className="text-sm font-medium text-gray-900">Carriers</h4>
-            <p className="text-xs text-gray-500 mt-1">
-              Add carriers for rate shopping. Find carrier IDs in your ShipStation account. Tracking URL template uses {'{tracking}'} as placeholder.
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Truck className="h-5 w-5 text-blue-500" />
+            <h3 className="font-semibold text-gray-900">Carriers</h3>
+            <Badge variant="secondary" className="ml-auto">{carriers.filter(c => c.id).length} configured</Badge>
           </div>
-          <div className="space-y-2 overflow-x-auto">
-            {/* Table Headers */}
-            <div className="grid grid-cols-[1fr_1fr_100px_100px_2fr_auto] gap-2 items-center px-2 pb-2 border-b border-gray-200 min-w-[900px]">
-              <div className="text-xs font-medium text-gray-700">Name</div>
-              <div className="text-xs font-medium text-gray-700">Carrier ID</div>
-              <div className="text-xs font-medium text-gray-700">Markup %</div>
-              <div className="text-xs font-medium text-gray-700">Markup $</div>
-              <div className="text-xs font-medium text-gray-700">Tracking URL Template</div>
-              <div className="w-10"></div>
+
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead>
+                  <tr className="bg-gradient-to-r from-gray-50 to-gray-100/50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Carrier ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Markup %</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Markup $</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tracking URL</th>
+                    <th className="px-4 py-3 w-12"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {carriers.map((carrier, index) => (
+                    <tr key={index} className="group hover:bg-blue-50/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={carrier.name}
+                          onChange={(e) => updateCarrier(index, 'name', e.target.value)}
+                          placeholder="e.g., UPS"
+                          className="h-9 text-sm bg-white"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={carrier.id}
+                          onChange={(e) => updateCarrier(index, 'id', e.target.value)}
+                          placeholder="se-123456"
+                          className="h-9 text-sm font-mono bg-white"
+                          required
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            value={carrier.estimateRateMarkup ?? 0}
+                            onChange={(e) => updateCarrier(index, 'estimateRateMarkup', e.target.value)}
+                            min="0"
+                            step="0.01"
+                            className="h-9 text-sm pr-6 bg-white"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                          <Input
+                            type="number"
+                            value={carrier.estimateRateMarkupDollar ?? 0}
+                            onChange={(e) => updateCarrier(index, 'estimateRateMarkupDollar', e.target.value)}
+                            min="0"
+                            step="0.01"
+                            className="h-9 text-sm pl-5 bg-white"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={carrier.trackingUrlTemplate ?? ''}
+                          onChange={(e) => updateCarrier(index, 'trackingUrlTemplate', e.target.value)}
+                          placeholder="https://.../{tracking}"
+                          className="h-9 text-sm font-mono bg-white"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        {carriers.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeCarrier(index)}
+                            className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            <div className="border-t border-gray-100 p-3 bg-gray-50/50">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={addCarrier}
+                className="w-full h-9 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 border-2 border-dashed border-gray-200 hover:border-blue-300"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Carrier
+              </Button>
+            </div>
+          </div>
+        </div>
 
-            {/* Carrier Rows */}
-            {carriers.map((carrier, index) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr_100px_100px_2fr_auto] gap-2 items-center min-w-[900px]">
-                <input
+        {/* Ship From Address */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-rose-500" />
+            <h3 className="font-semibold text-gray-900">Default Ship-From Address</h3>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Contact Name</Label>
+                <Input
                   type="text"
-                  value={carrier.name}
-                  onChange={(e) => updateCarrier(index, 'name', e.target.value)}
-                  placeholder="Carrier name (e.g., UPS)"
-                  className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  value={defaultFromAddress.name}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, name: e.target.value })}
+                  placeholder="John Smith"
+                  className="h-10 bg-white"
                 />
-                <input
-                  type="text"
-                  value={carrier.id}
-                  onChange={(e) => updateCarrier(index, 'id', e.target.value)}
-                  placeholder="Carrier ID (e.g., se-123456)"
-                  className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  required
-                />
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    value={carrier.estimateRateMarkup ?? 0}
-                    onChange={(e) => updateCarrier(index, 'estimateRateMarkup', e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    step="0.01"
-                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                  <span className="text-sm text-gray-500">%</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-gray-500">$</span>
-                  <input
-                    type="number"
-                    value={carrier.estimateRateMarkupDollar ?? 0}
-                    onChange={(e) => updateCarrier(index, 'estimateRateMarkupDollar', e.target.value)}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={carrier.trackingUrlTemplate ?? ''}
-                  onChange={(e) => updateCarrier(index, 'trackingUrlTemplate', e.target.value)}
-                  placeholder="https://www.ups.com/track?tracknum={tracking}"
-                  className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono"
-                />
-                {carriers.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeCarrier(index)}
-                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Remove carrier"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                )}
               </div>
-            ))}
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Company</Label>
+                <Input
+                  type="text"
+                  value={defaultFromAddress.company}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, company: e.target.value })}
+                  placeholder="Acme Corp"
+                  className="h-10 bg-white"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label className="text-xs text-gray-500">Street Address</Label>
+                <Input
+                  type="text"
+                  value={defaultFromAddress.street1}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, street1: e.target.value })}
+                  placeholder="123 Main Street"
+                  className="h-10 bg-white"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label className="text-xs text-gray-500">Street Address 2</Label>
+                <Input
+                  type="text"
+                  value={defaultFromAddress.street2}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, street2: e.target.value })}
+                  placeholder="Suite 100 (optional)"
+                  className="h-10 bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">City</Label>
+                <Input
+                  type="text"
+                  value={defaultFromAddress.city}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, city: e.target.value })}
+                  placeholder="Los Angeles"
+                  className="h-10 bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">State</Label>
+                <Input
+                  type="text"
+                  value={defaultFromAddress.state}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, state: e.target.value })}
+                  placeholder="CA"
+                  className="h-10 bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">ZIP Code</Label>
+                <Input
+                  type="text"
+                  value={defaultFromAddress.zip}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, zip: e.target.value })}
+                  placeholder="90001"
+                  className="h-10 bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Phone</Label>
+                <Input
+                  type="tel"
+                  value={defaultFromAddress.phone}
+                  onChange={(e) => setDefaultFromAddress({ ...defaultFromAddress, phone: e.target.value })}
+                  placeholder="(555) 123-4567"
+                  className="h-10 bg-white"
+                />
+              </div>
+            </div>
           </div>
-          <button
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-100">
+          <Button
             type="button"
-            onClick={addCarrier}
-            className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-gray-400 hover:text-gray-800 transition-colors"
+            variant="outline"
+            onClick={onClose}
+            disabled={isLoading}
+            className="px-6"
           >
-            + Add Another Carrier
-          </button>
-        </div>
-
-        {/* Default Ship-From Address */}
-        <div className="space-y-4 pt-6 border-t border-gray-200">
-          <div>
-            <h4 className="text-sm font-medium text-gray-900">Default Ship-From Address</h4>
-            <p className="text-xs text-gray-500 mt-1">
-              Pre-fill this address when processing shipments
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              value={defaultFromAddress.name}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, name: e.target.value })
-              }
-              placeholder="Contact Name"
-              className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="text"
-              value={defaultFromAddress.company}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, company: e.target.value })
-              }
-              placeholder="Company Name"
-              className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="text"
-              value={defaultFromAddress.street1}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, street1: e.target.value })
-              }
-              placeholder="Street Address 1"
-              className="col-span-2 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="text"
-              value={defaultFromAddress.street2}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, street2: e.target.value })
-              }
-              placeholder="Street Address 2 (optional)"
-              className="col-span-2 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="text"
-              value={defaultFromAddress.city}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, city: e.target.value })
-              }
-              placeholder="City"
-              className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="text"
-              value={defaultFromAddress.state}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, state: e.target.value })
-              }
-              placeholder="State"
-              className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="text"
-              value={defaultFromAddress.zip}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, zip: e.target.value })
-              }
-              placeholder="ZIP Code"
-              className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-            <input
-              type="tel"
-              value={defaultFromAddress.phone}
-              onChange={(e) =>
-                setDefaultFromAddress({ ...defaultFromAddress, phone: e.target.value })
-              }
-              placeholder="Phone"
-              className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isLoading}
-              className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
-            >
-              Cancel
-            </button>
-          <button
+            Cancel
+          </Button>
+          <Button
             type="submit"
             disabled={isLoading || !currentApiKey.trim()}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-sm"
+            className="px-6 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-lg shadow-blue-500/25"
           >
-            {isLoading ? 'Saving...' : isConfigured ? 'Update Configuration' : 'Save Configuration'}
-          </button>
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              isConfigured ? 'Update Configuration' : 'Save Configuration'
+            )}
+          </Button>
         </div>
       </form>
     </Modal>

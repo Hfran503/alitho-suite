@@ -30,7 +30,17 @@ const DEFAULT_PORTAL_PAGES = [
     icon: 'package',
     order: 2,
     isActive: true,
-    description: 'View orders',
+    description: 'View and manage orders',
+    visibilityMode: 'all',
+  },
+  {
+    pageKey: 'portal-orders-new',
+    label: 'Create Order',
+    href: '/portal/orders/new',
+    icon: 'plus',
+    order: 3,
+    isActive: true,
+    description: 'Create a new order',
     visibilityMode: 'all',
   },
   {
@@ -38,7 +48,7 @@ const DEFAULT_PORTAL_PAGES = [
     label: 'GCU Custom Envelope Orders',
     href: '/portal/gcu-custom-envelope-new-order',
     icon: 'document',
-    order: 3,
+    order: 4,
     isActive: true,
     description: 'Generate custom envelope order PDFs',
     visibilityMode: 'pace_ids', // Restrict to specific PACE Customer IDs

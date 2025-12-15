@@ -5,6 +5,39 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import { Modal } from '@/components/Modal'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Globe,
+  GripVertical,
+  Plus,
+  Trash2,
+  Loader2,
+  FileText,
+  Eye,
+  EyeOff,
+  Users,
+  Hash,
+  Mail,
+  Link,
+  Sparkles,
+  AlertCircle,
+  Save,
+  Home,
+  Truck,
+  Package,
+  FileIcon,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface PortalPageConfig {
   id: string
@@ -22,17 +55,27 @@ interface PortalPageConfig {
 }
 
 const VISIBILITY_MODES = [
-  { value: 'all', label: 'All Customers', description: 'Visible to all portal users' },
-  { value: 'pace_ids', label: 'PACE Customer IDs', description: 'Only specific PACE Customer IDs' },
-  { value: 'user_ids', label: 'User IDs', description: 'Only specific user IDs' },
-  { value: 'user_emails', label: 'User Emails', description: 'Only specific user emails' },
+  { value: 'all', label: 'All Customers', description: 'Visible to all portal users', icon: Users, color: 'emerald' },
+  { value: 'pace_ids', label: 'PACE IDs', description: 'Only specific PACE Customer IDs', icon: Hash, color: 'blue' },
+  { value: 'user_ids', label: 'User IDs', description: 'Only specific user IDs', icon: Users, color: 'violet' },
+  { value: 'user_emails', label: 'Emails', description: 'Only specific user emails', icon: Mail, color: 'amber' },
 ]
 
-const MODE_COLORS: Record<string, string> = {
-  all: 'bg-green-100 text-green-800',
-  pace_ids: 'bg-blue-100 text-blue-800',
-  user_ids: 'bg-purple-100 text-purple-800',
-  user_emails: 'bg-orange-100 text-orange-800',
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home,
+  truck: Truck,
+  package: Package,
+  document: FileIcon,
+}
+
+const getVisibilityColor = (mode: string) => {
+  switch (mode) {
+    case 'all': return 'bg-emerald-100 text-emerald-700'
+    case 'pace_ids': return 'bg-blue-100 text-blue-700'
+    case 'user_ids': return 'bg-violet-100 text-violet-700'
+    case 'user_emails': return 'bg-amber-100 text-amber-700'
+    default: return 'bg-gray-100 text-gray-700'
+  }
 }
 
 export function PortalPagesSettings() {
@@ -43,6 +86,7 @@ export function PortalPagesSettings() {
   const [hasChanges, setHasChanges] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creatingPage, setCreatingPage] = useState(false)
+  const [expandedPage, setExpandedPage] = useState<string | null>(null)
   const [newPage, setNewPage] = useState({
     pageKey: '',
     label: '',
@@ -85,7 +129,6 @@ export function PortalPagesSettings() {
 
       if (res.ok) {
         await fetchPageConfigs()
-        alert('Portal pages initialized successfully!')
       } else {
         const data = await res.json()
         alert(data.error || 'Failed to initialize portal pages')
@@ -109,7 +152,6 @@ export function PortalPagesSettings() {
 
       if (res.ok) {
         setHasChanges(false)
-        alert('Portal pages saved successfully!')
       } else {
         alert('Failed to save portal pages')
       }
@@ -165,7 +207,6 @@ export function PortalPagesSettings() {
     const [reorderedItem] = items.splice(result.source.index, 1)
     items.splice(result.destination.index, 0, reorderedItem)
 
-    // Update order values
     const updatedItems = items.map((item, index) => ({
       ...item,
       order: index,
@@ -176,9 +217,7 @@ export function PortalPagesSettings() {
   }
 
   const handleDelete = async (pageKey: string) => {
-    if (
-      !confirm('Are you sure you want to delete this portal page? This action cannot be undone.')
-    ) {
+    if (!confirm('Are you sure you want to delete this portal page?')) {
       return
     }
 
@@ -189,7 +228,6 @@ export function PortalPagesSettings() {
 
       if (res.ok) {
         await fetchPageConfigs()
-        alert('Portal page deleted successfully!')
       } else {
         const data = await res.json()
         alert(data.error || 'Failed to delete portal page')
@@ -248,7 +286,6 @@ export function PortalPagesSettings() {
           allowedUserIds: '',
           allowedUserEmails: '',
         })
-        alert('Portal page created successfully!')
       } else {
         const data = await res.json()
         alert(data.error || 'Failed to create portal page')
@@ -261,203 +298,300 @@ export function PortalPagesSettings() {
     }
   }
 
+  const activePages = pageConfigs.filter(p => p.isActive).length
+
   if (loading) {
-    return <div className="p-8 text-center">Loading portal pages configuration...</div>
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-48 gap-3">
+        <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+        <p className="text-sm text-gray-500 font-medium">Loading portal pages...</p>
+      </div>
+    )
   }
 
   if (pageConfigs.length === 0) {
     return (
-      <div className="p-8">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-2">Portal Pages Not Initialized</h3>
-          <p className="text-gray-600 mb-4">
-            Initialize the default portal pages structure to get started. This will create pages
-            for Welcome, Shipments, Orders, and PDF Generator.
-          </p>
-          <Button onClick={handleInitialize} disabled={initializing}>
-            {initializing ? 'Initializing...' : 'Initialize Portal Pages'}
+      <div className="p-6">
+      <Card className="border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+        <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+          <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg shadow-blue-500/25">
+            <Sparkles className="h-8 w-8 text-white" />
+          </div>
+          <div className="text-center">
+            <h3 className="font-semibold text-gray-900 text-lg">Portal Pages Not Initialized</h3>
+            <p className="text-sm text-gray-600 mt-1 max-w-md">
+              Initialize the default portal pages structure to get started. This creates pages for Welcome, Shipments, Orders, and PDF Generator.
+            </p>
+          </div>
+          <Button
+            onClick={handleInitialize}
+            disabled={initializing}
+            className="mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25"
+          >
+            {initializing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Initializing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Initialize Portal Pages
+              </>
+            )}
           </Button>
-        </div>
+        </CardContent>
+      </Card>
       </div>
     )
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Portal Pages Configuration</h2>
-          <p className="text-gray-600 mt-1">
-            Manage which pages appear in the customer portal and control visibility per customer
-          </p>
+    <div className="p-6 space-y-4">
+      {/* Stats Bar */}
+      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-100 rounded-lg">
+              <Globe className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Total Pages</p>
+              <p className="text-lg font-bold text-gray-900">{pageConfigs.length}</p>
+            </div>
+          </div>
+          <div className="h-8 w-px bg-gray-200" />
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-emerald-100 rounded-lg">
+              <Eye className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Active</p>
+              <p className="text-lg font-bold text-gray-900">{activePages}</p>
+            </div>
+          </div>
+          <div className="h-8 w-px bg-gray-200" />
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-gray-100 rounded-lg">
+              <EyeOff className="h-4 w-4 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Hidden</p>
+              <p className="text-lg font-bold text-gray-900">{pageConfigs.length - activePages}</p>
+            </div>
+          </div>
         </div>
-        <div className="space-x-2">
-          <Button variant="outline" onClick={() => setShowCreateModal(true)}>
-            Create Page
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCreateModal(true)}
+            className="h-9 gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Page
           </Button>
-          <Button onClick={handleSave} disabled={!hasChanges || saving}>
-            {saving ? 'Saving...' : 'Save Changes'}
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!hasChanges || saving}
+            className={cn(
+              'h-9 gap-2',
+              hasChanges
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25'
+                : ''
+            )}
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save
           </Button>
         </div>
       </div>
 
+      {/* Unsaved Changes Warning */}
       {hasChanges && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <p className="text-yellow-800">You have unsaved changes. Click "Save Changes" to apply.</p>
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 rounded-lg border border-amber-200">
+          <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+          <p className="text-xs text-amber-700">You have unsaved changes. Click Save to apply.</p>
         </div>
       )}
 
+      {/* Pages List */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="portal-pages">
           {(provided) => (
-            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
-              {pageConfigs.map((page, index) => (
-                <Draggable key={page.pageKey} draggableId={page.pageKey} index={index}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className={`bg-white border rounded-lg p-6 ${snapshot.isDragging ? 'shadow-lg' : ''}`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div {...provided.dragHandleProps} className="cursor-grab mt-2">
-                          <svg
-                            className="w-5 h-5 text-gray-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 8h16M4 16h16"
-                            />
-                          </svg>
-                        </div>
+            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+              {pageConfigs.map((page, index) => {
+                const IconComponent = page.icon ? ICON_MAP[page.icon] || FileText : FileText
+                const isExpanded = expandedPage === page.pageKey
 
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <h3 className="text-lg font-semibold">{page.label}</h3>
-                              <p className="text-sm text-gray-500">
-                                {page.href} • {page.pageKey}
-                              </p>
-                              {page.description && (
-                                <p className="text-sm text-gray-600 mt-1">{page.description}</p>
-                              )}
+                return (
+                  <Draggable key={page.pageKey} draggableId={page.pageKey} index={index}>
+                    {(provided, snapshot) => (
+                      <Card
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        className={cn(
+                          'border border-gray-200 overflow-hidden transition-all',
+                          snapshot.isDragging && 'shadow-xl ring-2 ring-blue-500/20',
+                          !page.isActive && 'opacity-60'
+                        )}
+                      >
+                        <CardContent className="p-0">
+                          {/* Page Header */}
+                          <div
+                            className={cn(
+                              'px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50',
+                              isExpanded && 'border-b border-gray-100'
+                            )}
+                            onClick={() => setExpandedPage(isExpanded ? null : page.pageKey)}
+                          >
+                            <div {...provided.dragHandleProps} className="cursor-grab" onClick={e => e.stopPropagation()}>
+                              <GripVertical className="h-4 w-4 text-gray-400" />
                             </div>
-                            <div className="flex items-center gap-2">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={page.isActive}
-                                  onChange={() => toggleActive(page.pageKey)}
-                                  className="rounded"
-                                />
-                                <span className="text-sm">Active</span>
-                              </label>
+
+                            <div className={cn(
+                              'p-2 rounded-lg',
+                              page.isActive ? 'bg-blue-100' : 'bg-gray-100'
+                            )}>
+                              <IconComponent className={cn(
+                                'h-4 w-4',
+                                page.isActive ? 'text-blue-600' : 'text-gray-400'
+                              )} />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-medium text-gray-900 truncate">{page.label}</h3>
+                                <Badge className={cn('text-[10px] px-1.5 py-0 border-0', getVisibilityColor(page.visibilityMode))}>
+                                  {VISIBILITY_MODES.find(m => m.value === page.visibilityMode)?.label}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <Link className="h-3 w-3" />
+                                <span className="truncate">{page.href}</span>
+                                <span className="text-gray-300">•</span>
+                                <span className="font-mono">{page.pageKey}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
+                              <Switch
+                                checked={page.isActive}
+                                onCheckedChange={() => toggleActive(page.pageKey)}
+                              />
                               <Button
-                                variant="destructive"
+                                variant="ghost"
                                 size="sm"
                                 onClick={() => handleDelete(page.pageKey)}
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
                               >
-                                Delete
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
 
-                          {/* Visibility Mode */}
-                          <div className="mb-4">
-                            <Label className="text-sm font-medium mb-2 block">Visibility Mode</Label>
-                            <div className="flex gap-2 flex-wrap">
-                              {VISIBILITY_MODES.map((mode) => (
-                                <button
-                                  key={mode.value}
-                                  onClick={() =>
-                                    updateVisibilityMode(
-                                      page.pageKey,
-                                      mode.value as 'all' | 'pace_ids' | 'user_ids' | 'user_emails'
+                          {/* Expanded Content */}
+                          {isExpanded && (
+                            <div className="px-4 py-3 bg-gray-50/50 space-y-4">
+                              {page.description && (
+                                <p className="text-sm text-gray-600">{page.description}</p>
+                              )}
+
+                              {/* Visibility Mode Selection */}
+                              <div>
+                                <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
+                                  Visibility Mode
+                                </Label>
+                                <div className="flex gap-2 flex-wrap">
+                                  {VISIBILITY_MODES.map((mode) => {
+                                    const ModeIcon = mode.icon
+                                    const isSelected = page.visibilityMode === mode.value
+                                    return (
+                                      <button
+                                        key={mode.value}
+                                        onClick={() =>
+                                          updateVisibilityMode(
+                                            page.pageKey,
+                                            mode.value as 'all' | 'pace_ids' | 'user_ids' | 'user_emails'
+                                          )
+                                        }
+                                        className={cn(
+                                          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                                          isSelected
+                                            ? getVisibilityColor(mode.value)
+                                            : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'
+                                        )}
+                                      >
+                                        <ModeIcon className="h-3.5 w-3.5" />
+                                        {mode.label}
+                                      </button>
                                     )
-                                  }
-                                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                    page.visibilityMode === mode.value
-                                      ? MODE_COLORS[mode.value]
-                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                  }`}
-                                  title={mode.description}
-                                >
-                                  {mode.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
+                                  })}
+                                </div>
+                              </div>
 
-                          {/* Conditional Inputs Based on Visibility Mode */}
-                          {page.visibilityMode === 'pace_ids' && (
-                            <div className="mb-3">
-                              <Label htmlFor={`pace-ids-${page.pageKey}`} className="text-sm">
-                                Allowed PACE Customer IDs (comma-separated)
-                              </Label>
-                              <Input
-                                id={`pace-ids-${page.pageKey}`}
-                                placeholder="e.g., 12345, 67890"
-                                value={page.allowedPaceCustomerIds.join(', ')}
-                                onChange={(e) =>
-                                  updateAllowedValues(
-                                    page.pageKey,
-                                    'allowedPaceCustomerIds',
-                                    e.target.value
-                                  )
-                                }
-                                className="mt-1 font-mono text-sm"
-                              />
+                              {/* Conditional Inputs */}
+                              {page.visibilityMode === 'pace_ids' && (
+                                <div>
+                                  <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                                    Allowed PACE Customer IDs (comma-separated)
+                                  </Label>
+                                  <Input
+                                    placeholder="e.g., 12345, 67890"
+                                    value={page.allowedPaceCustomerIds.join(', ')}
+                                    onChange={(e) =>
+                                      updateAllowedValues(page.pageKey, 'allowedPaceCustomerIds', e.target.value)
+                                    }
+                                    className="h-9 font-mono text-sm bg-white"
+                                  />
+                                </div>
+                              )}
+
+                              {page.visibilityMode === 'user_ids' && (
+                                <div>
+                                  <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                                    Allowed User IDs (comma-separated)
+                                  </Label>
+                                  <Input
+                                    placeholder="e.g., clxyz123, clxyz456"
+                                    value={page.allowedUserIds.join(', ')}
+                                    onChange={(e) =>
+                                      updateAllowedValues(page.pageKey, 'allowedUserIds', e.target.value)
+                                    }
+                                    className="h-9 font-mono text-sm bg-white"
+                                  />
+                                </div>
+                              )}
+
+                              {page.visibilityMode === 'user_emails' && (
+                                <div>
+                                  <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                                    Allowed User Emails (comma-separated)
+                                  </Label>
+                                  <Input
+                                    placeholder="e.g., customer@example.com"
+                                    value={page.allowedUserEmails.join(', ')}
+                                    onChange={(e) =>
+                                      updateAllowedValues(page.pageKey, 'allowedUserEmails', e.target.value)
+                                    }
+                                    className="h-9 text-sm bg-white"
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
-
-                          {page.visibilityMode === 'user_ids' && (
-                            <div className="mb-3">
-                              <Label htmlFor={`user-ids-${page.pageKey}`} className="text-sm">
-                                Allowed User IDs (comma-separated)
-                              </Label>
-                              <Input
-                                id={`user-ids-${page.pageKey}`}
-                                placeholder="e.g., clxyz123, clxyz456"
-                                value={page.allowedUserIds.join(', ')}
-                                onChange={(e) =>
-                                  updateAllowedValues(page.pageKey, 'allowedUserIds', e.target.value)
-                                }
-                                className="mt-1 font-mono text-sm"
-                              />
-                            </div>
-                          )}
-
-                          {page.visibilityMode === 'user_emails' && (
-                            <div className="mb-3">
-                              <Label htmlFor={`user-emails-${page.pageKey}`} className="text-sm">
-                                Allowed User Emails (comma-separated)
-                              </Label>
-                              <Input
-                                id={`user-emails-${page.pageKey}`}
-                                placeholder="e.g., customer@example.com, user@example.com"
-                                value={page.allowedUserEmails.join(', ')}
-                                onChange={(e) =>
-                                  updateAllowedValues(
-                                    page.pageKey,
-                                    'allowedUserEmails',
-                                    e.target.value
-                                  )
-                                }
-                                className="mt-1 font-mono text-sm"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </Draggable>
-              ))}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Draggable>
+                )
+              })}
               {provided.placeholder}
             </div>
           )}
@@ -465,134 +599,181 @@ export function PortalPagesSettings() {
       </DragDropContext>
 
       {/* Create Page Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold mb-4">Create Portal Page</h3>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="pageKey">Page Key *</Label>
-                <Input
-                  id="pageKey"
-                  placeholder="e.g., portal-reports"
-                  value={newPage.pageKey}
-                  onChange={(e) => setNewPage({ ...newPage, pageKey: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="label">Label *</Label>
-                <Input
-                  id="label"
-                  placeholder="e.g., Reports"
-                  value={newPage.label}
-                  onChange={(e) => setNewPage({ ...newPage, label: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="href">Href *</Label>
-                <Input
-                  id="href"
-                  placeholder="e.g., /portal/reports"
-                  value={newPage.href}
-                  onChange={(e) => setNewPage({ ...newPage, href: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="icon">Icon</Label>
-                <Input
-                  id="icon"
-                  placeholder="e.g., document, home, truck"
-                  value={newPage.icon}
-                  onChange={(e) => setNewPage({ ...newPage, icon: e.target.value })}
-                  className="mt-1"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Available: home, truck, package, document
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  placeholder="Optional description"
-                  value={newPage.description}
-                  onChange={(e) => setNewPage({ ...newPage, description: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label>Visibility Mode</Label>
-                <select
-                  value={newPage.visibilityMode}
-                  onChange={(e) =>
-                    setNewPage({
-                      ...newPage,
-                      visibilityMode: e.target.value as
-                        | 'all'
-                        | 'pace_ids'
-                        | 'user_ids'
-                        | 'user_emails',
-                    })
-                  }
-                  className="mt-1 flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  {VISIBILITY_MODES.map((mode) => (
-                    <option key={mode.value} value={mode.value}>
-                      {mode.label} - {mode.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {newPage.visibilityMode === 'pace_ids' && (
-                <div>
-                  <Label htmlFor="paceIds">Allowed PACE Customer IDs</Label>
-                  <Input
-                    id="paceIds"
-                    placeholder="Comma-separated IDs"
-                    value={newPage.allowedPaceCustomerIds}
-                    onChange={(e) =>
-                      setNewPage({ ...newPage, allowedPaceCustomerIds: e.target.value })
-                    }
-                    className="mt-1"
-                  />
-                </div>
-              )}
-
-              {newPage.visibilityMode === 'user_emails' && (
-                <div>
-                  <Label htmlFor="emails">Allowed User Emails</Label>
-                  <Input
-                    id="emails"
-                    placeholder="Comma-separated emails"
-                    value={newPage.allowedUserEmails}
-                    onChange={(e) => setNewPage({ ...newPage, allowedUserEmails: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-              )}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Portal Page"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {/* Page Key & Label */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                Page Key <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g., portal-reports"
+                value={newPage.pageKey}
+                onChange={(e) => setNewPage({ ...newPage, pageKey: e.target.value })}
+                className="h-9 font-mono text-sm"
+              />
             </div>
-
-            <div className="flex gap-2 mt-6">
-              <Button onClick={handleCreatePage} disabled={creatingPage}>
-                {creatingPage ? 'Creating...' : 'Create Page'}
-              </Button>
-              <Button variant="outline" onClick={() => setShowCreateModal(false)}>
-                Cancel
-              </Button>
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                Label <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g., Reports"
+                value={newPage.label}
+                onChange={(e) => setNewPage({ ...newPage, label: e.target.value })}
+                className="h-9 text-sm"
+              />
             </div>
           </div>
+
+          {/* Href & Icon */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                Href <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g., /portal/reports"
+                value={newPage.href}
+                onChange={(e) => setNewPage({ ...newPage, href: e.target.value })}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">Icon</Label>
+              <Select
+                value={newPage.icon}
+                onValueChange={(value) => setNewPage({ ...newPage, icon: value })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select icon" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="truck">Truck</SelectItem>
+                  <SelectItem value="package">Package</SelectItem>
+                  <SelectItem value="document">Document</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <Label className="text-xs font-medium text-gray-500 mb-1.5 block">Description</Label>
+            <Input
+              placeholder="Optional description"
+              value={newPage.description}
+              onChange={(e) => setNewPage({ ...newPage, description: e.target.value })}
+              className="h-9 text-sm"
+            />
+          </div>
+
+          {/* Visibility Mode */}
+          <div>
+            <Label className="text-xs font-medium text-gray-500 mb-2 block">Visibility Mode</Label>
+            <div className="flex gap-2 flex-wrap">
+              {VISIBILITY_MODES.map((mode) => {
+                const ModeIcon = mode.icon
+                const isSelected = newPage.visibilityMode === mode.value
+                return (
+                  <button
+                    key={mode.value}
+                    onClick={() =>
+                      setNewPage({
+                        ...newPage,
+                        visibilityMode: mode.value as 'all' | 'pace_ids' | 'user_ids' | 'user_emails',
+                      })
+                    }
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                      isSelected
+                        ? getVisibilityColor(mode.value)
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <ModeIcon className="h-3.5 w-3.5" />
+                    {mode.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Conditional Inputs */}
+          {newPage.visibilityMode === 'pace_ids' && (
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                Allowed PACE Customer IDs
+              </Label>
+              <Input
+                placeholder="Comma-separated IDs"
+                value={newPage.allowedPaceCustomerIds}
+                onChange={(e) => setNewPage({ ...newPage, allowedPaceCustomerIds: e.target.value })}
+                className="h-9 font-mono text-sm"
+              />
+            </div>
+          )}
+
+          {newPage.visibilityMode === 'user_ids' && (
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                Allowed User IDs
+              </Label>
+              <Input
+                placeholder="Comma-separated IDs"
+                value={newPage.allowedUserIds}
+                onChange={(e) => setNewPage({ ...newPage, allowedUserIds: e.target.value })}
+                className="h-9 font-mono text-sm"
+              />
+            </div>
+          )}
+
+          {newPage.visibilityMode === 'user_emails' && (
+            <div>
+              <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                Allowed User Emails
+              </Label>
+              <Input
+                placeholder="Comma-separated emails"
+                value={newPage.allowedUserEmails}
+                onChange={(e) => setNewPage({ ...newPage, allowedUserEmails: e.target.value })}
+                className="h-9 text-sm"
+              />
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-2">
+            <Button
+              onClick={handleCreatePage}
+              disabled={creatingPage}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            >
+              {creatingPage ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Page
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

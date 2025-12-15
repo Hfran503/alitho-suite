@@ -26,10 +26,8 @@ export default async function PortalLayout({
       <PortalTopbar />
       <div className="flex">
         <PortalSidebar />
-        <main className="flex-1 p-8">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
+        <main className="flex-1">
+          {children}
         </main>
       </div>
     </div>
