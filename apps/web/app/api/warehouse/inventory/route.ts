@@ -50,11 +50,15 @@ export async function GET(request: NextRequest) {
         item: {
           select: {
             id: true,
+            itemCode: true,
             sku: true,
             name: true,
             category: true,
             isActive: true,
             trackByReference: true,
+            // Pricing fields
+            sellPrice: true,
+            bulkSellPrice: true,
             // Bulk ordering fields
             canOrderInBulk: true,
             bulkUnitName: true,
@@ -152,7 +156,8 @@ export async function GET(request: NextRequest) {
       const searchLower = search.toLowerCase()
       items = items.filter(
         (i) =>
-          i.item.sku.toLowerCase().includes(searchLower) ||
+          i.item.itemCode?.toLowerCase().includes(searchLower) ||
+          i.item.sku?.toLowerCase().includes(searchLower) ||
           i.item.name.toLowerCase().includes(searchLower)
       )
     }

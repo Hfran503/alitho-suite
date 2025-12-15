@@ -352,7 +352,11 @@ export default function NewPickOrderPage() {
   const updateItemQty = (index: number, qty: number, isManualEdit: boolean = false) => {
     setItems(prev => {
       const targetItem = prev[index]
-      const newQty = Math.min(qty, targetItem.availableQty)
+      // For bulk orders, max is based on how many bulk units fit in available qty
+      const maxQty = targetItem.isBulkOrder && targetItem.unitsPerBulk
+        ? Math.floor(targetItem.availableQty / targetItem.unitsPerBulk)
+        : targetItem.availableQty
+      const newQty = Math.min(qty, maxQty)
 
       return prev.map((item, i) => {
         // Update the target item
@@ -679,7 +683,14 @@ export default function NewPickOrderPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right text-emerald-600">
-                        {item.availableQty}
+                        {item.isBulkOrder && item.unitsPerBulk ? (
+                          <div>
+                            <span>{Math.floor(item.availableQty / item.unitsPerBulk)}</span>
+                            <span className="text-xs text-gray-500 ml-1">{item.bulkUnitName?.toLowerCase() || 'bulk'}</span>
+                          </div>
+                        ) : (
+                          item.availableQty
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -693,7 +704,9 @@ export default function NewPickOrderPage() {
                             <Input
                               type="number"
                               min={1}
-                              max={item.availableQty}
+                              max={item.isBulkOrder && item.unitsPerBulk
+                                ? Math.floor(item.availableQty / item.unitsPerBulk)
+                                : item.availableQty}
                               value={item.requestedQty}
                               onChange={(e) => updateItemQty(index, parseInt(e.target.value) || 0, item.isAddOn)}
                               className={`w-20 ${item.isAddOn && item.isManuallyEdited ? 'border-orange-400 bg-orange-50' : ''}`}

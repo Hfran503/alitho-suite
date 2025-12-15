@@ -116,12 +116,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'CSV must have a Name column' }, { status: 400 })
     }
 
-    // Get existing SKUs for this tenant
+    // Get existing SKUs for this tenant (only items with SKUs)
     const existingItems = await db.inventoryItem.findMany({
-      where: { tenantId: membership.tenantId },
+      where: { tenantId: membership.tenantId, sku: { not: null } },
       select: { id: true, sku: true },
     })
-    const existingSkuMap = new Map(existingItems.map((item) => [item.sku.toLowerCase(), item.id]))
+    const existingSkuMap = new Map(
+      existingItems
+        .filter((item): item is { id: string; sku: string } => item.sku !== null)
+        .map((item) => [item.sku.toLowerCase(), item.id])
+    )
 
     // Get customer mapping if customer pace IDs are provided
     const customerMap = new Map<string, string>()

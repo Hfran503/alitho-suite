@@ -27,14 +27,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ImportItemsDialog } from '@/components/warehouse/items/ImportItemsDialog'
+import { BuildKitDialog } from '@/components/warehouse/kitting/BuildKitDialog'
+import { KitBadge } from '@/components/warehouse/items/KitBadge'
+
+type ItemType = 'STANDARD' | 'KIT_COMPONENT' | 'KIT_AND_COMPONENT' | 'KIT'
 
 interface InventoryItem {
   id: string
+  itemCode: string | null
   sku: string
   upc: string | null
   name: string
   description: string | null
   category: string | null
+  itemType: ItemType
   weight: number | null
   dimensions: {
     length?: number
@@ -44,6 +50,17 @@ interface InventoryItem {
   } | null
   isActive: boolean
   createdAt: string
+  customer?: {
+    id: string
+    name: string
+    company: string | null
+  } | null
+}
+
+interface Customer {
+  id: string
+  name: string
+  company: string | null
 }
 
 interface PaginationInfo {
@@ -66,9 +83,13 @@ export default function InventoryItemsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
+  const [customerFilter, setCustomerFilter] = useState<string>('')
+  const [itemTypeFilter, setItemTypeFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [availableCategories, setAvailableCategories] = useState<string[]>([])
+  const [availableCustomers, setAvailableCustomers] = useState<Customer[]>([])
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [buildKitItem, setBuildKitItem] = useState<InventoryItem | null>(null)
 
   // Debounce search
   useEffect(() => {
@@ -89,6 +110,8 @@ export default function InventoryItemsPage() {
       params.set('limit', pagination.limit.toString())
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (categoryFilter) params.set('category', categoryFilter)
+      if (customerFilter) params.set('customerId', customerFilter)
+      if (itemTypeFilter) params.set('itemType', itemTypeFilter)
       if (statusFilter) params.set('isActive', statusFilter)
 
       const response = await fetch(`/api/warehouse/items?${params.toString()}`)
@@ -104,12 +127,13 @@ export default function InventoryItemsPage() {
         totalPages: data.pagination?.totalPages || 0,
       }))
       setAvailableCategories(data.filters?.categories || [])
+      setAvailableCustomers(data.filters?.customers || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }
-  }, [pagination.page, pagination.limit, debouncedSearch, categoryFilter, statusFilter])
+  }, [pagination.page, pagination.limit, debouncedSearch, categoryFilter, customerFilter, itemTypeFilter, statusFilter])
 
   useEffect(() => {
     fetchItems()
@@ -118,7 +142,7 @@ export default function InventoryItemsPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [debouncedSearch, categoryFilter, statusFilter])
+  }, [debouncedSearch, categoryFilter, customerFilter, itemTypeFilter, statusFilter])
 
   const handleToggleStatus = async (item: InventoryItem) => {
     try {
@@ -134,13 +158,6 @@ export default function InventoryItemsPage() {
     } catch (err) {
       console.error('Error toggling item status:', err)
     }
-  }
-
-  const formatDimensions = (dimensions: InventoryItem['dimensions']) => {
-    if (!dimensions) return '-'
-    const { length, width, height, unit = 'in' } = dimensions
-    if (!length && !width && !height) return '-'
-    return `${length || 0} x ${width || 0} x ${height || 0} ${unit}`
   }
 
   const handleExport = () => {
@@ -199,14 +216,29 @@ export default function InventoryItemsPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <div className="lg:col-span-2">
             <Input
-              placeholder="Search by SKU, UPC, or name..."
+              placeholder="Search by Item #, SKU, UPC, or name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full"
             />
+          </div>
+          <div>
+            <Select value={customerFilter || '_all'} onValueChange={(v) => setCustomerFilter(v === '_all' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Customers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Customers</SelectItem>
+                {availableCustomers.map((customer) => (
+                  <SelectItem key={customer.id} value={customer.id}>
+                    {customer.name}{customer.company ? ` (${customer.company})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Select value={categoryFilter || '_all'} onValueChange={(v) => setCategoryFilter(v === '_all' ? '' : v)}>
@@ -220,6 +252,20 @@ export default function InventoryItemsPage() {
                     {cat}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Select value={itemTypeFilter || '_all'} onValueChange={(v) => setItemTypeFilter(v === '_all' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Types</SelectItem>
+                <SelectItem value="STANDARD">Standard</SelectItem>
+                <SelectItem value="KIT_COMPONENT">Component</SelectItem>
+                <SelectItem value="KIT">Kit</SelectItem>
+                <SelectItem value="KIT_AND_COMPONENT">Kit & Component</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -250,14 +296,14 @@ export default function InventoryItemsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10"></TableHead>
+              <TableHead>Item #</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>UPC</TableHead>
+              <TableHead>Customer</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Weight</TableHead>
-              <TableHead>Dimensions</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -288,10 +334,68 @@ export default function InventoryItemsPage() {
             ) : (
               items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-mono font-medium">{item.sku}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="h-8 w-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 outline-none focus:outline-none">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-40">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/warehouse/items/${item.id}`} className="flex items-center cursor-pointer">
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
+                          </Link>
+                        </DropdownMenuItem>
+                        {(item.itemType === 'KIT' || item.itemType === 'KIT_AND_COMPONENT') && (
+                          <DropdownMenuItem
+                            onClick={() => setBuildKitItem(item)}
+                            className="flex items-center cursor-pointer text-blue-600 focus:text-blue-600"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            Build Kit
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => handleToggleStatus(item)}
+                          className={`flex items-center cursor-pointer ${item.isActive ? 'text-red-600 focus:text-red-600' : 'text-green-600 focus:text-green-600'}`}
+                        >
+                          {item.isActive ? (
+                            <>
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                              </svg>
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Activate
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                  <TableCell className="font-mono font-medium text-emerald-600">{item.itemCode || '-'}</TableCell>
+                  <TableCell className="font-mono text-sm">{item.sku}</TableCell>
                   <TableCell>
                     <div>
-                      <div className="font-medium">{item.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{item.name}</span>
+                        {(item.itemType === 'KIT' || item.itemType === 'KIT_AND_COMPONENT') && (
+                          <KitBadge kitId={item.id} />
+                        )}
+                      </div>
                       {item.description && (
                         <div className="text-sm text-gray-500 truncate max-w-xs">
                           {item.description}
@@ -299,7 +403,13 @@ export default function InventoryItemsPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{item.upc || '-'}</TableCell>
+                  <TableCell className="text-sm">
+                    {item.customer ? (
+                      <span>{item.customer.name}</span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {item.category ? (
                       <Badge variant="outline">{item.category}</Badge>
@@ -310,30 +420,10 @@ export default function InventoryItemsPage() {
                   <TableCell>
                     {item.weight ? `${item.weight} lbs` : '-'}
                   </TableCell>
-                  <TableCell className="text-sm text-gray-600">
-                    {formatDimensions(item.dimensions)}
-                  </TableCell>
                   <TableCell>
                     <Badge variant={item.isActive ? 'default' : 'secondary'}>
                       {item.isActive ? 'Active' : 'Inactive'}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/warehouse/items/${item.id}`}>
-                        <Button variant="ghost" size="sm">
-                          Edit
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleStatus(item)}
-                        className={item.isActive ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}
-                      >
-                        {item.isActive ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -376,6 +466,18 @@ export default function InventoryItemsPage() {
         onOpenChange={setImportDialogOpen}
         onImportComplete={fetchItems}
       />
+
+      {/* Build Kit Dialog */}
+      {buildKitItem && (
+        <BuildKitDialog
+          open={!!buildKitItem}
+          onOpenChange={(open) => !open && setBuildKitItem(null)}
+          kitId={buildKitItem.id}
+          kitName={buildKitItem.name}
+          kitCode={buildKitItem.itemCode}
+          onSuccess={fetchItems}
+        />
+      )}
     </div>
   )
 }

@@ -424,6 +424,7 @@ export async function createPaceJob(jobData: {
 export async function createPaceJobPart(jobPartData: {
   job: string
   jobPart: string
+  jobProduct?: string
   description: string
   qtyOrdered: number
 }) {
@@ -541,6 +542,151 @@ export async function updatePaceJob(jobData: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(jobData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Create a new JobProduct in PACE
+ * @param jobProductData - JobProduct data to create
+ */
+export async function createPaceJobProduct(jobProductData: {
+  job: string
+  jobProduct: string
+  description?: string
+  qtyOrdered?: number
+  [key: string]: any
+}) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/CreateObject/createJobProduct`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(jobProductData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Create a new JobShipment in PACE
+ * @param shipmentData - JobShipment data to create
+ */
+export async function createPaceJobShipment(shipmentData: {
+  job: string
+  shipmentType?: number
+  shipVia?: number
+  dateTime?: string // Format: 'YYYY-MM-DD'
+  name?: string
+  address1?: string
+  address2?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  u_specialinformation?: string
+  [key: string]: any
+}) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/CreateObject/createJobShipment`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(shipmentData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Create a new Carton in PACE
+ * @param cartonData - Carton data to create
+ */
+export async function createPaceCarton(cartonData: {
+  shipment: number // JobShipment ID
+  quantity?: number
+  trackingNumber?: string
+  [key: string]: any
+}) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/CreateObject/createCarton`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(cartonData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Create a new CartonContent in PACE (links JobParts to a Carton)
+ * @param contentData - CartonContent data to create
+ */
+export async function createPaceCartonContent(contentData: {
+  carton: number // Carton ID
+  // Use ONLY ONE of: job, jobPart, jobPartKey, jobMaterial, proof, jobComponent, jobProduct, jobPartPressForm
+  jobPartKey?: string // Format: "job:jobPart" (e.g., "1002960:01") - preferred for JobPart linking
+  job?: string // Use alone for Job-level linking
+  jobPart?: string // Use alone or with job for Part-level linking
+  quantity?: number
+  [key: string]: any
+}) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/CreateObject/createCartonContent`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(contentData),
   })
 
   if (!response.ok) {

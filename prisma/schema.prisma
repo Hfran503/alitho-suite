@@ -54,6 +54,8 @@ model Tenant {
   gcuEnvelopeOrders      GcuEnvelopeOrder[]
   warehouseCustomers     WarehouseCustomer[]
   pickOrders             PickOrder[]
+  kitAssemblies          KitAssembly[]
+  storefrontOrders       StorefrontOrder[]
 
   @@index([slug])
   @@index([status])
@@ -79,6 +81,8 @@ model User {
   inventoryTransactions InventoryTransaction[]
   receivingRecords      ReceivingRecord[]
   pickOrdersCreated     PickOrder[]            @relation("PickOrderCreatedBy")
+  kitAssemblies         KitAssembly[]
+  storefrontOrdersCreated StorefrontOrder[]
 
   @@index([email])
   @@index([paceCustomerId])
@@ -1040,14 +1044,16 @@ enum WarehouseType {
 }
 
 enum InventoryTransactionType {
-  RECEIVE     // Inbound from receiving
-  SHIP        // Outbound shipment
-  ADJUST      // Manual adjustment (cycle count, correction)
-  TRANSFER    // Transfer between locations
-  RESERVE     // Reserved for order
-  UNRESERVE   // Released from reservation
-  DAMAGE      // Marked as damaged
-  PICK        // Picked for internal use (fulfillment job, etc.)
+  RECEIVE       // Inbound from receiving
+  SHIP          // Outbound shipment
+  ADJUST        // Manual adjustment (cycle count, correction)
+  TRANSFER      // Transfer between locations
+  RESERVE       // Reserved for order
+  UNRESERVE     // Released from reservation
+  DAMAGE        // Marked as damaged
+  PICK          // Picked for internal use (fulfillment job, etc.)
+  KIT_ASSEMBLE  // Component consumed for kit assembly
+  KIT_PRODUCE   // Kit produced from assembly
 }
 
 enum PickOrderStatus {
@@ -1056,6 +1062,11 @@ enum PickOrderStatus {
   IN_PROGRESS // Currently being picked
   COMPLETED   // All items picked
   CANCELLED   // Cancelled
+}
+
+enum StorefrontOrderStatus {
+  CREATED     // Order placed, items reserved
+  SHIPPED     // Items pulled from inventory and shipped
 }
 
 enum ItemType {
@@ -1139,6 +1150,7 @@ model WarehouseLocation {
   transactions    InventoryTransaction[]
   receivingItems  ReceivingItem[]
   pickOrderItems  PickOrderItem[]
+  kitAssemblies   KitAssembly[]
 
   @@unique([tenantId, barcode])
   @@index([tenantId])
@@ -1156,7 +1168,8 @@ model InventoryItem {
   customerId    String?      // Reference to WarehouseCustomer
 
   // Item identifiers
-  sku           String       // Stock Keeping Unit (unique per tenant)
+  itemCode      String?      // Human-friendly code: CSI-0001, CSI-0002, etc.
+  sku           String?      // Stock Keeping Unit (optional, unique per tenant if provided)
   upc           String?      // Universal Product Code (barcode)
   name          String       // Item name
   description   String?      @db.Text
@@ -1203,14 +1216,20 @@ model InventoryItem {
   // Kit relations
   kitComponents   KitComponent[]     @relation("Kit")        // Components that make up this kit
   usedInKits      KitComponent[]     @relation("Component")  // Kits that use this item
+  kitAssemblies   KitAssembly[]      @relation("KitAssemblies") // Assembly history for this kit
 
   // Add-on relations
   addOns          ItemAddOn[]        @relation("ParentItem")  // Add-ons for this item
   addOnFor        ItemAddOn[]        @relation("AddOnItem")   // Items this is an add-on for
 
+  // Storefront order relations
+  storefrontOrderItems StorefrontOrderItem[]
+
   @@unique([tenantId, sku])
+  @@unique([tenantId, itemCode])
   @@index([tenantId])
   @@index([customerId])
+  @@index([itemCode])
   @@index([sku])
   @@index([upc])
   @@index([category])
@@ -1484,6 +1503,20 @@ model WarehouseCustomer {
   name            String    // Customer name from PACE
   company         String?   // Company name
 
+  // Contact Info
+  email           String?
+  phone           String?
+
+  // Default Shipping Address
+  shipToName      String?   // Attention/Contact name
+  shipToAddress1  String?
+  shipToAddress2  String?
+  shipToCity      String?
+  shipToState     String?
+  shipToZip       String?
+  shipToCountry   String?   @default("US")
+  shipToPhone     String?
+
   // Status
   isActive        Boolean   @default(true)
 
@@ -1498,12 +1531,98 @@ model WarehouseCustomer {
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   inventoryItems  InventoryItem[]
   asns            ASN[]
+  storefrontOrders StorefrontOrder[]
 
   @@unique([tenantId, paceCustomerId])
   @@index([tenantId])
   @@index([paceCustomerId])
   @@index([isActive])
   @@index([name])
+}
+
+// ============================================
+// STOREFRONT ORDER MODELS
+// ============================================
+
+// StorefrontOrder - Customer order for warehouse items
+model StorefrontOrder {
+  id              String                @id @default(cuid())
+  orderNumber     String                // Human-readable number (e.g., SO-2024-0001)
+  tenantId        String
+  customerId      String
+
+  // Status
+  status          StorefrontOrderStatus @default(CREATED)
+
+  // Shipping Address (copied from customer or overridden)
+  shipToName      String?
+  shipToAddress1  String?
+  shipToAddress2  String?
+  shipToCity      String?
+  shipToState     String?
+  shipToZip       String?
+  shipToCountry   String?   @default("US")
+  shipToPhone     String?
+
+  // Order notes
+  notes           String?   @db.Text
+
+  // Tracking info (populated when shipped)
+  shippedAt       DateTime?
+  trackingNumber  String?
+  carrier         String?
+
+  // PACE Integration
+  paceJobNumber   String?   // Job number from PACE system
+  paceResponse    Json?     // Full PACE API response for audit
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String?
+
+  // Relations
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        WarehouseCustomer @relation(fields: [customerId], references: [id])
+  createdBy       User?     @relation(fields: [createdById], references: [id])
+  items           StorefrontOrderItem[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([paceJobNumber])
+}
+
+// StorefrontOrderItem - Line items in a storefront order
+model StorefrontOrderItem {
+  id              String    @id @default(cuid())
+  orderId         String
+  itemId          String
+
+  // Quantity
+  quantity        Int
+
+  // Price at time of order (optional, for record keeping)
+  unitPrice       Decimal?  @db.Decimal(12, 4)
+
+  // Bulk order tracking
+  isBulkOrder     Boolean   @default(false)
+
+  // Reference/Lot tracking (if item tracks by reference)
+  referenceNumber String?
+  lotNumber       String?
+
+  // Notes
+  notes           String?
+
+  // Relations
+  order           StorefrontOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item            InventoryItem   @relation(fields: [itemId], references: [id])
+
+  @@index([orderId])
+  @@index([itemId])
 }
 
 // ============================================
@@ -1624,6 +1743,47 @@ model KitComponent {
   @@unique([kitId, componentId])
   @@index([kitId])
   @@index([componentId])
+}
+
+// KitAssembly - Tracks kit assembly operations
+model KitAssembly {
+  id            String              @id @default(cuid())
+  tenantId      String
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // The kit being assembled
+  kitId         String
+  kit           InventoryItem       @relation("KitAssemblies", fields: [kitId], references: [id], onDelete: Cascade)
+
+  // Where the kit is being produced
+  locationId    String
+  location      WarehouseLocation   @relation(fields: [locationId], references: [id])
+
+  // Assembly details
+  quantity      Int                 // Number of kits assembled
+  status        KitAssemblyStatus   @default(COMPLETED)
+
+  // Who performed the assembly
+  assembledById String?
+  assembledBy   User?               @relation(fields: [assembledById], references: [id])
+
+  // Notes
+  notes         String?             @db.Text
+
+  // Timestamps
+  assembledAt   DateTime            @default(now())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@index([kitId])
+  @@index([locationId])
+  @@index([assembledAt])
+}
+
+enum KitAssemblyStatus {
+  COMPLETED   // Assembly completed successfully
+  CANCELLED   // Assembly was cancelled/reversed
 }
 
 // ============================================

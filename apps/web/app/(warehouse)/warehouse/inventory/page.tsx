@@ -101,6 +101,30 @@ interface PendingOrder {
   totalReserved: number
 }
 
+interface PendingStorefrontOrder {
+  storefrontOrder: {
+    id: string
+    orderNumber: string
+    status: string
+    shipToName: string | null
+    shipToCity: string | null
+    shipToState: string | null
+    createdAt: string
+    customer: {
+      id: string
+      name: string
+      company: string | null
+    }
+  }
+  items: Array<{
+    id: string
+    referenceNumber: string | null
+    lotNumber: string | null
+    quantity: number
+  }>
+  totalReserved: number
+}
+
 interface PaginationInfo {
   page: number
   limit: number
@@ -126,11 +150,14 @@ export default function InventoryPage() {
   const [quickViewItem, setQuickViewItem] = useState<InventoryItem | null>(null)
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([])
   const [loadingPendingOrders, setLoadingPendingOrders] = useState(false)
+  const [pendingStorefrontOrders, setPendingStorefrontOrders] = useState<PendingStorefrontOrder[]>([])
+  const [loadingPendingStorefrontOrders, setLoadingPendingStorefrontOrders] = useState(false)
 
   // Fetch pending orders when quick view item changes
   useEffect(() => {
     if (!quickViewItem) {
       setPendingOrders([])
+      setPendingStorefrontOrders([])
       return
     }
 
@@ -151,7 +178,25 @@ export default function InventoryPage() {
       }
     }
 
+    async function fetchPendingStorefrontOrders() {
+      if (!quickViewItem) return
+
+      setLoadingPendingStorefrontOrders(true)
+      try {
+        const response = await fetch(`/api/warehouse/inventory/item/${quickViewItem.item.id}/pending-storefront-orders`)
+        if (response.ok) {
+          const data = await response.json()
+          setPendingStorefrontOrders(data.data?.pendingOrders || [])
+        }
+      } catch (err) {
+        console.error('Error fetching pending storefront orders:', err)
+      } finally {
+        setLoadingPendingStorefrontOrders(false)
+      }
+    }
+
     fetchPendingOrders()
+    fetchPendingStorefrontOrders()
   }, [quickViewItem])
 
   // Debounce search
@@ -684,6 +729,87 @@ export default function InventoryPage() {
                               </TableCell>
                               <TableCell>
                                 <Link href={`/warehouse/pick-orders/${order.pickOrder.id}`}>
+                                  <Button variant="ghost" size="sm" className="text-xs">
+                                    View
+                                  </Button>
+                                </Link>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending Storefront Orders */}
+              {pendingStorefrontOrders.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-gray-700">
+                    Pending Storefront Orders ({pendingStorefrontOrders.length})
+                    <span className="font-normal text-sm text-emerald-600 ml-2">
+                      {pendingStorefrontOrders.reduce((sum, o) => sum + o.totalReserved, 0)} units reserved
+                    </span>
+                  </h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-emerald-50">
+                          <TableHead>Order #</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Ship To</TableHead>
+                          <TableHead>Ref #</TableHead>
+                          <TableHead className="text-right">Reserved</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loadingPendingStorefrontOrders ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-4 text-gray-500">
+                              Loading...
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          pendingStorefrontOrders.map((order) => (
+                            <TableRow key={order.storefrontOrder.id}>
+                              <TableCell>
+                                <span className="font-mono font-medium text-emerald-600">
+                                  {order.storefrontOrder.orderNumber}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <div className="font-medium">{order.storefrontOrder.customer.name}</div>
+                                  {order.storefrontOrder.customer.company && (
+                                    <div className="text-xs text-gray-500">{order.storefrontOrder.customer.company}</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {order.storefrontOrder.shipToCity && order.storefrontOrder.shipToState
+                                  ? `${order.storefrontOrder.shipToCity}, ${order.storefrontOrder.shipToState}`
+                                  : order.storefrontOrder.shipToName || '-'}
+                              </TableCell>
+                              <TableCell>
+                                {order.items.map((item, idx) => (
+                                  <div key={idx}>
+                                    {item.referenceNumber ? (
+                                      <Badge variant="outline" className="font-mono text-xs">
+                                        {item.referenceNumber}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">-</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-emerald-600">
+                                {order.totalReserved}
+                              </TableCell>
+                              <TableCell>
+                                <Link href="/warehouse/orders">
                                   <Button variant="ghost" size="sm" className="text-xs">
                                     View
                                   </Button>

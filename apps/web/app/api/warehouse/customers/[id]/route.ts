@@ -8,6 +8,18 @@ const updateCustomerSchema = z.object({
   name: z.string().min(1).optional(),
   company: z.string().optional(),
   isActive: z.boolean().optional(),
+  // Contact Info
+  email: z.string().email().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  // Shipping Address
+  shipToName: z.string().optional().nullable(),
+  shipToAddress1: z.string().optional().nullable(),
+  shipToAddress2: z.string().optional().nullable(),
+  shipToCity: z.string().optional().nullable(),
+  shipToState: z.string().optional().nullable(),
+  shipToZip: z.string().optional().nullable(),
+  shipToCountry: z.string().optional().nullable(),
+  shipToPhone: z.string().optional().nullable(),
 })
 
 // GET /api/warehouse/customers/[id] - Get single warehouse customer

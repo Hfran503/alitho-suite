@@ -82,6 +82,30 @@ interface PendingOrder {
   totalReserved: number
 }
 
+interface PendingStorefrontOrder {
+  storefrontOrder: {
+    id: string
+    orderNumber: string
+    status: string
+    shipToName: string | null
+    shipToCity: string | null
+    shipToState: string | null
+    createdAt: string
+    customer: {
+      id: string
+      name: string
+      company: string | null
+    }
+  }
+  items: Array<{
+    id: string
+    referenceNumber: string | null
+    lotNumber: string | null
+    quantity: number
+  }>
+  totalReserved: number
+}
+
 const TRANSACTION_TYPES: Record<string, { label: string; color: string }> = {
   RECEIVE: { label: 'Receive', color: 'bg-green-100 text-green-800' },
   SHIP: { label: 'Ship', color: 'bg-blue-100 text-blue-800' },
@@ -98,6 +122,7 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
   const [stockData, setStockData] = useState<ItemStockData | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([])
+  const [pendingStorefrontOrders, setPendingStorefrontOrders] = useState<PendingStorefrontOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -119,11 +144,18 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
           setTransactions(txnJson.data || [])
         }
 
-        // Fetch pending orders
+        // Fetch pending pick orders
         const pendingResponse = await fetch(`/api/warehouse/inventory/item/${itemId}/pending-orders`)
         if (pendingResponse.ok) {
           const pendingJson = await pendingResponse.json()
           setPendingOrders(pendingJson.data?.pendingOrders || [])
+        }
+
+        // Fetch pending storefront orders
+        const storefrontResponse = await fetch(`/api/warehouse/inventory/item/${itemId}/pending-storefront-orders`)
+        if (storefrontResponse.ok) {
+          const storefrontJson = await storefrontResponse.json()
+          setPendingStorefrontOrders(storefrontJson.data?.pendingOrders || [])
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')
@@ -442,6 +474,83 @@ export default function ItemInventoryPage({ params }: { params: Promise<{ itemId
                   </TableRow>
                 ))
               )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Pending Storefront Orders */}
+      {pendingStorefrontOrders.length > 0 && (
+        <div className="bg-white rounded-lg shadow mt-6">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold">
+              Pending Storefront Orders
+              <span className="font-normal text-sm text-emerald-600 ml-2">
+                {pendingStorefrontOrders.reduce((sum, o) => sum + o.totalReserved, 0)} units reserved across {pendingStorefrontOrders.length} order{pendingStorefrontOrders.length !== 1 ? 's' : ''}
+              </span>
+            </h2>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order #</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Ship To</TableHead>
+                <TableHead>Ref #</TableHead>
+                <TableHead className="text-right">Reserved Qty</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingStorefrontOrders.map((order) => (
+                <TableRow key={order.storefrontOrder.id}>
+                  <TableCell>
+                    <span className="font-mono font-medium text-emerald-600">
+                      {order.storefrontOrder.orderNumber}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{order.storefrontOrder.customer.name}</div>
+                      {order.storefrontOrder.customer.company && (
+                        <div className="text-xs text-gray-500">{order.storefrontOrder.customer.company}</div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {order.storefrontOrder.shipToCity && order.storefrontOrder.shipToState
+                      ? `${order.storefrontOrder.shipToCity}, ${order.storefrontOrder.shipToState}`
+                      : order.storefrontOrder.shipToName || '-'}
+                  </TableCell>
+                  <TableCell>
+                    {order.items.map((item, idx) => (
+                      <div key={idx}>
+                        {item.referenceNumber ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {item.referenceNumber}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </div>
+                    ))}
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-emerald-600">
+                    {order.totalReserved}
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600">
+                    {formatDateTime(order.storefrontOrder.createdAt)}
+                  </TableCell>
+                  <TableCell>
+                    <Link href="/warehouse/orders">
+                      <Button variant="ghost" size="sm">
+                        View
+                      </Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>

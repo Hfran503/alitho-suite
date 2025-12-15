@@ -15,7 +15,7 @@ const itemTypeSchema = z.enum(['STANDARD', 'KIT_COMPONENT', 'KIT_AND_COMPONENT',
 
 const updateItemSchema = z.object({
   customerId: z.string().optional().nullable(),
-  sku: z.string().min(1).optional(),
+  sku: z.string().optional().nullable(),
   upc: z.string().optional().nullable(),
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
@@ -66,6 +66,9 @@ export async function GET(
         customer: {
           select: { id: true, name: true, company: true, paceCustomerId: true },
         },
+        _count: {
+          select: { addOns: true },
+        },
       },
     })
 
@@ -73,9 +76,15 @@ export async function GET(
       return NextResponse.json({ error: 'Item not found' }, { status: 404 })
     }
 
+    // Add hasAddOns flag for UI convenience
+    const hasAddOns = item._count.addOns > 0
+
     return NextResponse.json({
       success: true,
-      data: item,
+      data: {
+        ...item,
+        hasAddOns,
+      },
     })
   } catch (error) {
     console.error('Error fetching item:', error)
@@ -131,12 +140,11 @@ export async function PATCH(
 
     // If SKU is being changed, check it doesn't conflict
     if (validatedData.sku && validatedData.sku !== existing.sku) {
-      const skuExists = await db.inventoryItem.findUnique({
+      const skuExists = await db.inventoryItem.findFirst({
         where: {
-          tenantId_sku: {
-            tenantId: membership.tenantId,
-            sku: validatedData.sku,
-          },
+          tenantId: membership.tenantId,
+          sku: validatedData.sku,
+          id: { not: id }, // Exclude current item
         },
       })
 

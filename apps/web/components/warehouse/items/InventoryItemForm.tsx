@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { CustomerSelect } from '@/components/warehouse/customers/CustomerSelect'
 import { ItemAddOnsManager } from '@/components/warehouse/items/ItemAddOnsManager'
+import { KitComponentsManager } from '@/components/warehouse/items/KitComponentsManager'
 import { DEFAULT_ITEM_CATEGORIES } from '@/lib/warehouse/constants'
 
 type ItemType = 'STANDARD' | 'KIT_COMPONENT' | 'KIT_AND_COMPONENT' | 'KIT'
@@ -42,6 +43,8 @@ interface InventoryItemFormData {
   bulkUnitName: string
   unitsPerBulk: string
   bulkSellPrice: string
+  // Add-ons
+  hasAddOns: boolean
 }
 
 interface InventoryItemFormProps {
@@ -75,6 +78,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
       bulkUnitName: '',
       unitsPerBulk: '',
       bulkSellPrice: '',
+      hasAddOns: false,
     }
   )
 
@@ -109,7 +113,7 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: formData.customerId || null,
-          sku: formData.sku,
+          sku: formData.sku || null,
           upc: formData.upc || null,
           name: formData.name,
           description: formData.description || null,
@@ -159,19 +163,18 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="sku">SKU *</Label>
+              <Label htmlFor="sku">SKU (Optional)</Label>
               <Input
                 id="sku"
                 value={formData.sku}
                 onChange={(e) => handleChange('sku', e.target.value.toUpperCase())}
                 placeholder="SKU-001"
-                required
                 disabled={isEdit} // SKU shouldn't be changed after creation
                 className="font-mono"
               />
-              {isEdit && (
-                <p className="text-xs text-gray-500 mt-1">SKU cannot be changed after creation</p>
-              )}
+              <p className="text-xs text-gray-500 mt-1">
+                {isEdit ? 'SKU cannot be changed after creation' : 'Leave empty to use Item # only'}
+              </p>
             </div>
 
             <div>
@@ -460,17 +463,56 @@ export function InventoryItemForm({ initialData, isEdit = false }: InventoryItem
           )}
         </div>
 
+        {/* Kit Components Section (only in edit mode for KIT types) */}
+        {isEdit && initialData?.id && (formData.itemType === 'KIT' || formData.itemType === 'KIT_AND_COMPONENT') && (
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <h2 className="text-lg font-semibold border-b pb-2">Kit Components</h2>
+            <p className="text-sm text-gray-600 -mt-2">
+              Define the items that make up this kit. When assembled, these components will be deducted from inventory.
+            </p>
+            <KitComponentsManager itemId={initialData.id} />
+          </div>
+        )}
+
         {/* Add-Ons Section (only in edit mode) */}
         {isEdit && initialData?.id && (
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
             <h2 className="text-lg font-semibold border-b pb-2">Add-Ons / Bundled Items</h2>
-            <p className="text-sm text-gray-600 -mt-2">
-              Configure items that should be automatically included when this item is ordered.
-            </p>
-            <ItemAddOnsManager
-              itemId={initialData.id}
-              canOrderInBulk={formData.canOrderInBulk}
-            />
+
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formData.hasAddOns}
+                onClick={() => handleChange('hasAddOns', !formData.hasAddOns)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 mt-0.5 ${
+                  formData.hasAddOns ? 'bg-emerald-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    formData.hasAddOns ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <div>
+                <Label className="cursor-pointer font-medium">
+                  This item has add-ons
+                </Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  Enable to configure items that should be automatically included when this item is ordered.
+                </p>
+              </div>
+            </div>
+
+            {formData.hasAddOns && (
+              <div className="pt-4 border-t mt-4">
+                <ItemAddOnsManager
+                  itemId={initialData.id}
+                  canOrderInBulk={formData.canOrderInBulk}
+                />
+              </div>
+            )}
           </div>
         )}
 

@@ -37,12 +37,12 @@ export interface ReserveStockParams {
   lotNumber?: string
 }
 
-// Get stock by SKU across all locations
+// Get stock by item across all locations
 export async function getStockByItem(
   tenantId: string,
   itemId: string
 ): Promise<{
-  item: { id: string; sku: string; name: string; trackByReference: boolean } | null
+  item: { id: string; sku: string | null; name: string; trackByReference: boolean } | null
   totalAvailable: number
   totalReserved: number
   totalDamaged: number
@@ -110,7 +110,7 @@ export async function getStockByLocation(
   tenantId: string,
   locationId: string
 ): Promise<Array<{
-  item: { id: string; sku: string; name: string }
+  item: { id: string; sku: string | null; name: string }
   available: number
   reserved: number
   damaged: number
