@@ -85,7 +85,7 @@ interface OrderItem {
 interface StorefrontOrder {
   id: string
   orderNumber: string
-  status: 'CREATED' | 'SHIPPED'
+  status: 'CREATED' | 'SHIPPED' | 'CANCELLED'
   shipToName: string | null
   shipToAddress1: string | null
   shipToAddress2: string | null
