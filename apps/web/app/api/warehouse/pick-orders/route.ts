@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { z } from 'zod'
+import { sendPickOrderCreatedNotification } from '@/lib/notifications/storefront-notifications'
 
 type PickOrderStatus = 'DRAFT' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
 
@@ -330,6 +331,21 @@ export async function POST(request: NextRequest) {
 
       return order
     })
+
+    // Send pick order created notification (async, don't wait)
+    sendPickOrderCreatedNotification(membership.tenantId, {
+      pickOrderNumber: pickOrder.pickOrderNumber,
+      destination: pickOrder.destination,
+      priority: pickOrder.priority,
+      items: pickOrder.items.map((i: any) => ({
+        name: i.item?.name || 'Unknown Item',
+        sku: i.item?.sku,
+        requestedQty: i.requestedQty,
+        referenceNumber: i.referenceNumber || undefined,
+      })),
+      createdBy: pickOrder.createdBy?.name || pickOrder.createdBy?.email || 'Unknown',
+      createdByEmail: pickOrder.createdBy?.email || undefined,
+    }).catch((err) => console.error('Failed to send pick order notification:', err))
 
     return NextResponse.json({ success: true, data: pickOrder }, { status: 201 })
   } catch (error) {

@@ -288,6 +288,13 @@ export async function POST(
         partNumber,
         response: componentResponse,
       })
+
+      // Step 4.5: Save the JobPart number on the order item for future reference
+      await db.storefrontOrderItem.update({
+        where: { id: orderItem.id },
+        data: { paceJobPart: partNumber },
+      })
+      console.log(`Saved paceJobPart ${partNumber} on order item ${orderItem.id}`)
     }
 
     // Step 5: Create JobShipment

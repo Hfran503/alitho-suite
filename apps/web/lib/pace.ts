@@ -629,6 +629,49 @@ export async function createPaceJobShipment(shipmentData: {
 }
 
 /**
+ * Update an existing JobShipment in PACE
+ * @param shipmentData - JobShipment data to update (must include id)
+ * PACE uses `id` field (maps to ccshipmentid in DB)
+ */
+export async function updatePaceJobShipment(shipmentData: {
+  id: number // JobShipment ID (ccshipmentid)
+  name?: string
+  address1?: string
+  address2?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  shipmentType?: number
+  shipVia?: number
+  dateTime?: string
+  u_specialinformation?: string
+  [key: string]: any
+}) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/UpdateObject/updateJobShipment`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(shipmentData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
  * Create a new Carton in PACE
  * @param cartonData - Carton data to create
  */
@@ -687,6 +730,50 @@ export async function createPaceCartonContent(contentData: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(contentData),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`PACE API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Update a CartonContent in PACE
+ * @param cartonContentId - The CartonContent primary key
+ * @param contentData - Fields to update
+ */
+export async function updatePaceCartonContent(
+  cartonContentId: number,
+  contentData: {
+    quantity?: number
+    [key: string]: any
+  }
+) {
+  const config = await getPaceConfig()
+  const authHeader = getAuthHeader(config)
+
+  const url = `${config.apiUrl}/UpdateObject/updateCartonContent`
+
+  // Include the cartonContent ID in the body
+  // PACE UpdateObject expects 'id' field for the primary key
+  const requestBody = {
+    id: cartonContentId,
+    ...contentData,
+  }
+
+  console.log('PACE updateCartonContent request:', JSON.stringify(requestBody))
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
   })
 
   if (!response.ok) {

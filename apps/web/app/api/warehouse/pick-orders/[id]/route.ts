@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { z } from 'zod'
+import { sendPickOrderStartedNotification, sendPickOrderCancelledNotification } from '@/lib/notifications/storefront-notifications'
 
 const updatePickOrderSchema = z.object({
   destination: z.string().min(1).optional(),
@@ -393,12 +394,36 @@ export async function PATCH(
       },
     })
 
-    // If this was the first pick, change status to IN_PROGRESS
+    // If this was the first pick, change status to IN_PROGRESS and send notification
     if (pickOrder.status === 'PENDING') {
-      await db.pickOrder.update({
+      const updatedPickOrder = await db.pickOrder.update({
         where: { id },
         data: { status: 'IN_PROGRESS' },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          items: {
+            include: {
+              item: { select: { id: true, sku: true, name: true } },
+            },
+          },
+        },
       })
+
+      // Send pick order started notification (async, don't wait)
+      sendPickOrderStartedNotification(membership.tenantId, {
+        pickOrderNumber: updatedPickOrder.pickOrderNumber,
+        destination: updatedPickOrder.destination,
+        priority: updatedPickOrder.priority,
+        status: 'IN_PROGRESS',
+        items: updatedPickOrder.items.map((i: any) => ({
+          name: i.item?.name || 'Unknown Item',
+          sku: i.item?.sku,
+          requestedQty: i.requestedQty,
+          referenceNumber: i.referenceNumber || undefined,
+        })),
+        createdBy: updatedPickOrder.createdBy?.name || updatedPickOrder.createdBy?.email || 'Unknown',
+        createdByEmail: updatedPickOrder.createdBy?.email || undefined,
+      }).catch((err) => console.error('Failed to send pick order started notification:', err))
     }
 
     // Check if all items are picked
@@ -449,7 +474,14 @@ export async function DELETE(
 
     const pickOrder = await db.pickOrder.findFirst({
       where: { id, tenantId: membership.tenantId },
-      include: { items: true },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        items: {
+          include: {
+            item: { select: { id: true, sku: true, name: true } },
+          },
+        },
+      },
     })
 
     if (!pickOrder) {
@@ -504,6 +536,23 @@ export async function DELETE(
           data: { status: 'CANCELLED' },
         })
       })
+
+      // Send pick order cancelled notification (async, don't wait)
+      sendPickOrderCancelledNotification(membership.tenantId, {
+        pickOrderNumber: pickOrder.pickOrderNumber,
+        destination: pickOrder.destination,
+        priority: pickOrder.priority,
+        status: 'CANCELLED',
+        items: pickOrder.items.map((i: any) => ({
+          name: i.item?.name || 'Unknown Item',
+          sku: i.item?.sku,
+          requestedQty: i.requestedQty,
+          pickedQty: i.pickedQty,
+          referenceNumber: i.referenceNumber || undefined,
+        })),
+        createdBy: pickOrder.createdBy?.name || pickOrder.createdBy?.email || 'Unknown',
+        createdByEmail: pickOrder.createdBy?.email || undefined,
+      }).catch((err) => console.error('Failed to send pick order cancelled notification:', err))
 
       return NextResponse.json({ success: true, message: 'Pick order cancelled' })
     } else {

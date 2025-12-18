@@ -10,6 +10,7 @@ import { PortalPagesSettings } from '@/components/settings/PortalPagesSettings'
 import { DepartmentsSettings } from '@/components/settings/DepartmentsSettings'
 import { EstimateSettings } from '@/components/settings/EstimateSettings'
 import { SecuritySettings } from '@/components/settings/SecuritySettings'
+import { ModulesSettings } from '@/components/settings/ModulesSettings'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -26,10 +27,11 @@ import {
   CreditCard,
   Settings,
   ChevronRight,
+  Boxes,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'portal-pages' | 'departments' | 'estimates' | 'teams' | 'billing' | 'security'
+type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'portal-pages' | 'departments' | 'estimates' | 'teams' | 'billing' | 'security' | 'modules'
 
 interface TabItem {
   id: Tab
@@ -37,7 +39,7 @@ interface TabItem {
   description: string
   icon: React.ElementType
   disabled?: boolean
-  category: 'general' | 'configuration' | 'security'
+  category: 'general' | 'configuration' | 'security' | 'modules'
 }
 
 export default function SettingsPage() {
@@ -53,6 +55,7 @@ export default function SettingsPage() {
     { id: 'departments', name: 'Departments', description: 'Organize teams and roles', icon: Building2, category: 'configuration' },
     { id: 'estimates', name: 'Estimates', description: 'Quote configuration', icon: FileText, category: 'configuration' },
     { id: 'security', name: 'Security', description: 'Authentication & secrets', icon: Shield, category: 'security' },
+    { id: 'modules', name: 'Modules', description: 'Enable/disable features', icon: Boxes, category: 'modules' },
     { id: 'teams', name: 'Teams', description: 'Team collaboration', icon: UsersRound, disabled: true, category: 'general' },
     { id: 'billing', name: 'Billing', description: 'Subscription & payments', icon: CreditCard, disabled: true, category: 'general' },
   ]
@@ -60,6 +63,7 @@ export default function SettingsPage() {
   const categories = [
     { id: 'general', name: 'General', tabs: tabs.filter(t => t.category === 'general') },
     { id: 'configuration', name: 'Configuration', tabs: tabs.filter(t => t.category === 'configuration') },
+    { id: 'modules', name: 'Modules', tabs: tabs.filter(t => t.category === 'modules') },
     { id: 'security', name: 'Security & Access', tabs: tabs.filter(t => t.category === 'security') },
   ]
 
@@ -185,6 +189,7 @@ export default function SettingsPage() {
                 {activeTab === 'departments' && <DepartmentsSettings />}
                 {activeTab === 'estimates' && <EstimateSettings />}
                 {activeTab === 'security' && <SecuritySettings />}
+                {activeTab === 'modules' && <ModulesSettings />}
                 {activeTab === 'teams' && (
                   <div className="text-center py-16">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl mb-4">

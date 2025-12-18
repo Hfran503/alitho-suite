@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -54,6 +53,12 @@ interface ShipViaOption {
   providerName: string | null
 }
 
+interface AvailableReference {
+  referenceNumber: string | null
+  available: number
+  isCurrent: boolean
+}
+
 interface OrderItem {
   id: string
   quantity: number
@@ -62,6 +67,7 @@ interface OrderItem {
   referenceNumber: string | null
   lotNumber: string | null
   notes: string | null
+  paceJobPart: string | null
   item: {
     id: string
     itemCode: string | null
@@ -120,7 +126,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   // Edit state
   const [editingAddress, setEditingAddress] = useState(false)
-  const [editingNotes, setEditingNotes] = useState(false)
   const [saving, setSaving] = useState(false)
   const [shippingAddress, setShippingAddress] = useState({
     shipToName: '',
@@ -132,7 +137,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     shipToCountry: '',
     shipToPhone: '',
   })
-  const [notes, setNotes] = useState('')
 
   // Ship dialog
   const [shipDialogOpen, setShipDialogOpen] = useState(false)
@@ -151,6 +155,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [paceShipDate, setPaceShipDate] = useState('')
   const [paceShipProvider, setPaceShipProvider] = useState<string>('')
   const [paceShipVia, setPaceShipVia] = useState<string>('')
+
+  // Item editing
+  const [editingItem, setEditingItem] = useState<OrderItem | null>(null)
+  const [editItemDialogOpen, setEditItemDialogOpen] = useState(false)
+  const [editItemQuantity, setEditItemQuantity] = useState<number>(0)
+  const [editItemReference, setEditItemReference] = useState<string>('')
+  const [savingItem, setSavingItem] = useState(false)
+  const [availableReferences, setAvailableReferences] = useState<AvailableReference[]>([])
+  const [loadingReferences, setLoadingReferences] = useState(false)
 
   useEffect(() => {
     if (message) {
@@ -209,7 +222,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         shipToCountry: data.data.shipToCountry || '',
         shipToPhone: data.data.shipToPhone || '',
       })
-      setNotes(data.data.notes || '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch order')
     } finally {
@@ -238,32 +250,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to update address' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSaveNotes = async () => {
-    if (!order) return
-
-    setSaving(true)
-    try {
-      const response = await fetch(`/api/warehouse/storefront-orders/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes }),
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Notes updated' })
-        setEditingNotes(false)
-        fetchOrder()
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update notes' })
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to update notes' })
     } finally {
       setSaving(false)
     }
@@ -318,25 +304,99 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  const handleEditItem = async (item: OrderItem) => {
+    setEditingItem(item)
+    setEditItemQuantity(item.quantity)
+    setEditItemReference(item.referenceNumber || '')
+    setEditItemDialogOpen(true)
+
+    // Fetch available references for this item
+    setLoadingReferences(true)
+    try {
+      const response = await fetch(`/api/warehouse/storefront-orders/${id}/items/${item.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setAvailableReferences(data.data.availableReferences || [])
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch available references:', err)
+    } finally {
+      setLoadingReferences(false)
+    }
+  }
+
+  const handleSaveItem = async () => {
+    if (!editingItem || !order) return
+
+    setSavingItem(true)
+    try {
+      const updates: { quantity?: number; referenceNumber?: string | null } = {}
+
+      // Only send changes
+      if (editItemQuantity !== editingItem.quantity) {
+        updates.quantity = editItemQuantity
+      }
+      if (editItemReference !== (editingItem.referenceNumber || '')) {
+        updates.referenceNumber = editItemReference || null
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setEditItemDialogOpen(false)
+        return
+      }
+
+      const response = await fetch(`/api/warehouse/storefront-orders/${id}/items/${editingItem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        let successMsg = 'Item updated'
+        if (data.paceSync?.success) {
+          successMsg += ' (PACE synced)'
+        } else if (data.paceSync?.error) {
+          successMsg += ` (PACE sync failed: ${data.paceSync.error})`
+        }
+        setMessage({ type: 'success', text: successMsg })
+        setEditItemDialogOpen(false)
+        fetchOrder()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to update item' })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to update item' })
+    } finally {
+      setSavingItem(false)
+    }
+  }
+
   // Generate special information from order items
   const generateSpecialInfo = () => {
     if (!order) return ''
 
     const lines: string[] = []
     for (const item of order.items) {
-      const sku = item.item.itemCode || item.item.sku || ''
+      const sku = item.item.sku || item.item.itemCode || ''
       const description = item.item.name || ''
+      const refNum = item.referenceNumber
       const isBulk = item.isBulkOrder && item.item.canOrderInBulk && item.item.unitsPerBulk
       const unitsPerBulk = item.item.unitsPerBulk || 1
       const bulkQty = isBulk ? Math.round(item.quantity / unitsPerBulk) : null
       const bulkUnitName = item.item.bulkUnitName || 'Case'
 
+      // Build SKU part with optional reference
+      const skuPart = refNum ? `${sku} (${refNum})` : sku
+
       if (isBulk && bulkQty) {
-        // Format: SKU - Description (Bulk): X Cartons (X x Y = Z units)
-        lines.push(`${sku} - ${description} (Bulk): ${bulkQty} ${bulkUnitName}${bulkQty !== 1 ? 's' : ''} (${bulkQty} x ${unitsPerBulk} = ${item.quantity} units)`)
+        // Format: SKU (Ref) - Description (Bulk): X Cartons (X x Y = Z units)
+        lines.push(`${skuPart} - ${description} (Bulk): ${bulkQty} ${bulkUnitName}${bulkQty !== 1 ? 's' : ''} (${bulkQty} x ${unitsPerBulk} = ${item.quantity} units)`)
       } else {
-        // Format: SKU - Description: X units
-        lines.push(`${sku} - ${description}: ${item.quantity} units`)
+        // Format: SKU (Ref) - Description: X units
+        lines.push(`${skuPart} - ${description}: ${item.quantity} units`)
       }
     }
 
@@ -438,10 +498,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               className={
                 order.status === 'SHIPPED'
                   ? 'bg-green-100 text-green-800'
-                  : 'bg-blue-100 text-blue-800'
+                  : order.status === 'CANCELLED'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-blue-100 text-blue-800'
               }
             >
-              {order.status === 'SHIPPED' ? 'Shipped' : 'Created'}
+              {order.status === 'SHIPPED' ? 'Shipped' : order.status === 'CANCELLED' ? 'Cancelled' : 'Created'}
             </Badge>
             {order.paceJobNumber && (
               <Badge variant="outline" className="font-mono">
@@ -533,6 +595,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <TableHead className="text-right">Quantity</TableHead>
                   <TableHead className="text-right">Unit Price</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  {isEditable && <TableHead className="w-[60px]"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -617,6 +680,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                           <span className="text-gray-400">-</span>
                         )}
                       </TableCell>
+                      {isEditable && (
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditItem(item)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
@@ -792,68 +867,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </div>
 
-          {/* Notes */}
+          {/* Notes (read-only) */}
           <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Notes</h3>
-              {isEditable && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    if (editingNotes) {
-                      handleSaveNotes()
-                    } else {
-                      setEditingNotes(true)
-                    }
-                  }}
-                  disabled={saving}
-                >
-                  {editingNotes ? (
-                    saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />
-                  ) : (
-                    <Pencil className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
-            </div>
-
-            {editingNotes ? (
-              <div className="space-y-2">
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Order notes..."
-                  rows={3}
-                  className="text-sm"
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setNotes(order.notes || '')
-                    setEditingNotes(false)
-                  }}
-                  className="text-gray-500"
-                >
-                  <X className="h-4 w-4 mr-1" /> Cancel
-                </Button>
-              </div>
-            ) : order.notes ? (
+            <h3 className="font-semibold mb-3">Notes</h3>
+            {order.notes ? (
               <p className="text-sm text-gray-600">{order.notes}</p>
             ) : (
-              <p className="text-sm text-gray-400 italic">
-                No notes
-                {isEditable && (
-                  <button
-                    type="button"
-                    className="ml-2 text-emerald-600 hover:underline"
-                    onClick={() => setEditingNotes(true)}
-                  >
-                    Add
-                  </button>
-                )}
-              </p>
+              <p className="text-sm text-gray-400 italic">No notes</p>
             )}
           </div>
 
@@ -1047,6 +1067,118 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 </>
               ) : (
                 'Cancel Order'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Item Dialog */}
+      <Dialog open={editItemDialogOpen} onOpenChange={setEditItemDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Item</DialogTitle>
+            <DialogDescription>
+              {editingItem && (
+                <>
+                  {editingItem.item.name}
+                  {editingItem.item.sku && (
+                    <span className="font-mono ml-2">({editingItem.item.sku})</span>
+                  )}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Quantity */}
+            <div className="space-y-2">
+              <Label htmlFor="editQuantity">Quantity</Label>
+              <Input
+                id="editQuantity"
+                type="number"
+                min={1}
+                value={editItemQuantity}
+                onChange={(e) => setEditItemQuantity(parseInt(e.target.value, 10) || 1)}
+              />
+              {editingItem?.isBulkOrder && editingItem?.item.unitsPerBulk && (
+                <p className="text-sm text-gray-500">
+                  = {Math.round(editItemQuantity / editingItem.item.unitsPerBulk)}{' '}
+                  {editingItem.item.bulkUnitName || 'Case'}
+                  {Math.round(editItemQuantity / editingItem.item.unitsPerBulk) !== 1 && 's'}
+                </p>
+              )}
+            </div>
+
+            {/* Reference Number */}
+            <div className="space-y-2">
+              <Label htmlFor="editReference">Reference Number (PO#)</Label>
+              {loadingReferences ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500 h-10">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading available references...
+                </div>
+              ) : availableReferences.filter((ref) => ref.referenceNumber).length > 0 ? (
+                <Select
+                  value={editItemReference}
+                  onValueChange={setEditItemReference}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reference" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableReferences
+                      .filter((ref) => ref.referenceNumber)
+                      .map((ref) => (
+                        <SelectItem
+                          key={ref.referenceNumber!}
+                          value={ref.referenceNumber!}
+                        >
+                          {ref.referenceNumber}{' '}
+                          <span className="text-gray-500">
+                            ({ref.available} available{ref.isCurrent ? ' - current' : ''})
+                          </span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="editReference"
+                  value={editItemReference}
+                  onChange={(e) => setEditItemReference(e.target.value)}
+                  placeholder="Enter reference number"
+                />
+              )}
+            </div>
+
+            {/* Warning about PACE sync */}
+            {order.paceJobNumber && editingItem?.paceJobPart && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                <strong>Note:</strong> Changes will be synced to PACE Job #{order.paceJobNumber}, Part {editingItem.paceJobPart}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditItemDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveItem}
+              disabled={savingItem}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {savingItem ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
               )}
             </Button>
           </DialogFooter>

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db, InventoryTransactionType } from '@repo/database'
 import { z } from 'zod'
+import { sendPickOrderCompletedNotification } from '@/lib/notifications/storefront-notifications'
 
 const completePickOrderSchema = z.object({
   notes: z.string().optional(),
@@ -34,10 +35,11 @@ export async function POST(
 
     const { id } = await params
 
-    // Get pick order with items
+    // Get pick order with items and creator
     const pickOrder = await db.pickOrder.findFirst({
       where: { id, tenantId: membership.tenantId },
       include: {
+        createdBy: { select: { id: true, name: true, email: true } },
         items: {
           include: {
             item: { select: { id: true, sku: true, name: true } },
@@ -185,6 +187,24 @@ export async function POST(
         },
       }
     })
+
+    // Send pick order completed notification (async, don't wait)
+    sendPickOrderCompletedNotification(membership.tenantId, {
+      pickOrderNumber: pickOrder.pickOrderNumber,
+      destination: pickOrder.destination,
+      priority: pickOrder.priority,
+      status: 'COMPLETED',
+      items: result.pickOrder.items.map((i: any) => ({
+        name: i.item?.name || 'Unknown Item',
+        sku: i.item?.sku,
+        requestedQty: i.requestedQty,
+        pickedQty: i.pickedQty,
+        referenceNumber: i.referenceNumber || undefined,
+      })),
+      createdBy: pickOrder.createdBy?.name || pickOrder.createdBy?.email || 'Unknown',
+      createdByEmail: pickOrder.createdBy?.email || undefined,
+      completedAt: result.summary.completedAt || undefined,
+    }).catch((err) => console.error('Failed to send pick order completed notification:', err))
 
     return NextResponse.json({
       success: true,

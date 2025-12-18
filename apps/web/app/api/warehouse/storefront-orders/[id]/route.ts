@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { z } from 'zod'
+import { sendOrderDeliveredNotification, sendOrderCancelledNotification } from '@/lib/notifications/storefront-notifications'
+import { updatePaceJobShipment } from '@/lib/pace'
 
 const shipOrderSchema = z.object({
   trackingNumber: z.string().optional(),
@@ -18,7 +20,6 @@ const updateOrderSchema = z.object({
   shipToZip: z.string().optional().nullable(),
   shipToCountry: z.string().optional().nullable(),
   shipToPhone: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
 })
 
 // GET /api/warehouse/storefront-orders/[id] - Get single order
@@ -67,6 +68,7 @@ export async function GET(
             referenceNumber: true,
             lotNumber: true,
             notes: true,
+            paceJobPart: true,
             item: {
               select: {
                 id: true,
@@ -129,6 +131,19 @@ export async function PUT(
 
     const order = await db.storefrontOrder.findFirst({
       where: { id, tenantId: membership.tenantId },
+      select: {
+        id: true,
+        status: true,
+        paceJobNumber: true,
+        paceResponse: true,
+        shipToName: true,
+        shipToAddress1: true,
+        shipToAddress2: true,
+        shipToCity: true,
+        shipToState: true,
+        shipToZip: true,
+        shipToCountry: true,
+      },
     })
 
     if (!order) {
@@ -138,6 +153,13 @@ export async function PUT(
     if (order.status === 'SHIPPED') {
       return NextResponse.json(
         { error: 'Cannot edit a shipped order' },
+        { status: 400 }
+      )
+    }
+
+    if (order.status === 'CANCELLED') {
+      return NextResponse.json(
+        { error: 'Cannot edit a cancelled order' },
         { status: 400 }
       )
     }
@@ -186,7 +208,84 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ success: true, data: updatedOrder })
+    // Sync shipping address to PACE if order has been sent there
+    let paceSyncResult: { success: boolean; error?: string } | null = null
+    if (order.paceJobNumber) {
+      // Check if any shipping address fields were updated
+      const shippingFieldsUpdated =
+        updateData.shipToName !== undefined ||
+        updateData.shipToAddress1 !== undefined ||
+        updateData.shipToAddress2 !== undefined ||
+        updateData.shipToCity !== undefined ||
+        updateData.shipToState !== undefined ||
+        updateData.shipToZip !== undefined ||
+        updateData.shipToCountry !== undefined
+
+      if (shippingFieldsUpdated) {
+        try {
+          // Get the shipment ID from the stored PACE response
+          const paceResponse = order.paceResponse as Record<string, any> | null
+          const shipmentId = paceResponse?.jobShipment?.id || paceResponse?.jobShipment?.shipment
+
+          if (shipmentId) {
+            // Build update payload with only changed fields
+            const paceUpdateData: {
+              id: number
+              name?: string
+              address1?: string
+              address2?: string
+              city?: string
+              state?: string
+              zip?: string
+            } = {
+              id: shipmentId,
+            }
+
+            // Map local fields to PACE fields (use new values from updateData, falling back to existing)
+            if (updateData.shipToName !== undefined) {
+              paceUpdateData.name = updateData.shipToName || ''
+            }
+            if (updateData.shipToAddress1 !== undefined) {
+              paceUpdateData.address1 = updateData.shipToAddress1 || ''
+            }
+            if (updateData.shipToAddress2 !== undefined) {
+              paceUpdateData.address2 = updateData.shipToAddress2 || ''
+            }
+            if (updateData.shipToCity !== undefined) {
+              paceUpdateData.city = updateData.shipToCity || ''
+            }
+            if (updateData.shipToState !== undefined) {
+              paceUpdateData.state = updateData.shipToState || ''
+            }
+            if (updateData.shipToZip !== undefined) {
+              paceUpdateData.zip = updateData.shipToZip || ''
+            }
+            // Note: country field excluded as it may cause issues with PACE
+
+            console.log('Syncing shipping address to PACE:', paceUpdateData)
+            await updatePaceJobShipment(paceUpdateData)
+            console.log('PACE shipment updated successfully')
+            paceSyncResult = { success: true }
+          } else {
+            console.warn('Cannot sync to PACE: No shipment ID found in paceResponse')
+            paceSyncResult = { success: false, error: 'No shipment ID found' }
+          }
+        } catch (paceError) {
+          console.error('Failed to sync shipping address to PACE:', paceError)
+          paceSyncResult = {
+            success: false,
+            error: paceError instanceof Error ? paceError.message : 'PACE sync failed',
+          }
+          // Don't fail the request - local update succeeded
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: updatedOrder,
+      paceSync: paceSyncResult,
+    })
   } catch (error) {
     console.error('Error updating storefront order:', error)
     return NextResponse.json(
@@ -226,6 +325,9 @@ export async function PATCH(
     const order = await db.storefrontOrder.findFirst({
       where: { id, tenantId: membership.tenantId },
       include: {
+        customer: {
+          select: { id: true, name: true, email: true },
+        },
         items: {
           include: {
             item: true,
@@ -339,6 +441,28 @@ export async function PATCH(
       return shipped
     })
 
+    // Send order delivered/shipped notification (async, don't wait)
+    sendOrderDeliveredNotification(membership.tenantId, {
+      orderNumber: order.orderNumber,
+      customerName: order.customer?.name || order.shipToName || 'Customer',
+      customerEmail: order.customer?.email || undefined,
+      items: updatedOrder.items.map((i: any) => ({
+        name: i.item?.name || 'Unknown Item',
+        sku: i.item?.sku || i.item?.itemCode,
+        quantity: i.quantity,
+        referenceNumber: i.referenceNumber || undefined,
+      })),
+      shippingAddress: {
+        name: order.shipToName || undefined,
+        address1: order.shipToAddress1 || undefined,
+        city: order.shipToCity || undefined,
+        state: order.shipToState || undefined,
+        zip: order.shipToZip || undefined,
+      },
+      trackingNumber: trackingNumber || undefined,
+      carrier: carrier || undefined,
+    }).catch((err) => console.error('Failed to send order shipped notification:', err))
+
     return NextResponse.json({ success: true, data: updatedOrder })
   } catch (error) {
     console.error('Error shipping order:', error)
@@ -347,7 +471,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/warehouse/storefront-orders/[id] - Cancel/delete order
+// DELETE /api/warehouse/storefront-orders/[id] - Cancel order
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -376,7 +500,14 @@ export async function DELETE(
 
     const order = await db.storefrontOrder.findFirst({
       where: { id, tenantId: membership.tenantId },
-      include: { items: true },
+      include: {
+        customer: { select: { id: true, name: true, email: true } },
+        items: {
+          include: {
+            item: { select: { id: true, name: true, sku: true, itemCode: true } },
+          },
+        },
+      },
     })
 
     if (!order) {
@@ -385,12 +516,19 @@ export async function DELETE(
 
     if (order.status === 'SHIPPED') {
       return NextResponse.json(
-        { error: 'Cannot delete a shipped order' },
+        { error: 'Cannot cancel a shipped order' },
         { status: 400 }
       )
     }
 
-    // Release reserved stock and delete order in transaction
+    if (order.status === 'CANCELLED') {
+      return NextResponse.json(
+        { error: 'Order is already cancelled' },
+        { status: 400 }
+      )
+    }
+
+    // Release reserved stock and update order status to CANCELLED
     await db.$transaction(async (tx) => {
       // Release reserved stock for each item
       for (const orderItem of order.items) {
@@ -426,20 +564,41 @@ export async function DELETE(
         }
       }
 
-      // Delete the order (items cascade delete)
-      await tx.storefrontOrder.delete({
+      // Update order status to CANCELLED instead of deleting
+      await tx.storefrontOrder.update({
         where: { id },
+        data: { status: 'CANCELLED' },
       })
     })
 
+    // Send order cancelled notification (async, don't wait)
+    sendOrderCancelledNotification(membership.tenantId, {
+      orderNumber: order.orderNumber,
+      customerName: order.customer?.name || order.shipToName || 'Customer',
+      customerEmail: order.customer?.email || undefined,
+      items: order.items.map((i: any) => ({
+        name: i.item?.name || 'Unknown Item',
+        sku: i.item?.sku || i.item?.itemCode,
+        quantity: i.quantity,
+        referenceNumber: i.referenceNumber || undefined,
+      })),
+      shippingAddress: {
+        name: order.shipToName || undefined,
+        address1: order.shipToAddress1 || undefined,
+        city: order.shipToCity || undefined,
+        state: order.shipToState || undefined,
+        zip: order.shipToZip || undefined,
+      },
+    }).catch((err) => console.error('Failed to send order cancelled notification:', err))
+
     return NextResponse.json({
       success: true,
-      message: 'Order cancelled and deleted',
+      message: 'Order cancelled',
     })
   } catch (error) {
-    console.error('Error deleting storefront order:', error)
+    console.error('Error cancelling storefront order:', error)
     return NextResponse.json(
-      { error: 'Failed to delete order' },
+      { error: 'Failed to cancel order' },
       { status: 500 }
     )
   }

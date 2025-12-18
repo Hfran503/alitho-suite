@@ -80,11 +80,13 @@ interface StorefrontOrder {
 const statusColors: Record<string, string> = {
   CREATED: 'bg-blue-100 text-blue-800',
   SHIPPED: 'bg-green-100 text-green-800',
+  CANCELLED: 'bg-red-100 text-red-800',
 }
 
 const statusLabels: Record<string, string> = {
   CREATED: 'Created',
   SHIPPED: 'Shipped',
+  CANCELLED: 'Cancelled',
 }
 
 export default function StorefrontOrdersPage() {
@@ -307,6 +309,7 @@ export default function StorefrontOrdersPage() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="CREATED">Created</SelectItem>
                 <SelectItem value="SHIPPED">Shipped</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -218,6 +218,11 @@ export default function HolidayGiftPage() {
                   onClick={() => handleGiftSelect(gift)}
                   className={styles.giftCard}
                 >
+                  {gift.id === 'chill-out' && (
+                    <div className={styles.shippingBadge}>
+                      Ships January 2026
+                    </div>
+                  )}
                   <img
                     src={gift.image}
                     alt={gift.name}
@@ -228,6 +233,10 @@ export default function HolidayGiftPage() {
                 </button>
               ))}
             </div>
+
+            <p className={styles.shippingNote}>
+              * The Chill Out Gift Box will be shipped in January 2026
+            </p>
           </div>
         ) : step === 3 ? (
           <div className={styles.giftMessage}>

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { z } from 'zod'
+import { sendOrderPlacedNotification } from '@/lib/notifications/storefront-notifications'
 
 const createOrderSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -315,6 +316,26 @@ export async function POST(request: NextRequest) {
 
       return newOrder
     })
+
+    // Send order placed notification (async, don't wait)
+    sendOrderPlacedNotification(membership.tenantId, {
+      orderNumber: order.orderNumber,
+      customerName: order.customer?.name || customer.name,
+      customerEmail: customer.email || undefined,
+      items: order.items.map((i: any) => ({
+        name: i.item?.name || 'Unknown Item',
+        sku: i.item?.sku || i.item?.itemCode,
+        quantity: i.quantity,
+        referenceNumber: i.referenceNumber || undefined,
+      })),
+      shippingAddress: {
+        name: order.shipToName || undefined,
+        address1: order.shipToAddress1 || undefined,
+        city: order.shipToCity || undefined,
+        state: order.shipToState || undefined,
+        zip: order.shipToZip || undefined,
+      },
+    }).catch((err) => console.error('Failed to send order notification:', err))
 
     return NextResponse.json({ success: true, data: order }, { status: 201 })
   } catch (error) {

@@ -72,6 +72,7 @@ function SignInForm() {
         email,
         password,
         redirect: false,
+        callbackUrl: '/dashboard',
       })
 
       if (result?.error) {

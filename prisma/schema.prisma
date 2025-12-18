@@ -1067,6 +1067,7 @@ enum PickOrderStatus {
 enum StorefrontOrderStatus {
   CREATED     // Order placed, items reserved
   SHIPPED     // Items pulled from inventory and shipped
+  CANCELLED   // Order cancelled, reserved items released
 }
 
 enum ItemType {
@@ -1616,6 +1617,9 @@ model StorefrontOrderItem {
 
   // Notes
   notes           String?
+
+  // PACE integration - stores the JobPart number (01, 02, etc.) when order is sent to PACE
+  paceJobPart     String?
 
   // Relations
   order           StorefrontOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
