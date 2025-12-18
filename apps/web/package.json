@@ -45,7 +45,7 @@
     "ioredis": "^5.8.1",
     "lucide-react": "^0.451.0",
     "nanoid": "^5.0.8",
-    "next": "^15.0.3",
+    "next": "15.5.7",
     "next-auth": "^4.24.10",
     "nodemailer": "^7.0.10",
     "papaparse": "^5.5.3",
