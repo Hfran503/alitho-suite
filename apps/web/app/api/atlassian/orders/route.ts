@@ -295,7 +295,16 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    // Parse body, defaulting to empty object if body is empty
+    let body: { tenantId?: string; folderPath?: string; deleteAfterProcessing?: boolean } = {};
+    try {
+      const text = await request.text();
+      if (text) {
+        body = JSON.parse(text);
+      }
+    } catch {
+      // Body is empty or invalid JSON, use defaults
+    }
     const { tenantId, folderPath = 'AtlassianOrders', deleteAfterProcessing = true } = body;
 
     // If tenantId not provided, get the first tenant (single-tenant deployments)
