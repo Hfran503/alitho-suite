@@ -1,4 +1,4 @@
-import { db, Prisma } from '@repo/database'
+import { db } from '@repo/database'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { notFound } from 'next/navigation'
@@ -83,16 +83,14 @@ export default async function PickOrderPrintPage({ params }: PrintPageProps) {
         return { ...orderItem, suggestedLocations: [] }
       }
 
-      const stockWhere: Prisma.InventoryStockWhereInput = {
-        tenantId: membership.tenantId,
-        itemId: orderItem.itemId,
-        available: { gt: 0 },
-        ...(orderItem.referenceNumber && { referenceNumber: orderItem.referenceNumber }),
-        ...(orderItem.lotNumber && { lotNumber: orderItem.lotNumber }),
-      }
-
       const stock = await db.inventoryStock.findMany({
-        where: stockWhere,
+        where: {
+          tenantId: membership.tenantId,
+          itemId: orderItem.itemId,
+          available: { gt: 0 },
+          ...(orderItem.referenceNumber && { referenceNumber: orderItem.referenceNumber }),
+          ...(orderItem.lotNumber && { lotNumber: orderItem.lotNumber }),
+        },
         include: {
           location: {
             select: { id: true, barcode: true, name: true },
