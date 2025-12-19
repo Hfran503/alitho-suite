@@ -113,6 +113,35 @@ export async function generateAtlassianWelcomePDF(
       color,
     });
 
+    // For Australia orders: crop to 6x4 trim size and remove page 2
+    const isAustralia = countryCategory === 'Australia';
+    if (isAustralia) {
+      // Get current page dimensions
+      const { width, height } = page.getSize();
+
+      // Target trim size: 6x4 inches = 432x288 points
+      const trimWidth = 432;
+      const trimHeight = 288;
+
+      // Calculate centered crop offsets
+      const cropX = (width - trimWidth) / 2;
+      const cropY = (height - trimHeight) / 2;
+
+      // Set all page boxes to the centered trim area
+      // This ensures the PDF is exactly 6x4 with content centered
+      page.setMediaBox(cropX, cropY, trimWidth, trimHeight);
+      page.setCropBox(cropX, cropY, trimWidth, trimHeight);
+      page.setTrimBox(cropX, cropY, trimWidth, trimHeight);
+      page.setBleedBox(cropX, cropY, trimWidth, trimHeight);
+
+      // Remove page 2 if it exists (AU only needs page 1)
+      if (pdfDoc.getPageCount() > 1) {
+        pdfDoc.removePage(1);
+      }
+
+      console.log(`🇦🇺 AU PDF cropped to 6x4 trim size (${trimWidth}x${trimHeight} pts)`);
+    }
+
     // Save PDF
     const pdfBytes = await pdfDoc.save();
 
