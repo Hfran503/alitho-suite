@@ -102,7 +102,7 @@ export default async function PickOrderPrintPage({ params }: PrintPageProps) {
 
       return {
         ...orderItem,
-        suggestedLocations: stock.map((s) => ({
+        suggestedLocations: stock.map((s: typeof stock[number]) => ({
           barcode: s.location.barcode,
           name: s.location.name,
           available: s.available,
