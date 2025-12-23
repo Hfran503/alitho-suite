@@ -47,6 +47,7 @@ export function isAddressMissing(address?: string): boolean {
 
   const placeholderPatterns = [
     /\[address to be confirmed in workday prior to start date\]/i,
+    /street and city address to be confirmed in workday/i,
     /\[not available\]/i,
     /\[to be confirmed\]/i,
     /\[pending\]/i,
