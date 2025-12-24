@@ -11,7 +11,7 @@
     "start:prod": "NODE_ENV=production USE_AWS_SECRETS=true turbo run start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "postinstall": "npx prisma generate --schema=./prisma/schema.prisma",
+    "postinstall": "npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
     "db:migrate": "pnpm --filter @repo/database db:migrate",
     "db:generate": "pnpm --filter @repo/database db:generate",
     "db:studio": "pnpm --filter @repo/database db:studio",
