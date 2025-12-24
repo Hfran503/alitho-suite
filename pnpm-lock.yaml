@@ -268,9 +268,18 @@ importers:
       '@sendgrid/mail':
         specifier: ^8.1.6
         version: 8.1.6
+      '@types/jsdom':
+        specifier: ^21.1.7
+        version: 21.1.7
+      '@types/mailparser':
+        specifier: ^3.4.6
+        version: 3.4.6
       '@types/nodemailer':
         specifier: ^7.0.3
         version: 7.0.3
+      '@types/ssh2-sftp-client':
+        specifier: ^9.0.5
+        version: 9.0.5
       bullmq:
         specifier: ^5.22.6
         version: 5.61.0
@@ -311,18 +320,9 @@ importers:
         specifier: ^12.0.1
         version: 12.0.1
     devDependencies:
-      '@types/jsdom':
-        specifier: ^21.1.7
-        version: 21.1.7
-      '@types/mailparser':
-        specifier: ^3.4.6
-        version: 3.4.6
       '@types/node':
         specifier: ^20.16.11
         version: 20.19.21
-      '@types/ssh2-sftp-client':
-        specifier: ^9.0.5
-        version: 9.0.5
       tsx:
         specifier: ^4.19.1
         version: 4.20.6
