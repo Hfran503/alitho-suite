@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         console.log(`Processing ${orderList.length} orders for ${countryCategory}`);
 
         // Build job description listing all orders
-        const orderNumbers = orderList.map((o) => o.orderNumber).join(', ');
+        const orderNumbers = orderList.map((o: (typeof orderList)[number]) => o.orderNumber).join(', ');
         // Use generic short description (≤50 chars) for description field
         const description = `Calitho Suite - ${countryCategory}`;
         // Place detailed info in description2 field
