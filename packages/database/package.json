@@ -4,7 +4,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "npx prisma@5.22.0 generate --schema=../../prisma/schema.prisma && npx tsc",
+    "build": "npx prisma@5.22.0 generate --schema=../../prisma/schema.prisma && npx -p typescript tsc",
     "db:generate": "cd ../.. && npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
     "db:migrate": "cd ../.. && npx prisma@5.22.0 migrate deploy --schema=./prisma/schema.prisma",
     "db:migrate:dev": "cd ../.. && npx prisma@5.22.0 migrate dev --schema=./prisma/schema.prisma",
