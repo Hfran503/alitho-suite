@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, InventoryTransactionType } from '@repo/database'
+import { db } from '@repo/database'
+import { InventoryTransactionType } from '@prisma/client'
 import { getTransactions } from '@/lib/services/inventory'
 
 // GET /api/warehouse/inventory/transactions - Get transaction history

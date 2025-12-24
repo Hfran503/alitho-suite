@@ -1,4 +1,5 @@
-import { db, Prisma, InventoryTransactionType } from '@repo/database'
+import { db, Prisma } from '@repo/database'
+import { InventoryTransactionType } from '@prisma/client'
 
 // Types
 export interface StockAdjustmentParams {

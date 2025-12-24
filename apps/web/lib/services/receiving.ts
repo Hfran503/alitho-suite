@@ -1,4 +1,5 @@
-import { db, Prisma, ReceivingStatus } from '@repo/database'
+import { db, Prisma } from '@repo/database'
+import { ReceivingStatus } from '@prisma/client'
 
 // Types
 export interface StartReceivingParams {

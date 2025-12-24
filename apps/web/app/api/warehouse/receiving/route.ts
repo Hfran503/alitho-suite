@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, ReceivingStatus } from '@repo/database'
+import { db } from '@repo/database'
+import { ReceivingStatus } from '@prisma/client'
 import { z } from 'zod'
 import { startReceiving, listReceivingRecords } from '@/lib/services/receiving'
 

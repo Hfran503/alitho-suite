@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, Prisma, InventoryTransactionType } from '@repo/database'
+import { db, Prisma } from '@repo/database'
+import { InventoryTransactionType } from '@prisma/client'
 import { z } from 'zod'
 import { sendPickOrderCompletedNotification } from '@/lib/notifications/storefront-notifications'
 

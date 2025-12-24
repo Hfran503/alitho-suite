@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, Prisma, InventoryTransactionType } from '@repo/database'
+import { db, Prisma } from '@repo/database'
+import { InventoryTransactionType } from '@prisma/client'
 
 // GET /api/warehouse/inventory/import - Download CSV template
 export async function GET() {

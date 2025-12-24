@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, ASNStatus } from '@repo/database'
+import { db } from '@repo/database'
+import { ASNStatus } from '@prisma/client'
 import { z } from 'zod'
 
 const createASNSchema = z.object({
