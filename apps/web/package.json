@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "cd ../.. && prisma generate --schema=./prisma/schema.prisma",
+    "prebuild": "cd ../.. && npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

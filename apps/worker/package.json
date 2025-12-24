@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch index.ts",
     "start": "node dist/index.js",
-    "build": "tsc"
+    "build": "npx -p typescript tsc"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.682.0",
