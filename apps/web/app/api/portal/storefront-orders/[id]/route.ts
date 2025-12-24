@@ -103,8 +103,8 @@ export async function GET(
     }
 
     // Calculate totals
-    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0)
-    const totalPrice = order.items.reduce((sum, item) => {
+    const totalItems = order.items.reduce((sum: number, item: (typeof order.items)[number]) => sum + item.quantity, 0)
+    const totalPrice = order.items.reduce((sum: number, item: (typeof order.items)[number]) => {
       const unitPrice = item.unitPrice
         ? Number(item.unitPrice)
         : item.item.sellPrice
