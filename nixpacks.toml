@@ -9,6 +9,8 @@ cmds = [
 
 [phases.build]
 cmds = [
+  # Debug: verify files exist
+  "ls -la apps/web/components/ui/ && ls -la apps/web/components/atlassian-orders/",
   # Ensure Prisma Client is generated before build
   "npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
   "npx turbo@2.1.3 run build",
