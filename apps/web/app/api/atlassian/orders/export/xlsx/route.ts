@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
     const columnWidths = Object.keys(excelData[0] || {}).map((key) => ({
       wch: Math.max(
         key.length,
-        ...excelData.map((row) => String(row[key as keyof typeof row] || '').length)
+        ...excelData.map((row: (typeof excelData)[number]) => String(row[key as keyof typeof row] || '').length)
       ),
     }));
     worksheet['!cols'] = columnWidths;
