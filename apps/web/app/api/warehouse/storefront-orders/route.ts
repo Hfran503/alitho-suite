@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 import { sendOrderPlacedNotification } from '@/lib/notifications/storefront-notifications'
 
@@ -124,9 +124,9 @@ export async function GET(request: NextRequest) {
     ])
 
     // Calculate totals for each order
-    const ordersWithTotals = orders.map(order => ({
+    const ordersWithTotals = orders.map((order: (typeof orders)[number]) => ({
       ...order,
-      totalItems: order.items.reduce((sum, item) => sum + item.quantity, 0),
+      totalItems: order.items.reduce((sum: number, item: (typeof order.items)[number]) => sum + item.quantity, 0),
     }))
 
     return NextResponse.json({
@@ -194,8 +194,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (inventoryItems.length !== itemIds.length) {
-      const foundIds = inventoryItems.map(i => i.id)
-      const missingIds = itemIds.filter(id => !foundIds.includes(id))
+      const foundIds = inventoryItems.map((i: (typeof inventoryItems)[number]) => i.id)
+      const missingIds = itemIds.filter((id: string) => !foundIds.includes(id))
       return NextResponse.json(
         { error: 'Some items not found or inactive', missingIds },
         { status: 400 }
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check stock availability for each item
-    const itemsMap = new Map(inventoryItems.map(i => [i.id, i]))
+    const itemsMap = new Map(inventoryItems.map((i: (typeof inventoryItems)[number]) => [i.id, i]))
     for (const item of items) {
       const stock = await db.inventoryStock.aggregate({
         where: {
@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create order with items and reserve stock in transaction
-    const order = await db.$transaction(async (tx) => {
+    const order = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create the order
       const newOrder = await tx.storefrontOrder.create({
         data: {

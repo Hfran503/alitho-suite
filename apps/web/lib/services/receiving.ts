@@ -1,4 +1,4 @@
-import { db, ReceivingStatus } from '@repo/database'
+import { db, Prisma, ReceivingStatus } from '@repo/database'
 
 // Types
 export interface StartReceivingParams {
@@ -35,7 +35,7 @@ export interface CompleteReceivingParams {
 export async function startReceiving(params: StartReceivingParams) {
   const { tenantId, warehouseId, userId, asnId, notes } = params
 
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     // If ASN provided, validate it exists and is in correct status
     if (asnId) {
       const asn = await tx.aSN.findFirst({
@@ -234,7 +234,7 @@ export async function completeReceiving(params: CompleteReceivingParams) {
   const { receivingRecordId, tenantId, userId, discrepancyNotes } = params
 
   // Use longer timeout for transactions with many items
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Get receiving record with items
     const receivingRecord = await tx.receivingRecord.findUnique({
       where: { id: receivingRecordId },
@@ -418,7 +418,7 @@ export async function completeReceiving(params: CompleteReceivingParams) {
       for (const receivingItem of receivingRecord.items) {
         // Find matching ASN item
         const asnItem = receivingRecord.asn?.items.find(
-          (ai) => ai.sku === receivingItem.sku && ai.lotNumber === receivingItem.lotNumber
+          (ai: NonNullable<typeof receivingRecord.asn>['items'][number]) => ai.sku === receivingItem.sku && ai.lotNumber === receivingItem.lotNumber
         )
 
         if (asnItem) {

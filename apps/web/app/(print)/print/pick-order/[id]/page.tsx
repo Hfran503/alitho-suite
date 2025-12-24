@@ -522,7 +522,7 @@ export default async function PickOrderPrintPage({ params }: PrintPageProps) {
             </tr>
           </thead>
           <tbody>
-            {itemsWithStock.map((item, index) => (
+            {itemsWithStock.map((item: (typeof itemsWithStock)[number], index: number) => (
               <tr key={item.id}>
                 <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{index + 1}</td>
                 <td>

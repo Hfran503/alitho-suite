@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 import { updatePaceJobPart, updatePaceCartonContent, updatePaceJobShipment } from '@/lib/pace'
 
@@ -84,7 +84,7 @@ export async function PATCH(
     }
 
     // Find the specific item we're editing and its position
-    const itemIndex = order.items.findIndex((item) => item.id === itemId)
+    const itemIndex = order.items.findIndex((item: (typeof order.items)[number]) => item.id === itemId)
     if (itemIndex === -1) {
       return NextResponse.json({ error: 'Order item not found' }, { status: 404 })
     }
@@ -132,7 +132,7 @@ export async function PATCH(
     }
 
     // Process changes in a transaction
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const inventoryChanges: Array<{
         action: string
         referenceNumber: string | null
@@ -590,14 +590,14 @@ export async function GET(
 
     // Also include currently reserved reference (even if no more available)
     const currentRef = orderItem.referenceNumber
-    const references = stockByReference.map((s) => ({
+    const references = stockByReference.map((s: (typeof stockByReference)[number]) => ({
       referenceNumber: s.referenceNumber,
       available: s._sum.available || 0,
       isCurrent: s.referenceNumber === currentRef,
     }))
 
     // Add current reference if not in list
-    if (currentRef && !references.find((r) => r.referenceNumber === currentRef)) {
+    if (currentRef && !references.find((r: (typeof references)[number]) => r.referenceNumber === currentRef)) {
       references.unshift({
         referenceNumber: currentRef,
         available: 0,

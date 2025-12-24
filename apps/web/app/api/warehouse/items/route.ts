@@ -122,8 +122,8 @@ export async function GET(request: NextRequest) {
 
     // Calculate total available for each item
     // For items that track by reference, also include stock breakdown
-    const itemsWithStock = items.map(item => {
-      const totalAvailable = item.stockLevels.reduce((sum, s) => sum + s.available, 0)
+    const itemsWithStock = items.map((item: (typeof items)[number]) => {
+      const totalAvailable = item.stockLevels.reduce((sum: number, s: (typeof item.stockLevels)[number]) => sum + s.available, 0)
 
       // For trackByReference items, group stock by reference number
       let stockByReference: { referenceNumber: string | null; available: number }[] | undefined
@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
       filters: {
-        categories: categories.map(c => c.category).filter(Boolean),
+        categories: categories.map((c: (typeof categories)[number]) => c.category).filter(Boolean),
         customers,
       },
     })

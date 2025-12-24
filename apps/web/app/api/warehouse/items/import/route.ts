@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
     })
     const existingSkuMap = new Map(
       existingItems
-        .filter((item): item is { id: string; sku: string } => item.sku !== null)
-        .map((item) => [item.sku.toLowerCase(), item.id])
+        .filter((item: (typeof existingItems)[number]): item is { id: string; sku: string } => item.sku !== null)
+        .map((item: { id: string; sku: string }) => [item.sku.toLowerCase(), item.id])
     )
 
     // Get customer mapping if customer pace IDs are provided
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         where: { tenantId: membership.tenantId, isActive: true },
         select: { id: true, paceCustomerId: true },
       })
-      customers.forEach((c) => customerMap.set(c.paceCustomerId.toLowerCase(), c.id))
+      customers.forEach((c: (typeof customers)[number]) => customerMap.set(c.paceCustomerId.toLowerCase(), c.id))
     }
 
     const results: ImportResult[] = []

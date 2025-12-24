@@ -81,7 +81,7 @@ export async function getStockByItem(
   }
 
   const totals = stockRecords.reduce(
-    (acc, record) => ({
+    (acc: { totalAvailable: number; totalReserved: number; totalDamaged: number; totalOnHold: number }, record: (typeof stockRecords)[number]) => ({
       totalAvailable: acc.totalAvailable + record.available,
       totalReserved: acc.totalReserved + record.reserved,
       totalDamaged: acc.totalDamaged + record.damaged,
@@ -93,7 +93,7 @@ export async function getStockByItem(
   return {
     item: stockRecords[0].item,
     ...totals,
-    locations: stockRecords.map((record) => ({
+    locations: stockRecords.map((record: (typeof stockRecords)[number]) => ({
       location: record.location,
       available: record.available,
       reserved: record.reserved,
@@ -125,7 +125,7 @@ export async function getStockByLocation(
     },
   })
 
-  return stockRecords.map((record) => ({
+  return stockRecords.map((record: (typeof stockRecords)[number]) => ({
     item: record.item,
     available: record.available,
     reserved: record.reserved,
@@ -151,7 +151,7 @@ export async function adjustStock(params: StockAdjustmentParams) {
     lotNumber,
   } = params
 
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Get or create stock record
     let stock = await tx.inventoryStock.findFirst({
       where: {
@@ -245,7 +245,7 @@ export async function transferStock(params: StockTransferParams) {
     throw new Error('Source and destination locations must be different')
   }
 
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Get source stock
     const sourceStock = await tx.inventoryStock.findFirst({
       where: {
@@ -361,7 +361,7 @@ export async function reserveStock(params: ReserveStockParams) {
     throw new Error('Reserve quantity must be positive')
   }
 
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     const stock = await tx.inventoryStock.findFirst({
       where: {
         tenantId,
@@ -430,7 +430,7 @@ export async function releaseReservation(params: ReserveStockParams) {
     throw new Error('Release quantity must be positive')
   }
 
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     const stock = await tx.inventoryStock.findFirst({
       where: {
         tenantId,

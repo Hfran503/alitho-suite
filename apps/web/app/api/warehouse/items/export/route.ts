@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
       return str
     }
 
-    const rows = items.map((item) => {
+    const rows = items.map((item: (typeof items)[number]) => {
       const dimensions = item.dimensions as { length?: number; width?: number; height?: number; unit?: string } | null
       return [
         escapeCSV(item.sku),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 
 // GET /api/warehouse/kitting - List kit assemblies
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check component availability
-    const componentRequirements = kit.kitComponents.map((kc) => ({
+    const componentRequirements = kit.kitComponents.map((kc: (typeof kit.kitComponents)[number]) => ({
       componentId: kc.componentId,
       component: kc.component,
       requiredQty: kc.quantity * validatedData.quantity,
@@ -166,14 +166,14 @@ export async function POST(request: NextRequest) {
       by: ['itemId'],
       where: {
         tenantId: membership.tenantId,
-        itemId: { in: componentRequirements.map((c) => c.componentId) },
+        itemId: { in: componentRequirements.map((c: (typeof componentRequirements)[number]) => c.componentId) },
       },
       _sum: {
         available: true,
       },
     })
 
-    const stockMap = new Map(componentStock.map((s) => [s.itemId, s._sum.available || 0]))
+    const stockMap = new Map(componentStock.map((s: (typeof componentStock)[number]) => [s.itemId, s._sum.available || 0]))
 
     // Check each component has sufficient stock
     const shortages: Array<{ component: string; required: number; available: number }> = []
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform the assembly in a transaction
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Deduct components from inventory (from ANY location with stock)
       for (const req of componentRequirements) {
         let remainingToDeduct = req.requiredQty

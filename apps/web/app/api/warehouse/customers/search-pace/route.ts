@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     })
 
     const existingMap = new Map(
-      existingCustomers.map((c) => [c.paceCustomerId, c.isActive])
+      existingCustomers.map((c: (typeof existingCustomers)[number]) => [c.paceCustomerId, c.isActive])
     )
 
     // Fetch details for found customers

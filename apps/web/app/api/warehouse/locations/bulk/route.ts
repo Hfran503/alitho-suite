@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       where: { tenantId: membership.tenantId },
       select: { barcode: true },
     })
-    existingLocations.forEach(loc => existingBarcodes.add(loc.barcode))
+    existingLocations.forEach((loc: (typeof existingLocations)[number]) => existingBarcodes.add(loc.barcode))
 
     // Generate locations
     for (const zone of zones) {

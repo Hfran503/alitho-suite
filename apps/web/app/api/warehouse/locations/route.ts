@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
       filters: {
-        zones: zones.map(z => z.zone).filter(Boolean),
+        zones: zones.map((z: (typeof zones)[number]) => z.zone).filter(Boolean),
       },
     })
   } catch (error) {

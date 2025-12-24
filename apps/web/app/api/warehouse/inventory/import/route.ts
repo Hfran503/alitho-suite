@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, InventoryTransactionType } from '@repo/database'
+import { db, Prisma, InventoryTransactionType } from '@repo/database'
 
 // GET /api/warehouse/inventory/import - Download CSV template
 export async function GET() {
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
 
       try {
         // Perform the adjustment in a transaction
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
           // Get or create stock record
           let stock = await tx.inventoryStock.findFirst({
             where: {

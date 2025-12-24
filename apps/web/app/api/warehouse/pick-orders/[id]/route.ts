@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 import { sendPickOrderStartedNotification, sendPickOrderCancelledNotification } from '@/lib/notifications/storefront-notifications'
 
@@ -84,7 +84,7 @@ export async function GET(
     // Get stock for each item to help with picking
     // Check reserved stock first (new orders), fall back to available (legacy orders)
     const itemsWithStock = await Promise.all(
-      pickOrder.items.map(async (orderItem) => {
+      pickOrder.items.map(async (orderItem: (typeof pickOrder.items)[number]) => {
         const baseWhere: any = {
           tenantId: membership.tenantId,
           itemId: orderItem.itemId,
@@ -123,7 +123,7 @@ export async function GET(
 
           return {
             ...orderItem,
-            availableStock: availableStock.map(s => ({
+            availableStock: availableStock.map((s: (typeof availableStock)[number]) => ({
               locationId: s.locationId,
               location: s.location,
               available: s.available,
@@ -135,7 +135,7 @@ export async function GET(
 
         return {
           ...orderItem,
-          availableStock: reservedStock.map(s => ({
+          availableStock: reservedStock.map((s: (typeof reservedStock)[number]) => ({
             locationId: s.locationId,
             location: s.location,
             available: s.reserved, // Show reserved qty as "available" for picking
@@ -148,9 +148,9 @@ export async function GET(
 
     // Calculate stats
     const totalItems = pickOrder.items.length
-    const pickedItems = pickOrder.items.filter(i => i.isPicked).length
-    const totalRequestedQty = pickOrder.items.reduce((sum, i) => sum + i.requestedQty, 0)
-    const totalPickedQty = pickOrder.items.reduce((sum, i) => sum + i.pickedQty, 0)
+    const pickedItems = pickOrder.items.filter((i: (typeof pickOrder.items)[number]) => i.isPicked).length
+    const totalRequestedQty = pickOrder.items.reduce((sum: number, i: (typeof pickOrder.items)[number]) => sum + i.requestedQty, 0)
+    const totalPickedQty = pickOrder.items.reduce((sum: number, i: (typeof pickOrder.items)[number]) => sum + i.pickedQty, 0)
 
     return NextResponse.json({
       success: true,
@@ -337,7 +337,7 @@ export async function PATCH(
     const { itemId, locationId, referenceNumber, lotNumber, pickedQty } = validation.data
 
     // Find the pick order item
-    const orderItem = pickOrder.items.find(i => i.id === itemId)
+    const orderItem = pickOrder.items.find((i: (typeof pickOrder.items)[number]) => i.id === itemId)
     if (!orderItem) {
       return NextResponse.json({ error: 'Pick order item not found' }, { status: 404 })
     }
@@ -430,7 +430,7 @@ export async function PATCH(
     const allItems = await db.pickOrderItem.findMany({
       where: { pickOrderId: id },
     })
-    const allPicked = allItems.every(i => i.isPicked)
+    const allPicked = allItems.every((i: (typeof allItems)[number]) => i.isPicked)
 
     return NextResponse.json({
       success: true,
@@ -494,7 +494,7 @@ export async function DELETE(
       return NextResponse.json({ success: true, message: 'Pick order deleted' })
     } else if (['PENDING', 'IN_PROGRESS'].includes(pickOrder.status)) {
       // Release reserved stock back to available
-      await db.$transaction(async (tx) => {
+      await db.$transaction(async (tx: Prisma.TransactionClient) => {
         for (const item of pickOrder.items) {
           // Only release unpicked quantity
           const toRelease = item.requestedQty - item.pickedQty

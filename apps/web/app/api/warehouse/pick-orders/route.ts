@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 import { sendPickOrderCreatedNotification } from '@/lib/notifications/storefront-notifications'
 
@@ -120,11 +120,11 @@ export async function GET(request: NextRequest) {
     ])
 
     // Calculate summary stats for each order
-    const ordersWithStats = pickOrders.map(order => {
+    const ordersWithStats = pickOrders.map((order: (typeof pickOrders)[number]) => {
       const totalItems = order.items.length
-      const pickedItems = order.items.filter(i => i.isPicked).length
-      const totalRequestedQty = order.items.reduce((sum, i) => sum + i.requestedQty, 0)
-      const totalPickedQty = order.items.reduce((sum, i) => sum + i.pickedQty, 0)
+      const pickedItems = order.items.filter((i: (typeof order.items)[number]) => i.isPicked).length
+      const totalRequestedQty = order.items.reduce((sum: number, i: (typeof order.items)[number]) => sum + i.requestedQty, 0)
+      const totalPickedQty = order.items.reduce((sum: number, i: (typeof order.items)[number]) => sum + i.pickedQty, 0)
 
       return {
         ...order,
@@ -198,8 +198,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (inventoryItems.length !== itemIds.length) {
-      const foundIds = inventoryItems.map(i => i.id)
-      const missingIds = itemIds.filter(id => !foundIds.includes(id))
+      const foundIds = inventoryItems.map((i: (typeof inventoryItems)[number]) => i.id)
+      const missingIds = itemIds.filter((id: string) => !foundIds.includes(id))
       return NextResponse.json(
         { error: 'Some items not found', missingIds },
         { status: 400 }
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build items map for later use
-    const itemsMap = new Map(inventoryItems.map(i => [i.id, i]))
+    const itemsMap = new Map(inventoryItems.map((i: (typeof inventoryItems)[number]) => [i.id, i]))
 
     // Validate locations if specified
     const locationIds = items.map(i => i.locationId).filter(Boolean) as string[]
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
     const pickOrderNumber = await generatePickOrderNumber(membership.tenantId)
 
     // Use transaction to create pick order and reserve stock
-    const pickOrder = await db.$transaction(async (tx) => {
+    const pickOrder = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create pick order with items
       const order = await tx.pickOrder.create({
         data: {

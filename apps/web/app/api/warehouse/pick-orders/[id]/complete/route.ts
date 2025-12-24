@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, InventoryTransactionType } from '@repo/database'
+import { db, Prisma, InventoryTransactionType } from '@repo/database'
 import { z } from 'zod'
 import { sendPickOrderCompletedNotification } from '@/lib/notifications/storefront-notifications'
 
@@ -62,12 +62,12 @@ export async function POST(
     }
 
     // Check all items have been picked (pickedQty > 0 and location assigned)
-    const unpickedItems = pickOrder.items.filter(item => !item.isPicked || !item.locationId)
+    const unpickedItems = pickOrder.items.filter((item: (typeof pickOrder.items)[number]) => !item.isPicked || !item.locationId)
     if (unpickedItems.length > 0) {
       return NextResponse.json(
         {
           error: 'All items must be picked before completing',
-          unpickedItems: unpickedItems.map(i => ({
+          unpickedItems: unpickedItems.map((i: (typeof unpickedItems)[number]) => ({
             itemId: i.id,
             sku: i.item.sku,
             requestedQty: i.requestedQty,
@@ -92,7 +92,7 @@ export async function POST(
     const { notes } = validation.data
 
     // Process in a transaction
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const transactionRecords: any[] = []
 
       for (const orderItem of pickOrder.items) {
@@ -181,7 +181,7 @@ export async function POST(
         transactions: transactionRecords,
         summary: {
           totalItems: pickOrder.items.length,
-          totalQuantityPicked: pickOrder.items.reduce((sum, i) => sum + i.pickedQty, 0),
+          totalQuantityPicked: pickOrder.items.reduce((sum: number, i: (typeof pickOrder.items)[number]) => sum + i.pickedQty, 0),
           destination: pickOrder.destination,
           completedAt: updatedOrder.completedAt,
         },

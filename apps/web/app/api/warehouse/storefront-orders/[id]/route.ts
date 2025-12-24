@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 import { sendOrderDeliveredNotification, sendOrderCancelledNotification } from '@/lib/notifications/storefront-notifications'
 import { updatePaceJobShipment } from '@/lib/pace'
@@ -360,7 +360,7 @@ export async function PATCH(
     const { trackingNumber, carrier } = validation.data
 
     // Ship order in transaction: update status and pull from inventory
-    const updatedOrder = await db.$transaction(async (tx) => {
+    const updatedOrder = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // For each item, move from reserved to actually pulled (decrement quantity)
       for (const orderItem of order.items) {
         let remainingToPull = orderItem.quantity
@@ -529,7 +529,7 @@ export async function DELETE(
     }
 
     // Release reserved stock and update order status to CANCELLED
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Release reserved stock for each item
       for (const orderItem of order.items) {
         let remainingToRelease = orderItem.quantity

@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get available stock for all components
-    const componentIds = kit.kitComponents.map((kc) => kc.componentId)
+    const componentIds = kit.kitComponents.map((kc: (typeof kit.kitComponents)[number]) => kc.componentId)
     const componentStock = await db.inventoryStock.groupBy({
       by: ['itemId'],
       where: {
@@ -80,10 +80,10 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const stockMap = new Map(componentStock.map((s) => [s.itemId, s._sum.available || 0]))
+    const stockMap = new Map(componentStock.map((s: (typeof componentStock)[number]) => [s.itemId, s._sum.available || 0]))
 
     // Calculate availability for each component
-    const components = kit.kitComponents.map((kc) => {
+    const components = kit.kitComponents.map((kc: (typeof kit.kitComponents)[number]) => {
       const available = stockMap.get(kc.componentId) || 0
       const canMake = kc.quantity > 0 ? Math.floor(available / kc.quantity) : 0
 
@@ -99,10 +99,10 @@ export async function GET(request: NextRequest) {
     })
 
     // Find the limiting component (lowest canMake)
-    const maxAssemblable = Math.min(...components.map((c) => c.canMake))
+    const maxAssemblable = Math.min(...components.map((c: (typeof components)[number]) => c.canMake))
 
     // Mark limiting components
-    components.forEach((c) => {
+    components.forEach((c: (typeof components)[number]) => {
       c.isLimiting = c.canMake === maxAssemblable && maxAssemblable < Infinity
     })
 

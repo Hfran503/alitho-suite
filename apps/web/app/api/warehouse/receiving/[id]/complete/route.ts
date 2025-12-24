@@ -54,14 +54,14 @@ export async function POST(
 
     // Check that all items have put-away locations
     const itemsWithoutLocation = receivingRecord.items.filter(
-      (item) => item.receivedQty > 0 && !item.putAwayLocationId
+      (item: (typeof receivingRecord.items)[number]) => item.receivedQty > 0 && !item.putAwayLocationId
     )
 
     if (itemsWithoutLocation.length > 0) {
       return NextResponse.json(
         {
           error: 'All received items must have a put-away location',
-          itemsWithoutLocation: itemsWithoutLocation.map((i) => i.sku),
+          itemsWithoutLocation: itemsWithoutLocation.map((i: (typeof itemsWithoutLocation)[number]) => i.sku),
         },
         { status: 400 }
       )
