@@ -10,8 +10,8 @@ cmds = [
 [phases.build]
 cmds = [
   # Ensure Prisma Client is generated before build
-  "npx prisma generate --schema=./prisma/schema.prisma",
-  "npx turbo run build",
+  "npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
+  "npx turbo@2.1.3 run build",
   # Copy static files for Next.js standalone mode
   "cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static",
   # Copy public folder if it exists
