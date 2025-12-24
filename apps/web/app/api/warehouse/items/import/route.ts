@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, Prisma } from '@repo/database'
+import { db, JsonNull } from '@repo/database'
 import { normalizeCategory } from '@/lib/warehouse/constants'
 
 interface ImportResult {
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
           description: getValue('description') || null,
           category: normalizeCategory(getValue('category')),
           weight: parseNum(getValue('weight')) || null,
-          dimensions: dimensions === null ? Prisma.JsonNull : dimensions,
+          dimensions: dimensions === null ? JsonNull : dimensions,
           customerId,
           isActive,
           trackByReference,
