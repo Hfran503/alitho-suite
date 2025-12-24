@@ -20,6 +20,17 @@ const nextConfig = {
       },
     ],
   },
+  // Explicit webpack alias configuration for Docker builds
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname),
+      '@/components': path.resolve(__dirname, 'components'),
+      '@/lib': path.resolve(__dirname, 'lib'),
+      '@/app': path.resolve(__dirname, 'app'),
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig
