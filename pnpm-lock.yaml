@@ -114,18 +114,30 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.20.5
         version: 8.21.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/archiver':
+        specifier: ^7.0.0
+        version: 7.0.0
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
       '@types/node':
         specifier: ^20.16.11
         version: 20.19.21
       '@types/nodemailer':
         specifier: ^7.0.3
         version: 7.0.3
+      '@types/papaparse':
+        specifier: ^5.3.16
+        version: 5.3.16
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.26
       '@types/react-dom':
         specifier: ^18.3.1
         version: 18.3.7(@types/react@18.3.26)
+      '@types/ssh2-sftp-client':
+        specifier: ^9.0.5
+        version: 9.0.5
       archiver:
         specifier: ^7.0.1
         version: 7.0.1
@@ -220,18 +232,6 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
-      '@types/archiver':
-        specifier: ^7.0.0
-        version: 7.0.0
-      '@types/bcryptjs':
-        specifier: ^2.4.6
-        version: 2.4.6
-      '@types/papaparse':
-        specifier: ^5.3.16
-        version: 5.3.16
-      '@types/ssh2-sftp-client':
-        specifier: ^9.0.5
-        version: 9.0.5
       eslint:
         specifier: ^8.57.1
         version: 8.57.1
