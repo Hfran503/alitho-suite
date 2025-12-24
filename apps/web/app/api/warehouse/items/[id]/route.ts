@@ -157,7 +157,7 @@ export async function PATCH(
     }
 
     // Build update data with proper null handling for JSON fields
-    const updateData: Prisma.InventoryItemUpdateInput = {
+    const updateData = {
       ...(validatedData.customerId !== undefined && { customerId: validatedData.customerId }),
       ...(validatedData.sku !== undefined && { sku: validatedData.sku }),
       ...(validatedData.upc !== undefined && { upc: validatedData.upc }),
