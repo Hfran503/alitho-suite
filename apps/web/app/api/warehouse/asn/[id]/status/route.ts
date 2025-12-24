@@ -2,24 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { ASNStatus } from '@prisma/client'
 import { z } from 'zod'
 
+// Define statuses once in zod schema - single source of truth
+const asnStatusEnum = z.enum([
+  'DRAFT',
+  'PENDING',
+  'IN_TRANSIT',
+  'ARRIVED',
+  'RECEIVING',
+  'RECEIVED',
+  'PARTIALLY_RECEIVED',
+  'CANCELLED',
+])
+type ASNStatusType = z.infer<typeof asnStatusEnum>
+
 const updateStatusSchema = z.object({
-  status: z.enum([
-    'DRAFT',
-    'PENDING',
-    'IN_TRANSIT',
-    'ARRIVED',
-    'RECEIVING',
-    'RECEIVED',
-    'PARTIALLY_RECEIVED',
-    'CANCELLED',
-  ]),
+  status: asnStatusEnum,
 })
 
 // Valid status transitions
-const VALID_TRANSITIONS: Record<ASNStatus, ASNStatus[]> = {
+const VALID_TRANSITIONS: Record<ASNStatusType, ASNStatusType[]> = {
   DRAFT: ['PENDING', 'CANCELLED'],
   PENDING: ['IN_TRANSIT', 'ARRIVED', 'CANCELLED'],
   IN_TRANSIT: ['ARRIVED', 'CANCELLED'],
@@ -68,7 +71,7 @@ export async function PATCH(
     const { status: newStatus } = updateStatusSchema.parse(body)
 
     // Validate status transition
-    const currentStatus = existing.status as ASNStatus
+    const currentStatus = existing.status as ASNStatusType
     const validNextStatuses = VALID_TRANSITIONS[currentStatus] || []
 
     if (!validNextStatuses.includes(newStatus)) {
@@ -83,7 +86,7 @@ export async function PATCH(
 
     // Build update data based on new status
     const updateData: {
-      status: ASNStatus
+      status: ASNStatusType
       arrivedAt?: Date
       receivedAt?: Date
     } = { status: newStatus }

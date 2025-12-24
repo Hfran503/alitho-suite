@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { InventoryTransactionType } from '@prisma/client'
 import { getTransactions } from '@/lib/services/inventory'
+
+// Inventory transaction type derived from Prisma schema
+type InventoryTransactionType = 'RECEIVE' | 'SHIP' | 'ADJUST' | 'TRANSFER' | 'RESERVE' | 'UNRESERVE' | 'DAMAGE' | 'PICK' | 'KIT_ASSEMBLE' | 'KIT_PRODUCE'
 
 // GET /api/warehouse/inventory/transactions - Get transaction history
 export async function GET(request: NextRequest) {

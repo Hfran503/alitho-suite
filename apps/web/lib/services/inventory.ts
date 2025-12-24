@@ -1,5 +1,7 @@
 import { db, Prisma } from '@repo/database'
-import { InventoryTransactionType } from '@prisma/client'
+
+// Inventory transaction type derived from Prisma schema
+type InventoryTransactionType = 'RECEIVE' | 'SHIP' | 'ADJUST' | 'TRANSFER' | 'RESERVE' | 'UNRESERVE' | 'DAMAGE' | 'PICK' | 'KIT_ASSEMBLE' | 'KIT_PRODUCE'
 
 // Types
 export interface StockAdjustmentParams {

@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { ASNStatus } from '@prisma/client'
 import { z } from 'zod'
+
+// ASN status type derived from Prisma schema
+type ASNStatus = 'DRAFT' | 'PENDING' | 'IN_TRANSIT' | 'ARRIVED' | 'RECEIVING' | 'RECEIVED' | 'PARTIALLY_RECEIVED' | 'CANCELLED'
 
 const createASNSchema = z.object({
   customerId: z.string().optional().nullable(),

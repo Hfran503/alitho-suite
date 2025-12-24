@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { ReceivingStatus } from '@prisma/client'
 import { z } from 'zod'
+
+// Receiving status type derived from Prisma schema
+type ReceivingStatus = 'IN_PROGRESS' | 'COMPLETED' | 'COMPLETED_WITH_DISCREPANCY'
 import { startReceiving, listReceivingRecords } from '@/lib/services/receiving'
 
 const createReceivingSchema = z.object({

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db, Prisma } from '@repo/database'
-import { InventoryTransactionType } from '@prisma/client'
+
+// Inventory transaction type derived from Prisma schema
+type InventoryTransactionType = 'RECEIVE' | 'SHIP' | 'ADJUST' | 'TRANSFER' | 'RESERVE' | 'UNRESERVE' | 'DAMAGE' | 'PICK' | 'KIT_ASSEMBLE' | 'KIT_PRODUCE'
 
 // GET /api/warehouse/inventory/import - Download CSV template
 export async function GET() {

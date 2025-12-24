@@ -1,5 +1,7 @@
 import { db, Prisma } from '@repo/database'
-import { ReceivingStatus } from '@prisma/client'
+
+// Receiving status type derived from Prisma schema
+type ReceivingStatus = 'IN_PROGRESS' | 'COMPLETED' | 'COMPLETED_WITH_DISCREPANCY'
 
 // Types
 export interface StartReceivingParams {
