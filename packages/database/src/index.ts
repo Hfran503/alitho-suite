@@ -38,4 +38,4 @@ export const db = new Proxy({} as PrismaClient, {
 export type { PrismaClient }
 export { Prisma }
 // Re-export all types and enums from Prisma client for convenience
-export type * from '@prisma/client'
+export * from '@prisma/client'
