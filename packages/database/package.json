@@ -4,12 +4,12 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "prisma generate --schema=../../prisma/schema.prisma && tsc",
-    "db:generate": "cd ../.. && prisma generate --schema=./prisma/schema.prisma",
-    "db:migrate": "cd ../.. && prisma migrate deploy --schema=./prisma/schema.prisma",
-    "db:migrate:dev": "cd ../.. && prisma migrate dev --schema=./prisma/schema.prisma",
-    "db:studio": "cd ../.. && prisma studio --schema=./prisma/schema.prisma",
-    "db:seed": "cd ../.. && prisma generate --schema=./prisma/schema.prisma && NODE_NO_WARNINGS=1 tsx packages/database/src/seed.ts"
+    "build": "npx prisma@5.22.0 generate --schema=../../prisma/schema.prisma && tsc",
+    "db:generate": "cd ../.. && npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
+    "db:migrate": "cd ../.. && npx prisma@5.22.0 migrate deploy --schema=./prisma/schema.prisma",
+    "db:migrate:dev": "cd ../.. && npx prisma@5.22.0 migrate dev --schema=./prisma/schema.prisma",
+    "db:studio": "cd ../.. && npx prisma@5.22.0 studio --schema=./prisma/schema.prisma",
+    "db:seed": "cd ../.. && npx prisma@5.22.0 generate --schema=./prisma/schema.prisma && NODE_NO_WARNINGS=1 tsx packages/database/src/seed.ts"
   },
   "prisma": {
     "schema": "../../prisma/schema.prisma"
