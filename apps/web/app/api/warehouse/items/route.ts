@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, JsonNull } from '@repo/database'
+import { db } from '@repo/database'
 import { z } from 'zod'
 
 const dimensionsSchema = z.object({
@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
         category: validatedData.category,
         itemType: validatedData.itemType,
         weight: validatedData.weight,
-        dimensions: validatedData.dimensions == null ? JsonNull : validatedData.dimensions,
+        dimensions: validatedData.dimensions ?? null,
         isActive: validatedData.isActive,
         trackByReference: validatedData.trackByReference,
         // Pricing
@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
         bulkUnitName: validatedData.bulkUnitName,
         unitsPerBulk: validatedData.unitsPerBulk,
         bulkSellPrice: validatedData.bulkSellPrice,
-        metadata: validatedData.metadata == null ? JsonNull : validatedData.metadata,
+        metadata: validatedData.metadata ?? null,
       },
       include: {
         customer: {

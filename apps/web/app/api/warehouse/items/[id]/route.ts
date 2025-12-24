@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, JsonNull } from '@repo/database'
+import { db } from '@repo/database'
 import { z } from 'zod'
 
 const dimensionsSchema = z.object({
@@ -177,10 +177,10 @@ export async function PATCH(
       ...(validatedData.bulkSellPrice !== undefined && { bulkSellPrice: validatedData.bulkSellPrice }),
       // Handle JSON fields with proper Prisma null type
       ...(validatedData.dimensions !== undefined && {
-        dimensions: validatedData.dimensions === null ? JsonNull : validatedData.dimensions,
+        dimensions: validatedData.dimensions ?? null,
       }),
       ...(validatedData.metadata !== undefined && {
-        metadata: validatedData.metadata === null ? JsonNull : validatedData.metadata,
+        metadata: validatedData.metadata ?? null,
       }),
     }
 

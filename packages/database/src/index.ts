@@ -37,9 +37,5 @@ export const db = new Proxy({} as PrismaClient, {
 
 export type { PrismaClient }
 export { Prisma }
-// Explicitly re-export Prisma null types for JSON fields
-export const DbNull = Prisma.DbNull
-export const JsonNull = Prisma.JsonNull
-export const AnyNull = Prisma.AnyNull
 // Re-export all types from Prisma client for convenience
 export type * from '@prisma/client'
