@@ -1,0 +1,867 @@
+<project name="epace sdk" basedir="." default="run-sample">
+    <property name="build.compiler.emacs" value="on"/>
+    <property name="build.compiler.pedantic" value="false"/>
+    <property name="build.compiler.depend" value="true"/>
+    <property name="build.compiler.fulldepend" value="true"/>
+    <property name="build.compiler" value="modern"/>
+    
+    <property file="build.properties"/>
+    <property name="jdk_version" value="1.8"/>
+    <!-- Host/Port of epace instance to connect to-->
+    <property name="epace.host" value="localhost"/>
+    <property name="epace.port" value="80"/>
+
+    <!-- Username and password to use. This will likely be different, but will work on a fresh install -->
+    <property name="epace.username" value="Administrator"/>
+    <property name="epace.password" value="pace"/>
+
+    <!-- Set up paths -->
+    <property name="build.dir" value="./build"/>
+    <property name="build.dest" value="./build/classes"/>
+    <property name="gensrc.dir" value="./build/gensrc"/>
+    <property name="wsdl.dir" value="./build/wsdl"/>
+    <property name="lib.dir" value="./lib"/>
+    <property name="tools.dir" value="./tools/lib"/>
+    <property name="src.dir" value="./src"/>
+    <property name="java.dir" value="${src.dir}/main"/>
+    <property name="lib.jaxws.dir" value="${lib.dir}/cxf"/>
+
+    <!-- JUNIT tests -->
+    <property name="test.dir" value="${src.dir}/test/"/>
+    <property name="build.testclasses" value="${build.dir}/testclasses"/>
+    <property name="build.tests" value="${build.dir}/tests"/>
+    <property name="junit.failonerror" value="true"/>
+
+
+    <!-- Create classpath entry for JAXWS -->
+    <path id="jaxws.classpath">
+        <pathelement location="${java.home}/../lib/tools.jar"/>
+        <fileset dir="${lib.jaxws.dir}">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+
+
+    <!-- Create classpath entry for test -->
+    <path id="test.class.path">
+        <pathelement location="${build.testclasses}"/>
+        <pathelement location="${build.dest}"/>
+        <path refid="jaxws.classpath"/>
+        <path refid="tools.classpath"/>
+        <fileset dir="${build.dir}/dist">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+
+    <!-- Create classpath entry for tools-->
+    <path id="tools.classpath">
+        <fileset dir="./tools/lib/">
+            <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib.dir}">
+            <include name="**/*.jar"/>  
+        </fileset>
+    </path>
+
+    <taskdef name="wsimport" classname="com.sun.tools.ws.ant.WsImport">
+		<classpath refid="tools.classpath"/>
+	</taskdef>
+
+    <target name="setup">
+		<mkdir dir="${build.dir}"/>
+		<mkdir dir="${src.dir}"/>
+		<mkdir dir="${build.dest}"/>
+		<mkdir dir="${wsdl.dir}"/>
+	</target>
+
+    <target name="download-wsdl">
+		<get
+			username="${epace.username}"
+			password="${epace.password}"
+			src="http://${epace.host}:${epace.port}/rpc/services/${service.name}?wsdl"
+			dest="${wsdl.dir}/${service.name}.wsdl"/>
+	</target>
+
+	<target name="get-wsdl" description="retrieve wsdl files from epace" depends="setup">
+        <mkdir dir="${wsdl.dir}"/>
+
+		<antcall target="download-wsdl">
+			<param name="service.name" value="Version" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="FindObjects"/>
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="ReadObject" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="UpdateObject" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="CreateObject" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="CloneObject" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="DeleteObject" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="InvokeAction" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="InvokeProcess" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="InvokePaceConnect" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="SystemInspector" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="AttachmentService" />
+		</antcall>
+        <antcall target="download-wsdl">
+			<param name="service.name" value="GeoLocate" />
+		</antcall>
+        <antcall target="download-wsdl">
+			<param name="service.name" value="CustomizationService" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="ReportService" />
+		</antcall>
+		<antcall target="download-wsdl">
+			<param name="service.name" value="TransactionService" />
+		</antcall>
+	</target>
+
+    <target name="wsdl2java">
+        <wsimport
+        	destdir="${build.dest}"
+        	sourcedestdir="${gensrc.dir}"
+            wsdl="${basedir}/build/wsdl/${name}.wsdl"
+        	wsdllocation="http://${epace.host}:${epace.port}/rpc/services/${name}?wsdl">
+
+			<binding dir="${basedir}/etc" includes="Bindings.xml"/>
+		</wsimport>
+    </target>
+
+    <target name="gen-src" depends="get-wsdl" description="generate java source from wsdl files">
+        <mkdir dir="${gensrc.dir}"/>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="CreateObject"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="ReadObject"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="CloneObject"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="InvokeAction"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="UpdateObject"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="DeleteObject"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="FindObjects"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="InvokeProcess"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="InvokePaceConnect"/>
+        </antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="Version"/>
+        </antcall>
+    	<antcall target="wsdl2java">
+    	    <param name="name" value="TransactionService"/>
+    	</antcall>
+
+        <antcall target="wsdl2java">
+            <param name="name" value="SystemInspector"/>
+        </antcall>
+        
+        <antcall target="wsdl2java">
+            <param name="name" value="AttachmentService"/>
+        </antcall>
+    	
+    	<antcall target="wsdl2java">
+    	    <param name="name" value="GeoLocate"/>
+    	</antcall>
+
+    	<antcall target="wsdl2java">
+    	    <param name="name" value="CustomizationService"/>
+    	</antcall>
+
+    	<antcall target="wsdl2java">
+    		<param name="name" value="ReportService"/>
+    	</antcall>
+    </target>
+
+    <target name="compile" depends="gen-src">
+        <mkdir dir="${build.dest}"/>
+
+        <javac destdir="${build.dest}" target="${jdk_version}" source="${jdk_version}">
+            <src path="${java.dir}"/>
+            <src path="${gensrc.dir}"/>
+            <classpath refid="tools.classpath"/>
+            <classpath refid="jaxws.classpath"/>
+        </javac>
+    </target>
+
+    <target name="check-customer-property" unless="customer.code" depends="input-customer-property">
+        <fail message="must pass 'customer.code' (ex, -Dcustomer.code=TEST)"/>
+    </target>
+
+    <target name="input-customer-property" unless="customer.code">
+        <input message="Please enter customer code:" addproperty="customer.code"/>
+    </target>
+
+	<target name="check-estimate-property" unless="estimate.number" depends="input-estimate-property">
+	    <fail message="must pass 'estimate.number' (ex, -Destimate.number=TEST)"/>
+	</target>
+
+	<target name="input-estimate-property" unless="estimate.number">
+		<input message="Please enter estimate number :" addproperty="estimate.number"/>
+	</target>
+
+    <target name="check-chargeback-number-property" unless="chargeback.number" depends="input-chargeback-number-property">
+        <fail message="must pass 'chargeback.number' (ex, -Dchargeback.number=TEST)"/>
+    </target>
+
+    <target name="input-chargeback-number-property" unless="chargeback.number">
+        <input message="Please enter chargeback number:" addproperty="chargeback.number"/>
+    </target>
+
+    <target name="check-job-property" unless="job.job" depends="input-job-property">
+        <fail message="must pass 'job.job' (ex, -Djob.job=1234)"/>
+    </target>
+
+    <target name="input-job-property" unless="job.job">
+        <input message="Please enter job:" addproperty="job.job"/>
+    </target>
+
+    <target name="check-employee-id" unless="employee.id" depends="input-employee-id">
+        <fail message="must pass 'employee.id' (ex, -Djob.job=1234)"/>
+    </target>
+
+    <target name="input-employee-id" unless="employee.id">
+        <input message="Please enter employee id:" addproperty="employee.id"/>
+    </target>
+
+    <target name="check-activity-code" unless="activitycode.code" depends="input-activity-code">
+        <fail message="must pass 'activitycode.code' (ex, -Djob.job=1234)"/>
+    </target>
+
+    <target name="input-activity-code" unless="activitycode.code">
+        <input message="Please enter activity code:" addproperty="activitycode.code"/>
+    </target>
+
+    <target name="check-quantity-property" unless="jobpart.quantity" depends="input-quantity-property">
+        <fail message="must pass 'quantity' (ex, -Djobpart.quantity=1234)"/>
+    </target>
+
+    <target name="input-quantity-property" unless="jobpart.quantity">
+        <input message="Please enter part 1 quantity:" addproperty="jobpart.quantity"/>
+    </target>
+
+    <target name="check-glaccount-property" unless="glaccount.glaccount" depends="input-glaccount-property">
+        <fail message="must pass 'glaccount.glaccount' (ex, -Dglaccount.glaccount=1234)"/>
+    </target>
+
+    <target name="input-glaccount-property" unless="glaccount.glaccount">
+        <input message="Please enter glaccount id:" addproperty="glaccount.glaccount"/>
+    </target>
+
+    <target name="check-paceconnect-code-property" unless="paceconnect.code" depends="input-paceconnect-code-property">
+        <fail message="must pass 'paceconnect.code'"/>
+    </target>
+
+    <target name="input-paceconnect-code-property" unless="paceconnect.code">
+        <input message="Please enter PaceConnect code:" addproperty="paceconnect.code"/>
+    </target>
+
+    <target name="check-paceconnect-input-property" unless="paceconnect.input" depends="input-paceconnect-input-property">
+        <fail message="must pass 'paceconnect.input'"/>
+    </target>
+
+    <target name="input-paceconnect-input-property" unless="paceconnect.input">
+        <input message="Please enter PaceConnect input:" addproperty="paceconnect.input"/>
+    </target>
+
+    <target name="check-paceconnect-type-property" unless="paceconnect.type" depends="input-paceconnect-type-property">
+        <fail message="must pass 'paceconnect.type'"/>
+    </target>
+
+    <target name="input-paceconnect-type-property" unless="paceconnect.type">
+        <input message="Please enter PaceConnect type:" addproperty="paceconnect.type"/>
+    </target>
+
+    <target name="check-poline-id-property" unless="poline.id" depends="input-poline-id-property">
+        <fail message="must pass 'poline.id' (ex, -Dpoline.id=1234)"/>
+    </target>
+
+    <target name="input-poline-id-property" unless="poline.id">
+        <input message="Please enter Purchase Order Line id:" addproperty="poline.id"/>
+    </target>
+
+    <target name="check-poline-unitprice-property" unless="poline.unitprice" depends="input-poline-unitprice-property">
+        <fail message="must pass 'poline.unitprice' (ex, -Dpoline.unitprice=1234)"/>
+    </target>
+
+    <target name="input-poline-unitprice-property" unless="poline.unitprice">
+        <input message="Please enter Purchase Order Line unitprice:" addproperty="poline.unitprice"/>
+    </target>
+
+    <target name="check-poline-qtyreceived-property" unless="poline.qtyreceived" depends="input-poline-qtyreceived-property">
+        <fail message="must pass 'poline.qtyreceived' (ex, -Dpoline.qtyreceived=1234)"/>
+    </target>
+
+    <target name="input-poline-qtyreceived-property" unless="poline.qtyreceived">
+        <input message="Please enter Purchase Order Line qtyreceived:" addproperty="poline.qtyreceived"/>
+    </target>
+
+    <target name="check-poline-serialid-property" unless="poline.serialid" depends="input-poline-serialid-property">
+        <fail message="must pass 'poline.serialid' (ex, -Dpoline.serialid=1234)"/>
+    </target>
+
+    <target name="input-poline-serialid-property" unless="poline.serialid">
+        <input message="Please enter Purchase Order Line serial Id:" addproperty="poline.serialid"/>
+    </target>
+
+    <target name="check-poline-numids-property" unless="poline.numids" depends="input-poline-numids-property">
+        <fail message="must pass 'poline.numids' (ex, -Dpoline.numids=1234)"/>
+    </target>
+
+    <target name="input-poline-numids-property" unless="poline.numids">
+        <input message="Please enter the number of Ids:" addproperty="poline.numids"/>
+    </target>
+
+    <target name="check-poline-bin-property" unless="poline.bin" depends="input-poline-bin-property">
+        <fail message="must pass 'poline.bin' (ex, -Dpoline.bin=1234)"/>
+    </target>
+
+    <target name="input-poline-bin-property" unless="poline.bin">
+        <input message="Please enter Purchase Order Line Binary Inventory Key:" addproperty="poline.bin"/>
+    </target>
+
+    <target name="check-quote-id-property" unless="quote.id" depends="input-quote-id-property">
+        <fail message="must pass 'quote.id' (ex, -Dquote.id=1234)"/>
+    </target>
+
+    <target name="input-quote-id-property" unless="quote.id">
+        <input message="Please enter Quote Id:" addproperty="quote.id"/>
+    </target>
+
+    <target name="sample" depends="check-customer-property" description="Run sample (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.Sample" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${customer.code}"/>
+        </java>
+    </target>
+	
+	<target name="transactionSample" description="Run transaction sample">
+	        <java classname="com.pace2020.epace.sdk.sample.TransactionServiceSample" fork="true">
+	            <classpath refid="jaxws.classpath"/>
+	            <classpath refid="tools.classpath"/>
+	            <classpath location="${build.dest}"/>
+	            <jvmarg value="-Depace.username=${epace.username}"/>
+	            <jvmarg value="-Depace.password=${epace.password}"/>
+	        </java>
+	</target>
+
+    <target name="run-chargeback-account-sample" depends="compile, chargeback-account-sample" description="Compile and run chargeback-account-sample"/>
+
+    <target name="chargeback-account-sample" depends="check-customer-property, check-chargeback-number-property" description="Run chargeback-account-sample (without compiling)">
+           <java classname="com.pace2020.epace.sdk.sample.ChargeBackAccountSample" fork="true">
+               <classpath refid="jaxws.classpath"/>
+               <classpath refid="tools.classpath"/>
+               <classpath location="${build.dest}"/>
+               <jvmarg value="-Depace.username=${epace.username}"/>
+               <jvmarg value="-Depace.password=${epace.password}"/>
+               <arg value="${customer.code}"/>
+               <arg value="${chargeback.number}"/>
+           </java>
+       </target>
+
+       <target name="run-sample" depends="compile, sample" description="Compile and run sample"/>
+
+
+    <target name="receive-po-line" depends="check-poline-id-property, check-poline-unitprice-property, check-poline-qtyreceived-property, check-poline-serialid-property, check-poline-numids-property, check-poline-bin-property" 
+    	description="Run receive-po-line (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.ReceivePOLine" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${poline.id}"/>
+            <arg value="${poline.unitprice}"/>
+            <arg value="${poline.qtyreceived}"/>
+            <arg value="${poline.serialid}"/>
+            <arg value="${poline.numids}"/>
+            <arg value="${poline.bin}"/>
+        </java>
+    </target>
+
+    <target name="run-receive-po-line" depends="compile, receive-po-line" description="Compile and run receive-po-line"/>
+
+    <target name="read-glaccount" depends="check-glaccount-property" description="Run read-glaccount (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.ReadGLAccount" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${glaccount.glaccount}"/>
+        </java>
+    </target>
+
+    <target name="run-read-glaccount" depends="compile, read-glaccount" description="Compile and run read-glaccount"/>
+
+    <target name="create-job" depends="check-customer-property, check-quantity-property" description="Create job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.CreateJob" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${customer.code}"/>
+            <arg value="${jobpart.quantity}"/>
+        </java>
+    </target>
+
+    <target name="run-create-job" depends="compile, create-job" description="Compile and create job"/>
+
+    <target name="create-job-with-template" depends="check-customer-property, check-quantity-property" description="Create job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.CreateTwoJobsUsingItemTemplatesAndCreateComboJobSample" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${customer.code}"/>
+            <arg value="${jobpart.quantity}"/>
+        </java>
+    </target>
+
+    <target name="run-create-job-with-template" depends="compile, create-job-with-template" description="Compile and create job"/>
+
+    <target name="delete-job" depends="check-customer-property, check-quantity-property" description="Delete job (without compiling)">
+            <java classname="com.pace2020.epace.sdk.sample.DeleteJob" fork="true">
+                <classpath refid="jaxws.classpath"/>
+                <classpath refid="tools.classpath"/>
+                <classpath location="${build.dest}"/>
+                <jvmarg value="-Depace.username=${epace.username}"/>
+                <jvmarg value="-Depace.password=${epace.password}"/>
+                <arg value="${customer.code}"/>
+                <arg value="${jobpart.quantity}"/>
+            </java>
+        </target>
+
+    <target name="run-delete-job" depends="compile, delete-job" description="Compile and delete job"/>
+
+    <target name="list-paceconnect-types" description="List PaceConnect Types (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.ListPaceConnectTypes" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+
+    <target name="run-list-paceconnect-types" depends="compile, list-paceconnect-types" description="Compile and list PaceConnect types"/>
+
+    <target name="list-paceconnect-keys" depends="check-paceconnect-type-property" description="List PaceConnect keys (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.ListKeysForPaceConnectType" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${paceconnect.type}"/>
+        </java>
+    </target>
+
+    <target name="run-list-paceconnect-keys" depends="compile, list-paceconnect-keys" description="Compile and list PaceConnect keys"/>
+
+    <target name="invoke-paceconnect" depends="check-paceconnect-code-property, check-paceconnect-input-property" description="Invoke PaceConnect (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.InvokePaceConnect" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${paceconnect.code}"/>
+            <arg value="${paceconnect.input}"/>
+        </java>
+    </target>
+
+    <target name="invoke-action" depends="check-quote-id-property" description="Invoke Action - Calculate Quote">
+        <java classname="com.pace2020.epace.sdk.sample.InvokeAction" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${quote.id}"/>
+        </java>
+    </target>
+
+    <target name="create-estimate" depends="check-customer-property" description="Invoke Action - Create Estimate">
+        <java classname="com.pace2020.epace.sdk.sample.CreateEstimate" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${customer.code}"/>
+        </java>
+    </target>
+	
+	<target name="create-estimate-part" depends="check-estimate-property" description="Invoke Action - Create Estimate Part">
+		<java classname="com.pace2020.epace.sdk.sample.CreateEstimatePart" fork="true">
+			<classpath refid="jaxws.classpath"/>
+			<classpath refid="tools.classpath"/>
+			<classpath location="${build.dest}"/>
+			<jvmarg value="-Depace.username=${epace.username}"/>
+			<jvmarg value="-Depace.password=${epace.password}"/>
+			<arg value="${estimate.number}"/>
+		</java>
+	</target>
+
+    <target name="run-invoke-paceconnect" depends="compile, invoke-paceconnect" description="Compile and invoke PaceConnect"/>
+
+    <target name="clone-job" depends="check-customer-property" description="Clone job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.CloneJob" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${customer.code}"/>
+        </java>
+    </target>
+
+    <target name="run-clone-job" depends="compile, clone-job" description="Compile and clone job"/>
+
+    <target name="convert-to-job" description="Convert To Job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.ConvertToJob" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+
+    <target name="run-convert-to-job" depends="compile, convert-to-job" description="Compile and convert to job"/>
+
+    <target name="employee-signon" depends="" description="Employee Sign on Sample (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.EmployeeSignInSignOutSample" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+
+    <target name="run-employee-signin" depends="compile, employee-signon" description="Compile and Run Employee Sign On"/>
+
+    <target name="job-transaction-start-stop" depends="check-customer-property, check-quantity-property, check-activity-code, check-employee-id " description="Start and Stop Job Transaction on Sample (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.JobTransactionStartStopSample" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${customer.code}"/>
+            <arg value="${jobpart.quantity}"/>
+            <arg value="${employee.id}"/>
+            <arg value="${activitycode.code}"/>
+        </java>
+    </target>
+
+    <target name="run-job-transaction-start-stop" depends="compile, job-transaction-start-stop" description="Compile and Run Job Transaction Start Stop"/>
+
+    <target name="close-job" depends="check-job-property, check-customer-property" description="Close job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.CloseJob" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${job.job}"/>
+            <arg value="${customer.code}"/>
+        </java>
+    </target>
+
+    <target name="create-estimate-convert-from-job" depends="check-job-property" description="Close estimate and convert from job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.CreateEstimateAndConvertFromJob" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${job.job}"/>
+        </java>
+    </target>
+
+    <target name="run-create-estimate-convert-from-job" depends="compile, create-estimate-convert-from-job" description="Compile and Close estimate and convert from job"/>
+
+    <target name="geo-locate-contacts" description="Close job (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.GeoLocateContacts" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="30"/>
+            <arg value="-81.5"/>
+        	<arg value="50"/>
+        	<arg value="@active = 'true'"/>
+        </java>
+    </target>
+            	
+    <target name="run-close-job" depends="compile, close-job" description="Compile and close job"/>
+
+    <target name="create-job-transaction" depends="check-job-property, check-customer-property" description="Creating JobTransaction setting unpersisted attributes">
+        <java classname="com.pace2020.epace.sdk.sample.CreateJobTransactionUsingOverrideStatusAttribute" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <arg value="${job.job}"/>
+            <arg value="${customer.code}"/>
+        </java>
+    </target>
+
+    <target name="run-create-job-transaction" depends="compile, create-job-transaction" description="Compile and create job transaction"/>
+
+    <target name="find-objects" depends="compile" description="Find Objects Sample">
+        <java classname="com.pace2020.epace.sdk.sample.FindObjects" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+	
+    <target name="find-objects-date-functions" depends="compile" description="Find Objects Date Functions Sample">
+        <java classname="com.pace2020.epace.sdk.sample.FindObjectsDateFunctions" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+
+	<target name="find-object-date-time-constraints" depends="compile" description="Find Objects Sample with Date time constraints">
+        <java classname="com.pace2020.epace.sdk.sample.FindObjectDateTimeConstraints" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+	</target>
+	
+    <target name="find-objects-aggregate" depends="compile" description="Find Objects Aggregate Sample">
+        <java classname="com.pace2020.epace.sdk.sample.FindObjectsAggregate" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+    
+    <target name="system-inspector" depends="compile" description="System Inspector Sample">
+        <java classname="com.pace2020.epace.sdk.sample.SystemInspector" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+
+    <target name="find-last-move-only-transaction" depends="check-job-property, check-customer-property" description="Find Last Move Only JobTransaction (without compiling)">
+        <java classname="com.pace2020.epace.sdk.sample.FindLastMoveOnlyTransaction" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <jvmarg value="-Xdebug"/>
+            <jvmarg value="-Xnoagent"/>
+            <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005"/>
+            <arg value="${job.job}"/>
+            <arg value="${customer.code}"/>
+        </java>
+    </target>
+
+    <target name="run-find-last-move-only-transaction" depends="compile, find-last-move-only-transaction" description="Compile and Find Last Move Only JobTransaction"/>
+
+    <target name="report-service" depends="compile" description="Execute report service">
+        <java classname="com.pace2020.epace.sdk.sample.ReportServiceSample" fork="true">
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <classpath location="${build.dest}"/>
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+        </java>
+    </target>
+
+    <target name="jar" depends="compile">
+        <mkdir dir="${build.dir}/dist"/>
+
+        <property name="jar_location" value="${build.dir}/dist/sdk.jar"/>
+        <echo message="Creating SDK jar at location: ${jar_location}"/>
+        <jar jarfile="${jar_location}" basedir="${build.dest}" update="true"/>
+    </target>
+
+    <target name="compile-tests" depends="jar, copy-junit-test-files">
+        <mkdir dir="${build.testclasses}"/>
+        <mkdir dir="${build.tests}"/>
+
+        <copy todir="${build.testclasses}">
+            <fileset dir="${test.dir}"/>
+        </copy>
+
+        <javac destdir="${build.testclasses}" debug="true" source="${jdk_version}">
+            <classpath refid="test.class.path"/>
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <src path="${test.dir}"/>
+        </javac>
+
+        <jar jarfile="${build.testclasses}/suite_tests.jar">
+            <fileset dir="${build.testclasses}">
+                <exclude name="**/Abstract*.class"/>
+                <include name="com/pace2020/epace/sdk/**/*TestCase.class"/>
+            </fileset>
+        </jar>
+    </target>
+
+    <target name="copy-junit-test-files">
+        <mkdir dir="${build.testclasses}"/>
+        <mkdir dir="${build.tests}"/>
+
+        <copy todir="${build.testclasses}">
+            <fileset dir="${test.dir}">
+                <include name="**/*.properties"/>
+                <include name="**/*.xml"/>
+                <include name="**/*.xls"/>
+                <include name="**/*.txt"/>
+                <include name="**/*.csv"/>
+                <include name="**/*.xsd"/>
+                <include name="**/*.pdf"/>
+                <include name="**/*.jpg"/>
+                <include name="**/*.xconf"/>
+                <include name="**/*.txt"/>
+            </fileset>
+        </copy>
+
+        <copy todir="${build.testclasses}">
+            <fileset dir="${build.dest}">
+                <include name="**/*.properties"/>
+                <include name="**/*.xml"/>
+                <include name="**/*.xls"/>
+                <include name="**/*.txt"/>
+                <include name="**/*.csv"/>
+                <include name="**/*.xsd"/>
+                <include name="**/*.pdf"/>
+                <include name="**/*.jpg"/>
+                <include name="**/*.dtd"/>
+                <include name="**/*.xconf"/>
+                <include name="**/*.txt"/>
+            </fileset>
+        </copy>
+
+        <copy todir="${build.testclasses}">
+            <fileset dir="${java.dir}">
+                <include name="**/*.roles"/>
+                <include name="**/*.properties"/>
+                <include name="**/*.xsl"/>
+                <include name="**/*.xsd"/>
+                <include name="**/*.jelly"/>
+                <include name="**/*.drl"/>
+                <include name="**/*.js"/>
+                <include name="**/*.mxinfo"/>
+                <include name="**/*.dtd"/>
+                <include name="**/*.ent"/>
+                <include name="**/*.sql"/>
+                <include name="**/*.pdf"/>
+                <include name="**/*.xml"/>
+                <include name="**/*.types"/>
+                <include name="**/*.txt"/>
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="sdk-tests">
+        <!-- used only by Pace when building Pace remove these when trying to use this ant target -->
+        <property file="../../../../../epace.version.properties"/>
+        <property name="deb.version" value="${version}-${build.testnumber}"/>
+        <property name="MailLogger.failure.subject" value="[${deb.version}] **SDK TESTS FAILED**"/>
+
+        <junit fork="true"
+               haltonfailure="false"
+               failureproperty="sdk.tests.failed"
+               printsummary="withOutAndErr"
+               maxmemory="2024M"
+               dir="${build.tests}">
+           <!-- <jvmarg value="-Xdebug"/>
+            <jvmarg value="-Xnoagent"/>
+            <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005"/>
+            -->
+            <jvmarg value="-Depace.username=${epace.username}"/>
+            <jvmarg value="-Depace.password=${epace.password}"/>
+            <jvmarg value="-Dorg.apache.cxf.stax.maxChildElement=100000"/>
+
+            <classpath refid="test.class.path"/>
+            <classpath refid="jaxws.classpath"/>
+            <classpath refid="tools.classpath"/>
+            <formatter type="plain" usefile="false"/>
+
+            <batchtest>
+                <fileset dir="${build.testclasses}">
+                    <include name="com/pace2020/epace/sdk/suite/TestSuite.class"/>
+                </fileset>
+            </batchtest>
+        </junit>
+
+        <!-- used only by Pace when building Pace remove these when trying to use this ant target -->
+        <antcall target="clean"/>
+        <fail message="${MailLogger.failure.subject}" if="sdk.tests.failed"/>
+    </target>
+
+    <target name="clean" description="Cleans the build directories">
+        <delete quiet="true" dir="${build.dir}"/>
+    </target>
+
+</project>

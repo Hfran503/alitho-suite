@@ -6,8 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, RefreshCw, Search, Send, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
-import { OrdersTable, OrderDetailPanel, AtlassianOrder, OrderCounts } from '@/components/atlassian-orders';
+import { Loader2, RefreshCw, Search, Send, ChevronLeft, ChevronRight, FileText, Plus } from 'lucide-react';
+import { OrdersTable, OrderDetailPanel, AtlassianOrder, OrderCounts, AddManualOrderDialog } from '@/components/atlassian-orders';
 
 export default function ReadyToProcessPage() {
   const [orders, setOrders] = useState<AtlassianOrder[]>([]);
@@ -23,6 +23,7 @@ export default function ReadyToProcessPage() {
   const [regeneratingPdfs, setRegeneratingPdfs] = useState(false);
   const [batchPdfSuccess, setBatchPdfSuccess] = useState<string | null>(null);
   const [batchPdfError, setBatchPdfError] = useState<string | null>(null);
+  const [showAddOrderDialog, setShowAddOrderDialog] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -275,6 +276,14 @@ export default function ReadyToProcessPage() {
           <p className="text-sm text-gray-500">Orders ready to be sent to PACE</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setShowAddOrderDialog(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Manual Order
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -540,6 +549,13 @@ export default function ReadyToProcessPage() {
           }}
         />
       )}
+
+      {/* Add Manual Order Dialog */}
+      <AddManualOrderDialog
+        open={showAddOrderDialog}
+        onOpenChange={setShowAddOrderDialog}
+        onOrderCreated={fetchOrders}
+      />
     </div>
   );
 }

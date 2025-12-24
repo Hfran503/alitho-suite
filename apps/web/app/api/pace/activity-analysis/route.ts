@@ -52,9 +52,9 @@ type EmployeeSummary = {
   years: EmployeePeriodData[]
 }
 
-const YEARS_TO_FETCH = 5
+const YEARS_TO_FETCH = 5 // Number of years to compare
 
-// GET /api/pace/activity-analysis - Analyze activity codes with 5-year comparison
+// GET /api/pace/activity-analysis - Analyze activity codes with multi-year comparison
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -107,33 +107,37 @@ export async function GET(request: Request) {
 
     const authHeader = `Basic ${Buffer.from(`${paceUsername}:${pacePassword}`).toString('base64')}`
 
+    // Parse date string to components (avoiding timezone issues)
+    const parseDateStr = (dateStr: string) => {
+      const [year, month, day] = dateStr.split('-').map(Number)
+      return { year, month, day }
+    }
+
     // Format dates for PACE XPath query
-    const formatDateForXPath = (date: Date) => {
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1
-      const day = date.getDate()
+    const formatDateForXPath = (year: number, month: number, day: number) => {
       return `date(${year}, ${month}, ${day})`
     }
 
     // Calculate date ranges for each year
-    const currentStart = new Date(startDate)
-    const currentEnd = new Date(endDate)
+    const startParts = parseDateStr(startDate)
+    const endParts = parseDateStr(endDate)
 
-    const yearRanges: Array<{ year: number; label: string; start: Date; end: Date; startStr: string; endStr: string }> = []
+    const yearRanges: Array<{ year: number; label: string; startYear: number; startMonth: number; startDay: number; endYear: number; endMonth: number; endDay: number; startStr: string; endStr: string }> = []
 
     for (let i = 0; i < YEARS_TO_FETCH; i++) {
-      const yearStart = new Date(currentStart)
-      yearStart.setFullYear(yearStart.getFullYear() - i)
-      const yearEnd = new Date(currentEnd)
-      yearEnd.setFullYear(yearEnd.getFullYear() - i)
+      const yearVal = startParts.year - i
 
       yearRanges.push({
-        year: yearStart.getFullYear(),
-        label: i === 0 ? 'Current' : `${yearStart.getFullYear()}`,
-        start: yearStart,
-        end: yearEnd,
-        startStr: yearStart.toISOString().split('T')[0],
-        endStr: yearEnd.toISOString().split('T')[0],
+        year: yearVal,
+        label: i === 0 ? 'Current' : `${yearVal}`,
+        startYear: yearVal,
+        startMonth: startParts.month,
+        startDay: startParts.day,
+        endYear: endParts.year - i,
+        endMonth: endParts.month,
+        endDay: endParts.day,
+        startStr: `${yearVal}-${String(startParts.month).padStart(2, '0')}-${String(startParts.day).padStart(2, '0')}`,
+        endStr: `${endParts.year - i}-${String(endParts.month).padStart(2, '0')}-${String(endParts.day).padStart(2, '0')}`,
       })
     }
 
@@ -143,14 +147,20 @@ export async function GET(request: Request) {
     for (const range of yearRanges) {
       console.log(`Fetching Jobs by dateSetup for ${range.label}: ${range.startStr} to ${range.endStr}...`)
 
-      const jobsXPath = `@dateSetup >= ${formatDateForXPath(range.start)} and @dateSetup <= ${formatDateForXPath(range.end)}`
-      const jobIds = await fetchJobIdsByXPath(paceApiUrl, authHeader, jobsXPath)
-      console.log(`Found ${jobIds.length} Jobs for ${range.label}`)
+      try {
+        const jobsXPath = `@dateSetup >= ${formatDateForXPath(range.startYear, range.startMonth, range.startDay)} and @dateSetup <= ${formatDateForXPath(range.endYear, range.endMonth, range.endDay)}`
+        const jobIds = await fetchJobIdsByXPath(paceApiUrl, authHeader, jobsXPath)
+        console.log(`Found ${jobIds.length} Jobs for ${range.label}`)
 
-      const jobCosts = await fetchJobCostsForJobs(paceApiUrl, authHeader, jobIds, activityCodesParam)
-      console.log(`Found ${jobCosts.length} JobCost records for ${range.label}`)
+        const jobCosts = await fetchJobCostsForJobs(paceApiUrl, authHeader, jobIds, activityCodesParam)
+        console.log(`Found ${jobCosts.length} JobCost records for ${range.label}`)
 
-      yearDataMap.set(range.year, jobCosts)
+        yearDataMap.set(range.year, jobCosts)
+      } catch (error) {
+        console.error(`Error fetching data for ${range.label}:`, error)
+        // Set empty array for this year if fetch fails
+        yearDataMap.set(range.year, [])
+      }
     }
 
     // Get unique activity codes and employees for enrichment
@@ -525,9 +535,22 @@ function buildEmployeeSummaries(
       const empJobCosts = jobCosts.filter(jc => jc.employee === empId)
 
       const hoursWorked = empJobCosts.filter(isActual).reduce((sum, jc) => sum + (jc.hours || 0), 0)
-      const estimatedHours = empJobCosts.filter(isEstimate).reduce((sum, jc) => sum + (jc.hours || 0), 0)
       const cost = empJobCosts.filter(isActual).reduce((sum, jc) => sum + (jc.cost || 0), 0)
       const jobCount = new Set(empJobCosts.filter(isActual).map(jc => jc.job)).size
+
+      // Get unique job+activityCode combinations the employee worked on (actual work)
+      const workedJobActivityCodes = new Set(
+        empJobCosts
+          .filter(isActual)
+          .map(jc => `${jc.job}|${jc.activityCode}`)
+      )
+
+      // Sum estimated hours for those same job+activityCode combinations
+      // (estimates may not have employee assigned, so we don't filter by employee for estimates)
+      const estimatedHours = jobCosts
+        .filter(isEstimate)
+        .filter(jc => workedJobActivityCodes.has(`${jc.job}|${jc.activityCode}`))
+        .reduce((sum, jc) => sum + (jc.hours || 0), 0)
 
       return {
         year: range.year,

@@ -344,6 +344,406 @@ export default function ActivityAnalysisPage() {
     XLSX.writeFile(wb, filename)
   }
 
+  // Print Report
+  const handlePrintReport = () => {
+    if (!data) return
+
+    const { startDate, endDate } = getEffectiveDateRange()
+
+    // Helper to check if a year has data
+    const hasYearData = (total: PeriodData) => {
+      return total.estimatedCost > 0 || total.actualCost > 0 || total.actualHours > 0 || total.jobCount > 0
+    }
+
+    // Filter totals to only include years with data
+    const totalsWithData = data.totals.filter(hasYearData)
+
+    // Get year colors for print
+    const getYearColorPrint = (index: number) => {
+      const colors = ['#2563eb', '#059669', '#7c3aed', '#ea580c', '#4b5563']
+      const bgColors = ['#eff6ff', '#ecfdf5', '#f5f3ff', '#fff7ed', '#f9fafb']
+      return { color: colors[index % colors.length], bg: bgColors[index % bgColors.length] }
+    }
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Activity Code Analysis Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 24px;
+      color: #1f2937;
+      font-size: 11px;
+      line-height: 1.4;
+      background: #f9fafb;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 6px;
+    }
+    .header .subtitle {
+      color: #6b7280;
+      font-size: 12px;
+    }
+    .header .filter-info {
+      margin-top: 12px;
+      padding: 10px 20px;
+      background: #eff6ff;
+      border-radius: 8px;
+      display: inline-block;
+      color: #1d4ed8;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .section {
+      margin-bottom: 28px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .cards-grid {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .year-card {
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      flex: 1;
+      min-width: 150px;
+      max-width: 200px;
+      background: white;
+    }
+    .year-card-header {
+      padding: 10px 14px;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .year-card-header .period {
+      font-size: 10px;
+      font-weight: 400;
+      opacity: 0.9;
+      margin-top: 2px;
+    }
+    .year-card-body {
+      padding: 14px;
+    }
+    .year-card-body .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .year-card-body .label {
+      color: #6b7280;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    .year-card-body .value {
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .year-card-body .value.large {
+      font-size: 15px;
+    }
+    .year-card-body .divider {
+      border-top: 1px solid #e5e7eb;
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+    .positive { color: #059669; }
+    .negative { color: #dc2626; }
+    .orange { color: #ea580c; }
+
+    /* Activity Card Style */
+    .activity-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .activity-card-header {
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .activity-code {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-weight: 700;
+      color: #2563eb;
+      font-size: 14px;
+    }
+    .activity-desc {
+      color: #4b5563;
+      font-size: 12px;
+    }
+    .activity-card-body {
+      padding: 14px 16px;
+    }
+    .mini-cards {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .mini-card {
+      border-radius: 8px;
+      padding: 10px 12px;
+      flex: 1;
+      min-width: 120px;
+    }
+    .mini-card-label {
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .mini-card .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      margin-bottom: 3px;
+    }
+    .mini-card .stat-label {
+      color: #6b7280;
+    }
+    .mini-card .stat-value {
+      font-weight: 600;
+      color: #111827;
+    }
+    .mini-card .stat-value.var {
+      font-weight: 700;
+    }
+
+    /* Employee Card Style */
+    .employee-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .employee-card-header {
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .employee-name {
+      font-weight: 600;
+      color: #111827;
+      font-size: 13px;
+    }
+    .employee-id {
+      color: #9ca3af;
+      font-size: 10px;
+    }
+    .employee-card-body {
+      padding: 14px 16px;
+    }
+
+    .footer {
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 2px solid #e5e7eb;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 11px;
+    }
+    @media print {
+      body { padding: 0; background: white; }
+      .section { page-break-inside: avoid; }
+      .activity-card { page-break-inside: avoid; }
+      .employee-card { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Activity Code Analysis Report</h1>
+    <div class="subtitle">Generated on ${new Date().toLocaleString()}</div>
+    <div class="filter-info">Activity Codes: ${selectedActivityCodes.join(', ')}</div>
+    <div class="subtitle" style="margin-top: 10px;">Period: ${startDate} to ${endDate}</div>
+  </div>
+
+  ${totalsWithData.length > 0 ? `
+  <div class="section">
+    <div class="section-title">Cost Comparison by Year</div>
+    <div class="cards-grid">
+      ${totalsWithData.map((total) => {
+        const colors = getYearColorPrint(data.totals.indexOf(total))
+        const variance = total.estimatedCost - total.actualCost
+        return `
+          <div class="year-card" style="border-color: ${colors.color};">
+            <div class="year-card-header" style="background: ${colors.color};">
+              ${total.label}
+              <div class="period">${total.startDate} to ${total.endDate}</div>
+            </div>
+            <div class="year-card-body" style="background: ${colors.bg};">
+              <div class="row">
+                <span class="label">Estimated</span>
+                <span class="value large">${formatCurrency(total.estimatedCost)}</span>
+              </div>
+              <div class="row">
+                <span class="label">Actual</span>
+                <span class="value large">${formatCurrency(total.actualCost)}</span>
+              </div>
+              <div class="row divider">
+                <span class="label">Variance</span>
+                <span class="value large ${variance >= 0 ? 'positive' : 'negative'}">${formatCurrency(variance)}</span>
+              </div>
+              <div class="row" style="margin-top: 10px;">
+                <span class="label">Hours</span>
+                <span class="value">${formatHours(total.actualHours)}</span>
+              </div>
+              <div class="row">
+                <span class="label">Jobs</span>
+                <span class="value">${total.jobCount}</span>
+              </div>
+            </div>
+          </div>
+        `
+      }).join('')}
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="section">
+    <div class="section-title">Activity Code Breakdown</div>
+    ${data.activitySummaries.map(activity => {
+      const yearsWithData = activity.years.filter(y =>
+        totalsWithData.some(t => t.year === y.year)
+      )
+      return `
+        <div class="activity-card">
+          <div class="activity-card-header">
+            <span class="activity-code">${activity.activityCode}</span>
+            <span class="activity-desc">${activity.description}</span>
+          </div>
+          <div class="activity-card-body">
+            <div class="mini-cards">
+              ${yearsWithData.map((year) => {
+                const colors = getYearColorPrint(data.totals.findIndex(t => t.year === year.year))
+                const variance = year.estimatedCost - year.actualCost
+                return `
+                  <div class="mini-card" style="background: ${colors.bg}; border: 1px solid ${colors.color}40;">
+                    <div class="mini-card-label" style="color: ${colors.color};">${year.label}</div>
+                    <div class="stat-row">
+                      <span class="stat-label">Est:</span>
+                      <span class="stat-value">${formatCurrency(year.estimatedCost)}</span>
+                    </div>
+                    <div class="stat-row">
+                      <span class="stat-label">Actual:</span>
+                      <span class="stat-value">${formatCurrency(year.actualCost)}</span>
+                    </div>
+                    <div class="stat-row" style="border-top: 1px solid ${colors.color}30; padding-top: 4px; margin-top: 4px;">
+                      <span class="stat-label">Variance:</span>
+                      <span class="stat-value var ${variance >= 0 ? 'positive' : 'negative'}">${formatCurrency(variance)}</span>
+                    </div>
+                    <div class="stat-row" style="margin-top: 6px; font-size: 9px; color: #9ca3af;">
+                      <span>Jobs: ${year.jobCount}</span>
+                      <span>Hrs: ${formatHours(year.actualHours)}</span>
+                    </div>
+                  </div>
+                `
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `
+    }).join('')}
+  </div>
+
+  <div class="section">
+    <div class="section-title">Employee Productivity</div>
+    ${data.employeeSummaries.map(employee => {
+      const yearsWithData = employee.years.filter(y =>
+        totalsWithData.some(t => t.year === y.year)
+      )
+      return `
+        <div class="employee-card">
+          <div class="employee-card-header">
+            <span class="employee-name">${employee.employeeName}</span>
+            <span class="employee-id">(${employee.employeeId})</span>
+          </div>
+          <div class="employee-card-body">
+            <div class="mini-cards">
+              ${yearsWithData.map((year) => {
+                const colors = getYearColorPrint(data.totals.findIndex(t => t.year === year.year))
+                return `
+                  <div class="mini-card" style="background: ${colors.bg}; border: 1px solid ${colors.color}40;">
+                    <div class="mini-card-label" style="color: ${colors.color};">${year.label}</div>
+                    <div class="stat-row">
+                      <span class="stat-label">Hours:</span>
+                      <span class="stat-value">${formatHours(year.hoursWorked)}</span>
+                    </div>
+                    <div class="stat-row">
+                      <span class="stat-label">Est Hrs:</span>
+                      <span class="stat-value">${formatHours(year.estimatedHours)}</span>
+                    </div>
+                    <div class="stat-row">
+                      <span class="stat-label">Efficiency:</span>
+                      <span class="stat-value ${year.efficiency >= 100 ? 'positive' : year.efficiency > 0 ? 'orange' : ''}" style="font-weight: 700;">${formatPercent(year.efficiency)}</span>
+                    </div>
+                    <div class="stat-row" style="border-top: 1px solid ${colors.color}30; padding-top: 4px; margin-top: 4px;">
+                      <span class="stat-label">Cost:</span>
+                      <span class="stat-value">${formatCurrency(year.cost)}</span>
+                    </div>
+                    <div class="stat-row">
+                      <span class="stat-label">$/Hr:</span>
+                      <span class="stat-value">${formatCurrency(year.avgCostPerHour)}</span>
+                    </div>
+                    <div class="stat-row" style="margin-top: 6px; font-size: 9px; color: #9ca3af;">
+                      <span>Jobs: ${year.jobCount}</span>
+                    </div>
+                  </div>
+                `
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `
+    }).join('')}
+  </div>
+
+  <div class="footer">
+    Activity Code Analysis Report &bull; ${selectedActivityCodes.length} activity code(s) &bull; ${totalsWithData.length} year(s) with data
+  </div>
+
+  <script>
+    window.onload = function() { window.print(); }
+  </script>
+</body>
+</html>
+    `
+
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -476,17 +876,30 @@ export default function ActivityAnalysisPage() {
               </button>
 
               {data && (
-                <button
-                  onClick={handleExportToExcel}
-                  disabled={loading}
-                  className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
-                  title="Export to Excel"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Export
-                </button>
+                <>
+                  <button
+                    onClick={handleExportToExcel}
+                    disabled={loading}
+                    className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+                    title="Export to Excel"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export
+                  </button>
+                  <button
+                    onClick={handlePrintReport}
+                    disabled={loading}
+                    className="px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+                    title="Print Report"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print
+                  </button>
+                </>
               )}
             </div>
           </div>

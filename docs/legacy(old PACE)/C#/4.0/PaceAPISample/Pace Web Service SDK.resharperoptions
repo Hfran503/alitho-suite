@@ -1,0 +1,138 @@
+<Configuration>
+  <RecentFilesTracker>
+    <RecentFilesTracker>
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\README.txt" offset="2280" line="0" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\CloseJob.cs" offset="327" line="0" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\FindOpenJobs.cs" offset="197" line="0" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\SDK.cs" offset="880" line="25" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\CreateJob.cs" offset="421" line="0" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\PaceWebServices.cs" offset="0" line="17" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Sample.cs" offset="361" line="33" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\ReadGLAccount.cs" offset="327" line="15" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\InvokeProcessTest.cs" offset="50" line="0" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\PaceWebServiceTypes.cs" offset="101647" line="5032" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.Version\Reference.cs" offset="761" line="21" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.UpdateObject\Reference.cs" offset="766" line="4798" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.InvokeProcess\Reference.cs" offset="20658" line="426" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.ReadObject\Reference.cs" offset="764" line="5596" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.FindObjects\Reference.cs" offset="765" line="21" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.DeleteObject\Reference.cs" offset="754" line="5" column="0" />
+      <TrackedFile location="C:\Documents and Settings\Dan\My Documents\Visual Studio Projects\Pace Web Service SDK\Web References\com.pace2020.CreateObject\Reference.cs" offset="983451" line="26840" column="0" />
+    </RecentFilesTracker>
+  </RecentFilesTracker>
+  <SettingsComponent>
+    <string />
+    <integer />
+    <boolean />
+  </SettingsComponent>
+  <CompletionStatisticsManager>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.com.pace2020.ReadObject.ReadObject">
+      <Item value="Url" priority="0" />
+      <Item value="CreateObjRef" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.com.pace2020.CreateObject.CreateObject">
+      <Item value="createCustomer" priority="0" />
+      <Item value="Credentials" priority="0" />
+      <Item value="Url" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:System.Web.Services.Protocols.SoapException">
+      <Item value="Message" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:int">
+      <Item value="ToString" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.com.pace2020.Version.Version">
+      <Item value="Credentials" priority="0" />
+      <Item value="Url" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@Pace_Web_Service_SDK.com">
+      <Item value="pace2020" priority="1" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@System">
+      <Item value="Net" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.Customer">
+      <Item value="id" priority="0" />
+      <Item value="csr" priority="0" />
+      <Item value="taxableCode" priority="1" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@Pace_Web_Service_SDK.com.pace2020.Version">
+      <Item value="Version" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@Pace_Web_Service_SDK">
+      <Item value="com" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@System.String">
+      <Item value="Join" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.PaceServices">
+      <Item value="versionService" priority="0" />
+      <Item value="DeleteObjectService" priority="0" />
+      <Item value="ReadObjectService" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@System.Int32">
+      <Item value="Parse" priority="3" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.com.pace2020.ReadObject.Customer">
+      <Item value="custName" priority="2" />
+      <Item value="id" priority="0" />
+      <Item value="dateSetup" priority="1" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.com.pace2020.DeleteObject.DeleteObject">
+      <Item value="deleteObject" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:System.Web.Services.Protocols.SoapHttpClientProtocol">
+      <Item value="Url" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@Pace_Web_Service_SDK.SDK">
+      <Item value="HOST" priority="0" />
+      <Item value="USERNAME" priority="0" />
+      <Item value="PASSWORD" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@System.Console">
+      <Item value="WriteLine" priority="21" />
+      <Item value="ReadLine" priority="3" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:System.DateTime">
+      <Item value="ToString" priority="0" />
+      <Item value="ToShortTimeString" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@System.Xml">
+      <Item value="Serialization" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:System.TimeSpan">
+      <Item value="ToString" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:string[]">
+      <Item value="Length" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@Pace_Web_Service_SDK.com.pace2020">
+      <Item value="Version" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:@">
+      <Item value="qtyOrdered" priority="2" />
+      <Item value="ReadObjectService" priority="0" />
+      <Item value="currentStatus" priority="0" />
+      <Item value="reason" priority="0" />
+      <Item value="InvokeProcessService" priority="0" />
+      <Item value="readGLAccount" priority="0" />
+      <Item value="job" priority="1" />
+      <Item value="customer" priority="0" />
+      <Item value="CreateObjectService" priority="0" />
+      <Item value="failures" priority="0" />
+      <Item value="readJobPart" priority="0" />
+      <Item value="Length" priority="2" />
+      <Item value="Equals" priority="0" />
+      <Item value="dateSetup" priority="0" />
+      <Item value="id" priority="0" />
+      <Item value="jobPart" priority="0" />
+      <Item value="successes" priority="1" />
+      <Item value="UpdateObjectService" priority="0" />
+      <Item value="readActivityCode" priority="0" />
+    </ItemStatistics>
+    <ItemStatistics item="Qualified:Pace_Web_Service_SDK.com.pace2020.UpdateObject.UpdateObject">
+      <Item value="Credentials" priority="0" />
+      <Item value="Url" priority="0" />
+    </ItemStatistics>
+  </CompletionStatisticsManager>
+</Configuration>

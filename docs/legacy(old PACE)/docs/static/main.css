@@ -1,0 +1,35 @@
+.style1 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 36px;
+	font-weight: bold;
+}
+
+.style2 {
+	color: #CCCCCC;
+	font-family: Arial, Helvetica, sans-serif;
+	font-weight: bold;
+	font-style: italic;
+}
+
+.style5 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 16px;
+}
+
+.style6 {font-weight: bold; font-size: 18px;}
+
+.style7 {font-size: 16px}
+
+.style8 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-weight: bold;
+	font-size: 16px;
+	color: #FFFFFF;
+}
+
+body{
+	margin: 20px;
+	padding: 1px;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+}
