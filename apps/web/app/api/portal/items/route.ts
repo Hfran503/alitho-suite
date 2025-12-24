@@ -110,8 +110,8 @@ export async function GET(request: NextRequest) {
     })
 
     // Process items to calculate available quantities
-    const processedItems = items.map((item) => {
-      const totalAvailable = item.stockLevels.reduce((sum, s) => sum + s.available, 0)
+    const processedItems = items.map((item: (typeof items)[number]) => {
+      const totalAvailable = item.stockLevels.reduce((sum: number, s: (typeof item.stockLevels)[number]) => sum + s.available, 0)
 
       // For trackByReference items, group stock by reference number
       let stockByReference: { referenceNumber: string | null; available: number }[] | undefined
