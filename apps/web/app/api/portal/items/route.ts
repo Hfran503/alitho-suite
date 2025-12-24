@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
 
     const categories = allCategories
       .map((c: (typeof allCategories)[number]) => c.category)
-      .filter((c): c is string => c !== null)
+      .filter((c: string | null): c is string => c !== null)
       .sort()
 
     return NextResponse.json({
