@@ -252,7 +252,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check stock availability for each item
-    const itemsMap = new Map(inventoryItems.map((i: (typeof inventoryItems)[number]) => [i.id, i]))
+    type InventoryItemType = (typeof inventoryItems)[number]
+    const itemsMap = new Map<string, InventoryItemType>(inventoryItems.map((i) => [i.id, i]))
     for (const item of items) {
       const stock = await db.inventoryStock.aggregate({
         where: {
