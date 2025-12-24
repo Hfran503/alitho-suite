@@ -120,6 +120,9 @@ importers:
       archiver:
         specifier: ^7.0.1
         version: 7.0.1
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.4.21(postcss@8.5.6)
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -174,6 +177,9 @@ importers:
       pdfjs-dist:
         specifier: ^5.4.394
         version: 5.4.394
+      postcss:
+        specifier: ^8.4.47
+        version: 8.5.6
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -189,6 +195,9 @@ importers:
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.0
+      tailwindcss:
+        specifier: ^3.4.14
+        version: 3.4.18(tsx@4.20.6)
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.18(tsx@4.20.6))
@@ -220,21 +229,12 @@ importers:
       '@types/ssh2-sftp-client':
         specifier: ^9.0.5
         version: 9.0.5
-      autoprefixer:
-        specifier: ^10.4.20
-        version: 10.4.21(postcss@8.5.6)
       eslint:
         specifier: ^8.57.1
         version: 8.57.1
       eslint-config-next:
         specifier: ^15.0.3
         version: 15.5.5(eslint@8.57.1)(typescript@5.9.3)
-      postcss:
-        specifier: ^8.4.47
-        version: 8.5.6
-      tailwindcss:
-        specifier: ^3.4.14
-        version: 3.4.18(tsx@4.20.6)
       tsx:
         specifier: ^4.19.1
         version: 4.20.6
