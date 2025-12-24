@@ -554,7 +554,7 @@ export default async function PickOrderPrintPage({ params }: PrintPageProps) {
                   ) : item.suggestedLocations && item.suggestedLocations.length > 0 ? (
                     <div>
                       <span style={{ color: '#9ca3af', fontSize: '10px' }}>Suggested:</span>
-                      {item.suggestedLocations.map((loc, i) => (
+                      {item.suggestedLocations.map((loc: { barcode: string; name: string; available: number }, i: number) => (
                         <div key={i} className="suggested-locations">
                           <span className="location-badge" style={{ background: '#e5e7eb', color: '#374151' }}>
                             {loc.barcode}
