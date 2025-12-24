@@ -112,8 +112,8 @@ export default async function PickOrderPrintPage({ params }: PrintPageProps) {
   )
 
   const totalItems = pickOrder.items.length
-  const totalQty = pickOrder.items.reduce((sum, i) => sum + i.requestedQty, 0)
-  const pickedQty = pickOrder.items.reduce((sum, i) => sum + i.pickedQty, 0)
+  const totalQty = pickOrder.items.reduce((sum: number, i) => sum + i.requestedQty, 0)
+  const pickedQty = pickOrder.items.reduce((sum: number, i) => sum + i.pickedQty, 0)
 
   const priorityColors: Record<string, string> = {
     urgent: '#dc2626',
