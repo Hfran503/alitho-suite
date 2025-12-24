@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Group orders by country category
-    const ordersByCountry = eligibleOrders.reduce((acc: Record<string, typeof eligibleOrders>, order) => {
+    const ordersByCountry = eligibleOrders.reduce((acc: Record<string, typeof eligibleOrders>, order: (typeof eligibleOrders)[number]) => {
       const country = order.countryCategory || 'Unknown';
       if (!acc[country]) {
         acc[country] = [];
