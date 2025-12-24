@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform orders to a flat structure for Excel
-    const excelData = orders.map((order) => ({
+    const excelData = orders.map((order: (typeof orders)[number]) => ({
       'Order Number': order.orderNumber || '',
       'PACE Job Number': order.paceJobNumber || '',
       'Status': order.status || '',
