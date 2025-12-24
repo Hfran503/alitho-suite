@@ -324,8 +324,8 @@ export async function POST(request: NextRequest) {
       targetTenantId = tenant.id;
     }
 
-    // Queue the job
-    const job = await queueAtlassianOrdersCheck(targetTenantId, folderPath, deleteAfterProcessing);
+    // Queue the job (targetTenantId is guaranteed to be defined here)
+    const job = await queueAtlassianOrdersCheck(targetTenantId!, folderPath, deleteAfterProcessing);
 
     console.log(`✓ Queued Atlassian orders check for tenant ${targetTenantId}`);
 
