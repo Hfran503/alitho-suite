@@ -207,7 +207,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Build items map for later use
-    const itemsMap = new Map(inventoryItems.map((i: (typeof inventoryItems)[number]) => [i.id, i]))
+    type InventoryItemInfo = { id: string; sku: string | null; name: string; trackByReference: boolean }
+    const itemsMap = new Map<string, InventoryItemInfo>(inventoryItems.map((i: (typeof inventoryItems)[number]) => [i.id, i]))
 
     // Validate locations if specified
     const locationIds = items.map(i => i.locationId).filter(Boolean) as string[]
