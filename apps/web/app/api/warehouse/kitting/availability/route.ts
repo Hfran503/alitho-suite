@@ -85,13 +85,14 @@ export async function GET(request: NextRequest) {
     // Calculate availability for each component
     const components = kit.kitComponents.map((kc: (typeof kit.kitComponents)[number]) => {
       const available = stockMap.get(kc.componentId) || 0
-      const canMake = kc.quantity > 0 ? Math.floor(available / kc.quantity) : 0
+      const quantity = Number(kc.quantity)
+      const canMake = quantity > 0 ? Math.floor(Number(available) / quantity) : 0
 
       return {
         id: kc.id,
         componentId: kc.componentId,
         component: kc.component,
-        quantityPerKit: kc.quantity,
+        quantityPerKit: quantity,
         available,
         canMake,
         isLimiting: false, // Will be set below
