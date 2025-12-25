@@ -44,7 +44,7 @@ rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
 
 # Generate Prisma client
 cd /app
-npx prisma generate --schema=./prisma/schema.prisma
+./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 if [ $? -eq 0 ]; then
   echo "✓ Prisma client generated successfully"
@@ -119,7 +119,7 @@ if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
     # Try using prisma db push with the pooler URL (doesn't require advisory locks)
     # This will fail if schema differs, but succeed if schema is in sync
     set +e
-    env DATABASE_URL="$DATABASE_URL" npx prisma db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/db-push.log
+    env DATABASE_URL="$DATABASE_URL" ./node_modules/.bin/prisma db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/db-push.log
     PUSH_EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
@@ -194,7 +194,7 @@ if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
     # Mark the init migration as already applied
     echo "Marking 20241016000000_init as applied..."
     cd /app
-    npx prisma migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
+    ./node_modules/.bin/prisma migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
 
     if [ $? -eq 0 ]; then
       echo "✓ Migration baseline successful"
