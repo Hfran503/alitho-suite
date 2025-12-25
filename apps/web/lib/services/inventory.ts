@@ -497,7 +497,7 @@ export async function getTransactions(
     offset?: number
   }
 ) {
-  const where: Prisma.InventoryTransactionWhereInput = {
+  const where: any = {
     tenantId,
     ...(filters.itemId && { itemId: filters.itemId }),
     ...(filters.locationId && { locationId: filters.locationId }),
