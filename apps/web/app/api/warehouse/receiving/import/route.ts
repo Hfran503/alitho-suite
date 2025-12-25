@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     // Create a receiving record for all items
     const receivingRecord = await startReceiving({
       tenantId: membership.tenantId,
-      warehouseId,
+      warehouseId: warehouseId!,
       userId: session.user.id,
       notes: `Imported from CSV on ${new Date().toLocaleDateString()}`,
     })
