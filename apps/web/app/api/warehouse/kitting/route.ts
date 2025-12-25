@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     const componentRequirements = kit.kitComponents.map((kc: (typeof kit.kitComponents)[number]) => ({
       componentId: kc.componentId,
       component: kc.component,
-      requiredQty: kc.quantity * validatedData.quantity,
+      requiredQty: Number(kc.quantity) * validatedData.quantity,
     }))
 
     // Get available stock for all components
@@ -173,12 +173,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const stockMap = new Map(componentStock.map((s: (typeof componentStock)[number]) => [s.itemId, s._sum.available || 0]))
+    const stockMap = new Map(componentStock.map((s: (typeof componentStock)[number]) => [s.itemId, Number(s._sum.available) || 0]))
 
     // Check each component has sufficient stock
     const shortages: Array<{ component: string; required: number; available: number }> = []
     for (const req of componentRequirements) {
-      const available = stockMap.get(req.componentId) || 0
+      const available = Number(stockMap.get(req.componentId)) || 0
       if (available < req.requiredQty) {
         shortages.push({
           component: `${req.component.itemCode || req.component.sku || req.component.name}`,
