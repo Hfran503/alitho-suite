@@ -44,7 +44,7 @@ rm -rf /tmp/tsx-* /tmp/node-* ~/.tsx ~/.cache/tsx 2>/dev/null || true
 
 # Generate Prisma client
 cd /app
-pnpm exec prisma generate --schema=./prisma/schema.prisma
+npx prisma@5.22.0 generate --schema=./prisma/schema.prisma
 
 if [ $? -eq 0 ]; then
   echo "✓ Prisma client generated successfully"
@@ -119,7 +119,7 @@ if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
     # Try using prisma db push with the pooler URL (doesn't require advisory locks)
     # This will fail if schema differs, but succeed if schema is in sync
     set +e
-    env DATABASE_URL="$DATABASE_URL" pnpm exec prisma db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/db-push.log
+    env DATABASE_URL="$DATABASE_URL" npx prisma@5.22.0 db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/db-push.log
     PUSH_EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
@@ -194,7 +194,7 @@ if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
     # Mark the init migration as already applied
     echo "Marking 20241016000000_init as applied..."
     cd /app
-    pnpm exec prisma migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
+    npx prisma@5.22.0 migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
 
     if [ $? -eq 0 ]; then
       echo "✓ Migration baseline successful"
@@ -300,7 +300,7 @@ elif [ -f "/app/apps/web/.next/standalone/apps/web/server.js" ]; then
     # Try generating in standalone
     echo "Attempting to generate Prisma client in standalone..."
     cd /app/apps/web/.next/standalone
-    pnpm exec prisma generate --schema=/app/prisma/schema.prisma 2>/dev/null || true
+    npx prisma@5.22.0 generate --schema=/app/prisma/schema.prisma 2>/dev/null || true
   fi
 
   cd /app/apps/web/.next/standalone
