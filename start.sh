@@ -52,6 +52,22 @@ if [ $? -eq 0 ]; then
   # Verify the client was generated
   if [ -f "node_modules/.prisma/client/index.js" ]; then
     echo "✓ Prisma client files verified"
+
+    # Copy generated client to pnpm store location (where worker resolves @prisma/client)
+    PNPM_PRISMA_DIR="/app/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma/client"
+    if [ -d "$(dirname "$PNPM_PRISMA_DIR")" ]; then
+      echo "Copying Prisma client to pnpm store location..."
+      mkdir -p "$PNPM_PRISMA_DIR"
+      cp -r /app/node_modules/.prisma/client/* "$PNPM_PRISMA_DIR/"
+      echo "✓ Prisma client copied to pnpm store"
+    fi
+
+    # Also copy to packages/database node_modules if it exists
+    if [ -d "/app/packages/database/node_modules/.prisma" ]; then
+      echo "Copying Prisma client to database package..."
+      cp -r /app/node_modules/.prisma/client/* /app/packages/database/node_modules/.prisma/client/
+      echo "✓ Prisma client copied to database package"
+    fi
   else
     echo "✗ Prisma client files not found!"
     exit 1
