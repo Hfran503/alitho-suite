@@ -52,16 +52,24 @@ export async function queueVendorBill(
   delayMs: number = 0
 ) {
   const queue = await getVendorBillQueue()
+  const jobId = `vendor-bill-${vendorBillIntegrationId}`
+
+  // Remove existing job if it exists (allows re-queuing for manual retries)
+  const existingJob = await queue.getJob(jobId)
+  if (existingJob) {
+    console.log(`🗑️ Removing existing job ${jobId} (state: ${await existingJob.getState()})`)
+    await existingJob.remove()
+  }
 
   const job = await queue.add(
-    `vendor-bill-${vendorBillIntegrationId}`,
+    jobId,
     {
       vendorBillIntegrationId,
       attempt: 1,
     },
     {
       delay: delayMs,
-      jobId: `vendor-bill-${vendorBillIntegrationId}`, // Use unique job ID to prevent duplicates
+      jobId, // Use unique job ID to prevent duplicates
     }
   )
 
