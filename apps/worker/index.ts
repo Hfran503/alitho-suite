@@ -5,6 +5,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 import Redis from 'ioredis'
+import { getRedisUrl } from './lib/secrets'
 import { exportWorker } from './jobs/export'
 import { pdfWorker } from './jobs/pdf'
 import { emailWorker } from './jobs/email'
@@ -17,49 +18,57 @@ import { vendorBillWorker } from './jobs/vendor-bill'
 import { customerPaymentWorker } from './jobs/customer-payment'
 import { atlassianOrdersWorker } from './jobs/atlassian-orders'
 
-// Debug: Log REDIS_URL to verify it's set
+// Debug: Log environment
 console.log('🔍 Environment check:')
 console.log('   NODE_ENV:', process.env.NODE_ENV || 'development')
-console.log('   REDIS_URL:', process.env.REDIS_URL || 'NOT SET')
 console.log('   __dirname:', __dirname)
 
-const connection = new Redis(process.env.REDIS_URL!, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-})
+// Initialize workers with async startup
+async function startWorkers() {
+  // Fetch Redis URL from AWS Secrets Manager (same source as web app)
+  console.log('🔌 Fetching Redis URL...')
+  const redisUrl = await getRedisUrl()
+  console.log('🔌 Redis URL:', redisUrl.substring(0, 50) + '...')
 
-// Start all workers
-const workers = [
-  exportWorker(connection),
-  pdfWorker(connection),
-  emailWorker(connection),
-  webhookWorker(connection),
-  batchImportWorker(connection),
-  netsuiteInvoiceWorker(connection),
-  netsuitePOLineWorker(connection),
-  netsuitePOReceiptWorker(connection),
-  vendorBillWorker(connection),
-  customerPaymentWorker(connection),
-  atlassianOrdersWorker(connection),
-]
+  const connection = new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  })
 
-console.log('🚀 Worker started successfully')
-console.log(`📋 Running ${workers.length} workers:`)
-workers.forEach((worker) => {
-  console.log(`   - ${worker.name}`)
-})
+  // Start all workers
+  const workers = [
+    exportWorker(connection),
+    pdfWorker(connection),
+    emailWorker(connection),
+    webhookWorker(connection),
+    batchImportWorker(connection),
+    netsuiteInvoiceWorker(connection),
+    netsuitePOLineWorker(connection),
+    netsuitePOReceiptWorker(connection),
+    vendorBillWorker(connection),
+    customerPaymentWorker(connection),
+    atlassianOrdersWorker(connection),
+  ]
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('⏹️  SIGTERM received, closing workers...')
-  await Promise.all(workers.map((w) => w.close()))
-  await connection.quit()
-  process.exit(0)
-})
+  console.log('🚀 Worker started successfully')
+  console.log(`📋 Running ${workers.length} workers:`)
+  workers.forEach((worker) => {
+    console.log(`   - ${worker.name}`)
+  })
 
-process.on('SIGINT', async () => {
-  console.log('⏹️  SIGINT received, closing workers...')
-  await Promise.all(workers.map((w) => w.close()))
-  await connection.quit()
-  process.exit(0)
+  // Graceful shutdown
+  const shutdown = async () => {
+    console.log('⏹️  Shutdown signal received, closing workers...')
+    await Promise.all(workers.map((w) => w.close()))
+    await connection.quit()
+    process.exit(0)
+  }
+
+  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', shutdown)
+}
+
+startWorkers().catch((error) => {
+  console.error('❌ Failed to start workers:', error)
+  process.exit(1)
 })
