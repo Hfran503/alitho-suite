@@ -155,6 +155,14 @@ export function vendorBillWorker(connection: Redis) {
   )
 
   // Event handlers
+  worker.on('ready', () => {
+    console.log('🟢 [VendorBill] Worker is ready and listening')
+  })
+
+  worker.on('active', (job) => {
+    console.log(`🔄 [VendorBill] Job ${job.id} is now active`)
+  })
+
   worker.on('completed', (job) => {
     console.log(`✅ Vendor Bill Job ${job.id} completed successfully`)
   })
@@ -165,6 +173,10 @@ export function vendorBillWorker(connection: Redis) {
 
   worker.on('error', (err) => {
     console.error('❌ Vendor Bill Worker error:', err)
+  })
+
+  worker.on('stalled', (jobId) => {
+    console.warn(`⚠️ [VendorBill] Job ${jobId} has stalled`)
   })
 
   console.log('🚀 Vendor Bill Worker started')
