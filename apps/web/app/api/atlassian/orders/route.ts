@@ -192,10 +192,10 @@ export async function GET(request: NextRequest) {
       db.atlassianOrder.count({
         where: { status: 'sent_to_pace' },
       }),
-      // Duplicates
+      // Duplicates (exclude archived)
       db.atlassianOrder.count({
         where: {
-          OR: [{ status: 'potential_duplicate' }, { duplicateOfOrderId: { not: null } }],
+          status: 'potential_duplicate',
         },
       }),
       // Archived

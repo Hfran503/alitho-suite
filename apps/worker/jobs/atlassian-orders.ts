@@ -135,11 +135,15 @@ async function processEmail(
 
         console.log(`✓ Generated PDF for ${parsed.employeeData.printName} (${orderNumber}): ${pdfPath}`);
 
-        // Upload to SFTP if configured (only for USA and International US)
+        // Upload to SFTP if configured (only for USA and International US, and NOT duplicates/missing)
         let sftpUrl: string | null = null;
+        const isExcludedStatus =
+          status === 'potential_duplicate' ||
+          status === 'missing_address';
         const shouldUploadToSFTP =
-          parsed.employeeData.countryCategory === 'United States of America' ||
-          parsed.employeeData.countryCategory === 'International US';
+          !isExcludedStatus &&
+          (parsed.employeeData.countryCategory === 'United States of America' ||
+           parsed.employeeData.countryCategory === 'International US');
 
         if (isSFTPConfigured() && shouldUploadToSFTP) {
           try {
@@ -164,6 +168,8 @@ async function processEmail(
             console.error(`Failed to upload PDF to SFTP for order ${order.id}:`, sftpError);
             // Don't fail the entire processing if SFTP upload fails
           }
+        } else if (isExcludedStatus) {
+          console.log(`Skipping SFTP upload for order ${orderNumber} (status: ${status})`);
         } else if (!shouldUploadToSFTP) {
           console.log(`Skipping SFTP upload for ${parsed.employeeData.countryCategory} (only USA/International go to SFTP)`);
         }
