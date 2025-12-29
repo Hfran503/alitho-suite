@@ -13,7 +13,10 @@ let vendorBillQueue: Queue<VendorBillJobData> | null = null
  */
 export async function getVendorBillQueue() {
   if (!vendorBillQueue) {
+    console.log('🔍 [VendorBillQueue] Initializing queue...')
+    console.log('🔍 [VendorBillQueue] REDIS_URL from env:', process.env.REDIS_URL ? `${process.env.REDIS_URL.substring(0, 50)}...` : 'NOT SET')
     const redis = await getRedisInstance()
+    console.log('🔍 [VendorBillQueue] Redis instance obtained, creating queue...')
     vendorBillQueue = new Queue<VendorBillJobData>('vendor-bill', {
       connection: redis,
       defaultJobOptions: {
