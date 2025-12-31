@@ -85,11 +85,7 @@ export async function GET() {
           },
         },
         sessions: {
-          where: {
-            expires: {
-              gt: new Date(),
-            },
-          },
+          // Include all sessions (even expired) to show last activity
           orderBy: {
             updatedAt: 'desc',
           },
