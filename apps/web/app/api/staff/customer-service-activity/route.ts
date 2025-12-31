@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { db } from '@repo/database'
-import { requireStaff } from '@/lib/authorization'
-import { USER_ROLES } from '@/lib/roles'
+import { authOptions } from '@/lib/auth'
+import { USER_ROLES, STAFF_ROLES } from '@/lib/roles'
 
 interface UserFromDb {
   id: string
@@ -35,12 +36,24 @@ interface UserWithActivity {
   daysSinceActivity: number | null
 }
 
-// GET /api/admin/customer-service-activity - Get all Customer Service users with activity
+// GET /api/staff/customer-service-activity - Get all Customer Service users with activity
 export async function GET() {
   try {
-    const authResult = await requireStaff()
-    if (!authResult.authorized) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as { role?: string }).role
+
+    // Allow any staff role to access this endpoint
+    const allowedRoles: string[] = [...STAFF_ROLES]
+    if (!userRole || !allowedRoles.includes(userRole)) {
+      return NextResponse.json(
+        { error: 'Forbidden - Staff access required' },
+        { status: 403 }
+      )
     }
 
     // Find all users who have the customer_service role

@@ -65,7 +65,7 @@ export default function CustomerServiceActivityPage() {
       if (showRefreshing) {
         setIsRefreshing(true)
       }
-      const response = await fetch('/api/admin/customer-service-activity')
+      const response = await fetch('/api/staff/customer-service-activity')
       if (response.ok) {
         const data = await response.json()
         setUsers(data.users)
