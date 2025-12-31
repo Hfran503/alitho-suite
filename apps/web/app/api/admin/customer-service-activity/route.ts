@@ -3,6 +3,22 @@ import { db } from '@repo/database'
 import { requireAdmin } from '@/lib/authorization'
 import { USER_ROLES } from '@/lib/roles'
 
+interface UserFromDb {
+  id: string
+  email: string
+  name: string | null
+  image: string | null
+  createdAt: Date
+  memberships: Array<{
+    id: string
+    role: string
+    tenant: { id: string; name: string }
+  }>
+  sessions: Array<{
+    updatedAt: Date
+  }>
+}
+
 interface UserWithActivity {
   id: string
   email: string
@@ -79,7 +95,7 @@ export async function GET() {
     const now = new Date()
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
 
-    const usersWithActivity: UserWithActivity[] = users.map((user) => {
+    const usersWithActivity: UserWithActivity[] = (users as UserFromDb[]).map((user) => {
       let lastActivity: string | null = null
       let isInactive = false
       let daysSinceActivity: number | null = null
