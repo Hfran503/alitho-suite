@@ -3,6 +3,22 @@ import { db } from '@repo/database'
 import { requireAdmin } from '@/lib/authorization'
 import { USER_ROLES } from '@/lib/roles'
 
+interface UserWithActivity {
+  id: string
+  email: string
+  name: string | null
+  image: string | null
+  createdAt: Date
+  memberships: Array<{
+    id: string
+    role: string
+    tenant: { id: string; name: string }
+  }>
+  lastActivity: string | null
+  isInactive: boolean
+  daysSinceActivity: number | null
+}
+
 // GET /api/admin/customer-service-activity - Get all Customer Service users with activity
 export async function GET() {
   try {
@@ -63,7 +79,7 @@ export async function GET() {
     const now = new Date()
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
 
-    const usersWithActivity = users.map((user: any) => {
+    const usersWithActivity: UserWithActivity[] = users.map((user) => {
       let lastActivity: string | null = null
       let isInactive = false
       let daysSinceActivity: number | null = null
@@ -105,7 +121,7 @@ export async function GET() {
 
     // Calculate summary stats
     const totalUsers = usersWithActivity.length
-    const inactiveUsers = usersWithActivity.filter((u) => u.isInactive).length
+    const inactiveUsers = usersWithActivity.filter((u: UserWithActivity) => u.isInactive).length
     const activeUsers = totalUsers - inactiveUsers
 
     return NextResponse.json({
