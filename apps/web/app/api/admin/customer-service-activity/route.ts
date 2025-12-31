@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@repo/database'
-import { requireAdmin } from '@/lib/authorization'
+import { requireStaff } from '@/lib/authorization'
 import { USER_ROLES } from '@/lib/roles'
 
 interface UserFromDb {
@@ -38,7 +38,7 @@ interface UserWithActivity {
 // GET /api/admin/customer-service-activity - Get all Customer Service users with activity
 export async function GET() {
   try {
-    const authResult = await requireAdmin()
+    const authResult = await requireStaff()
     if (!authResult.authorized) {
       return authResult.error
     }
