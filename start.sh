@@ -28,10 +28,7 @@ else
   echo "DATABASE_URL is set (${DATABASE_URL:0:30}...)"
 fi
 
-# Skip TCP connectivity check - Hostinger blocks port 5432
-# The Neon serverless adapter uses HTTP/WebSocket (port 443) instead
-echo ""
-echo "Note: Using Neon serverless driver (HTTP) - skipping TCP connectivity check"
+# Database connectivity will be verified during migrations
 echo ""
 
 # Generate Prisma client (ensures it's available for migrations, seeding, and runtime)
@@ -79,142 +76,28 @@ fi
 
 echo ""
 
-# Run database migrations with explicit environment variable
+# Run database migrations (safe - only applies pending migrations)
 echo "Running database migrations..."
 
-# Check if using Neon pooler connection
-MIGRATION_DATABASE_URL="$DATABASE_URL"
-if [[ "$DATABASE_URL" == *"-pooler."* ]]; then
-  echo "⚠️  WARNING: DATABASE_URL uses connection pooler"
-
-  # Try to convert pooler URL to direct URL for migrations
-  # Remove "-pooler" from the hostname (e.g., ep-xxx-pooler.c-2 -> ep-xxx.c-2)
-  DIRECT_URL="${DATABASE_URL//-pooler./.}"
-  echo "   Converted to direct URL for migrations"
-  echo "   Using: ${DIRECT_URL:0:50}..."
-  MIGRATION_DATABASE_URL="$DIRECT_URL"
-
-  echo "   Note: Pooler connections don't support Prisma advisory locks"
-  echo "   Using direct connection for migrations only"
-fi
-
-# Ensure SSL parameters are present in the connection string
-if [[ "$MIGRATION_DATABASE_URL" == *"neon.tech"* ]] && [[ "$MIGRATION_DATABASE_URL" != *"sslmode="* ]]; then
-  echo "⚠️  Adding SSL parameters for Neon database connection"
-
-  # Check if URL already has query parameters
-  if [[ "$MIGRATION_DATABASE_URL" == *"?"* ]]; then
-    # Append to existing parameters
-    MIGRATION_DATABASE_URL="${MIGRATION_DATABASE_URL}&sslmode=require&sslaccept=strict"
-  else
-    # Add new parameters
-    MIGRATION_DATABASE_URL="${MIGRATION_DATABASE_URL}?sslmode=require&sslaccept=strict"
-  fi
-
-  echo "   SSL parameters added: sslmode=require&sslaccept=strict"
-fi
-
-# Try to run migrations (allow output to stream)
 set +e  # Don't exit on error
-env DATABASE_URL="$MIGRATION_DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
+pnpm db:migrate 2>&1 | tee /tmp/migration.log
 MIGRATION_EXIT_CODE=${PIPESTATUS[0]}
 set -e  # Re-enable exit on error
 
-# Check if migration failed
 if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
-  # Check for P1001 (can't reach database - likely direct connection blocked)
-  if grep -q "P1001" /tmp/migration.log; then
-    echo ""
-    echo "⚠️  Cannot reach database server for migrations (P1001)"
-    echo "This is common when:"
-    echo "  1. Neon direct endpoint is not accessible from this network"
-    echo "  2. The connection pooler URL is being used but direct is required"
-    echo ""
-    echo "Attempting to verify schema is up-to-date using pooler connection..."
+  echo ""
+  echo "⚠️  Migration failed"
 
-    # Try using prisma db push with the pooler URL (doesn't require advisory locks)
-    # This will fail if schema differs, but succeed if schema is in sync
-    set +e
-    env DATABASE_URL="$DATABASE_URL" npx prisma@5.22.0 db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/db-push.log
-    PUSH_EXIT_CODE=${PIPESTATUS[0]}
-    set -e
-
-    if [ $PUSH_EXIT_CODE -eq 0 ]; then
-      echo "✓ Database schema is in sync (verified via db push)"
-      echo "Continuing with application startup..."
-    elif grep -q "already in sync" /tmp/db-push.log; then
-      echo "✓ Database schema is already in sync"
-      echo "Continuing with application startup..."
-    else
-      echo ""
-      echo "❌ Could not verify database schema"
-      echo "Please run migrations manually from a machine that can reach the database:"
-      echo "  DATABASE_URL='direct-connection-url' npx prisma migrate deploy"
-      echo ""
-      echo "Or set SKIP_MIGRATIONS=true to bypass this check"
-
-      # Allow override to skip migrations
-      if [ "$SKIP_MIGRATIONS" = "true" ]; then
-        echo "⚠️  SKIP_MIGRATIONS=true - continuing without migration verification"
-      else
-        exit 1
-      fi
-    fi
-
-  # Check for P1002 (timeout/advisory lock error)
-  elif grep -q "P1002" /tmp/migration.log || grep -q "advisory lock" /tmp/migration.log; then
-    echo ""
-    echo "⚠️  Migration timeout (P1002 - advisory lock timeout)"
-    echo "This usually means:"
-    echo "  1. Connection pooler doesn't support advisory locks (use direct connection)"
-    echo "  2. Another process is holding the lock"
-    echo "  3. Database is under heavy load"
-    echo ""
-    echo "Retrying with exponential backoff..."
-
-    # Retry logic with exponential backoff
-    for attempt in 1 2 3; do
-      wait_time=$((5 * attempt))
-      echo "Retry attempt $attempt/3 (waiting ${wait_time}s)..."
-      sleep $wait_time
-
-      set +e
-      env DATABASE_URL="$MIGRATION_DATABASE_URL" pnpm db:migrate 2>&1 | tee /tmp/migration.log
-      MIGRATION_EXIT_CODE=${PIPESTATUS[0]}
-      set -e
-
-      if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
-        echo "✓ Migration succeeded on retry $attempt"
-        break
-      fi
-    done
-
-    if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
-      echo ""
-      echo "❌ Migration failed after 3 retries"
-      echo ""
-      echo "SOLUTION: Update your DATABASE_URL to use a direct connection:"
-      echo "  Current (pooler): ep-xxx-pooler.c-2.us-east-1.aws.neon.tech"
-      echo "  Change to (direct): ep-xxx.c-2.us-east-1.aws.neon.tech"
-      echo ""
-      echo "Or set DIRECT_DATABASE_URL in your environment variables."
-      exit 1
-    fi
-
-  # Check for P3005 (non-empty database)
-  elif grep -q "P3005" /tmp/migration.log; then
-    echo ""
-    echo "⚠️  Database is not empty (P3005 error detected)"
+  # Check for P3005 (non-empty database without migration history)
+  if grep -q "P3005" /tmp/migration.log; then
+    echo "Database has existing data but no migration history."
     echo "Attempting to baseline by marking migrations as applied..."
 
-    # Mark the init migration as already applied
-    echo "Marking 20241016000000_init as applied..."
     cd /app
     npx prisma@5.22.0 migrate resolve --applied "20241016000000_init" --schema=./prisma/schema.prisma
 
     if [ $? -eq 0 ]; then
       echo "✓ Migration baseline successful"
-      echo "Database schema is already in sync, continuing..."
     else
       echo "✗ Failed to baseline migration"
       exit 1
@@ -222,7 +105,13 @@ if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
   else
     echo "✗ Migration failed with exit code $MIGRATION_EXIT_CODE"
     cat /tmp/migration.log
-    exit 1
+
+    # Allow override to skip migrations
+    if [ "$SKIP_MIGRATIONS" = "true" ]; then
+      echo "⚠️  SKIP_MIGRATIONS=true - continuing without migrations"
+    else
+      exit 1
+    fi
   fi
 else
   echo "✓ Migrations completed successfully"

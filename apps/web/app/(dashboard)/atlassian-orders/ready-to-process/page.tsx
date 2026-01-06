@@ -34,6 +34,9 @@ export default function ReadyToProcessPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searchField, setSearchField] = useState('all');
 
+  // Country tab state - used to filter API requests
+  const [activeCountryTab, setActiveCountryTab] = useState('all');
+
   // API counts
   const [apiCounts, setApiCounts] = useState<OrderCounts>({
     all: 0,
@@ -70,7 +73,21 @@ export default function ReadyToProcessPage() {
     try {
       const offset = (currentPage - 1) * pageSize;
       const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}&searchField=${searchField}` : '';
-      const response = await fetch(`/api/atlassian/orders?limit=${pageSize}&offset=${offset}${searchParam}`);
+
+      // Map tab value to countryCategory value
+      const countryMap: Record<string, string> = {
+        philippines: 'Philippines',
+        australia: 'Australia',
+        india: 'India',
+        usa: 'United States of America',
+        international: 'International US',
+      };
+      const countryParam = activeCountryTab !== 'all' ? `&countryCategory=${encodeURIComponent(countryMap[activeCountryTab] || '')}` : '';
+
+      // Filter for ready-to-process orders (completed or pending, not duplicates)
+      const statusParam = '&statusFilter=ready';
+
+      const response = await fetch(`/api/atlassian/orders?limit=${pageSize}&offset=${offset}${searchParam}${countryParam}${statusParam}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
@@ -91,7 +108,7 @@ export default function ReadyToProcessPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, debouncedSearch, searchField]);
+  }, [currentPage, pageSize, debouncedSearch, searchField, activeCountryTab]);
 
   useEffect(() => {
     fetchOrders();
@@ -246,25 +263,18 @@ export default function ReadyToProcessPage() {
     }
   };
 
-  // Filter orders for Ready to Process view
-  const readyOrders = orders.filter(
-    (o) =>
-      (o.status === 'completed' || o.status === 'pending') &&
-      !o.duplicateOfOrderId
-  );
-
-  // Group by country
-  const groupedOrders = {
-    all: readyOrders,
-    philippines: readyOrders.filter((o) => o.countryCategory === 'Philippines'),
-    australia: readyOrders.filter((o) => o.countryCategory === 'Australia'),
-    india: readyOrders.filter((o) => o.countryCategory === 'India'),
-    usa: readyOrders.filter((o) => o.countryCategory === 'United States of America'),
-    international: readyOrders.filter((o) => o.countryCategory === 'International US'),
+  // Get the count for the current tab for pagination
+  const getCountForTab = () => {
+    switch (activeCountryTab) {
+      case 'philippines': return apiCounts.philippines;
+      case 'australia': return apiCounts.australia;
+      case 'india': return apiCounts.india;
+      case 'usa': return apiCounts.usa;
+      case 'international': return apiCounts.international;
+      default: return apiCounts.readyToSend;
+    }
   };
-
-  // Use apiCounts.readyToSend for pagination since we filter ready orders client-side
-  const readyTotalCount = apiCounts.readyToSend;
+  const readyTotalCount = getCountForTab();
   const totalPages = Math.ceil(readyTotalCount / pageSize);
 
   return (
@@ -443,7 +453,10 @@ export default function ReadyToProcessPage() {
       {/* Tabs */}
       <Card>
         <CardContent className="pt-6">
-          <Tabs defaultValue="all">
+          <Tabs value={activeCountryTab} onValueChange={(value) => {
+            setActiveCountryTab(value);
+            setCurrentPage(1); // Reset pagination when changing tabs
+          }}>
             <TabsList className="mb-4">
               <TabsTrigger value="all">All ({apiCounts.readyToSend})</TabsTrigger>
               <TabsTrigger value="philippines">Philippines ({apiCounts.philippines})</TabsTrigger>
@@ -458,81 +471,19 @@ export default function ReadyToProcessPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
               </div>
             ) : (
-              <>
-                <TabsContent value="all">
-                  <OrdersTable
-                    orders={groupedOrders.all}
-                    selectedOrder={selectedOrder}
-                    onSelectOrder={setSelectedOrder}
-                    isSelectMode={isSelectMode}
-                    selectedOrderIds={selectedOrderIds}
-                    onToggleOrderSelection={handleToggleOrderSelection}
-                    onSelectAllOrders={handleSelectAllOrders}
-                    showPaceJobColumn={false}
-                    emptyMessage="No orders ready to process."
-                  />
-                </TabsContent>
-                <TabsContent value="philippines">
-                  <OrdersTable
-                    orders={groupedOrders.philippines}
-                    selectedOrder={selectedOrder}
-                    onSelectOrder={setSelectedOrder}
-                    isSelectMode={isSelectMode}
-                    selectedOrderIds={selectedOrderIds}
-                    onToggleOrderSelection={handleToggleOrderSelection}
-                    onSelectAllOrders={handleSelectAllOrders}
-                    showPaceJobColumn={false}
-                  />
-                </TabsContent>
-                <TabsContent value="australia">
-                  <OrdersTable
-                    orders={groupedOrders.australia}
-                    selectedOrder={selectedOrder}
-                    onSelectOrder={setSelectedOrder}
-                    isSelectMode={isSelectMode}
-                    selectedOrderIds={selectedOrderIds}
-                    onToggleOrderSelection={handleToggleOrderSelection}
-                    onSelectAllOrders={handleSelectAllOrders}
-                    showPaceJobColumn={false}
-                  />
-                </TabsContent>
-                <TabsContent value="india">
-                  <OrdersTable
-                    orders={groupedOrders.india}
-                    selectedOrder={selectedOrder}
-                    onSelectOrder={setSelectedOrder}
-                    isSelectMode={isSelectMode}
-                    selectedOrderIds={selectedOrderIds}
-                    onToggleOrderSelection={handleToggleOrderSelection}
-                    onSelectAllOrders={handleSelectAllOrders}
-                    showPaceJobColumn={false}
-                  />
-                </TabsContent>
-                <TabsContent value="usa">
-                  <OrdersTable
-                    orders={groupedOrders.usa}
-                    selectedOrder={selectedOrder}
-                    onSelectOrder={setSelectedOrder}
-                    isSelectMode={isSelectMode}
-                    selectedOrderIds={selectedOrderIds}
-                    onToggleOrderSelection={handleToggleOrderSelection}
-                    onSelectAllOrders={handleSelectAllOrders}
-                    showPaceJobColumn={false}
-                  />
-                </TabsContent>
-                <TabsContent value="international">
-                  <OrdersTable
-                    orders={groupedOrders.international}
-                    selectedOrder={selectedOrder}
-                    onSelectOrder={setSelectedOrder}
-                    isSelectMode={isSelectMode}
-                    selectedOrderIds={selectedOrderIds}
-                    onToggleOrderSelection={handleToggleOrderSelection}
-                    onSelectAllOrders={handleSelectAllOrders}
-                    showPaceJobColumn={false}
-                  />
-                </TabsContent>
-              </>
+              <div className="mt-4">
+                <OrdersTable
+                  orders={orders}
+                  selectedOrder={selectedOrder}
+                  onSelectOrder={setSelectedOrder}
+                  isSelectMode={isSelectMode}
+                  selectedOrderIds={selectedOrderIds}
+                  onToggleOrderSelection={handleToggleOrderSelection}
+                  onSelectAllOrders={handleSelectAllOrders}
+                  showPaceJobColumn={false}
+                  emptyMessage="No orders found in this category."
+                />
+              </div>
             )}
           </Tabs>
         </CardContent>

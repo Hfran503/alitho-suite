@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const statusFilter = searchParams.get('statusFilter'); // 'ready' for ready-to-process orders
     const country = searchParams.get('country');
     const countryCategory = searchParams.get('countryCategory');
     const limit = parseInt(searchParams.get('limit') || '100', 10);
@@ -19,7 +20,11 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: any = {};
 
-    if (status) {
+    if (statusFilter === 'ready') {
+      // Ready-to-process: completed or pending, NOT duplicates
+      where.status = { in: ['completed', 'pending'] };
+      where.duplicateOfOrderId = null;
+    } else if (status) {
       where.status = status;
     }
 

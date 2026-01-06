@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@neondatabase/serverless':
-        specifier: ^1.0.2
-        version: 1.0.2
-      '@prisma/adapter-neon':
-        specifier: ^7.1.0
-        version: 7.1.0
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
@@ -1289,10 +1283,6 @@ packages:
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
-  '@neondatabase/serverless@1.0.2':
-    resolution: {integrity: sha512-I5sbpSIAHiB+b6UttofhrN/UJXII+4tZPAq1qugzwCwLIL8EZLV7F/JyHUrEIiGgQpEXzpnjlJ+zwcEhheGvCw==}
-    engines: {node: '>=19.0.0'}
-
   '@next/env@15.5.7':
     resolution: {integrity: sha512-4h6Y2NyEkIEN7Z8YxkA27pq6zTkS09bUSYC0xjd0NpwFxjnIKeZEeH591o5WECSmjpUhLn3H2QLJcDye3Uzcvg==}
 
@@ -1389,9 +1379,6 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@prisma/adapter-neon@7.1.0':
-    resolution: {integrity: sha512-gxxNjkFEyM9rSOCD5uBnvFabusIgcPpZFsvSVSvXJvhxr+/e1H90HJvZQYQJQFSYr6Datu2B9pZIvTdbSztSfg==}
-
   '@prisma/client@5.22.0':
     resolution: {integrity: sha512-M0SVXfyHnQREBKxCgyo7sffrKttwE6R8PMq330MIUF0pTwjUhLbW84pFDlf06B27XyCR++VtjugEnIHdr07SVA==}
     engines: {node: '>=16.13'}
@@ -1403,12 +1390,6 @@ packages:
 
   '@prisma/debug@5.22.0':
     resolution: {integrity: sha512-AUt44v3YJeggO2ZU5BkXI7M4hu9BF2zzH2iF2V5pyXT/lRTyWiElZ7It+bRH1EshoMRxHgpYg4VB6rCM+mG5jQ==}
-
-  '@prisma/debug@7.1.0':
-    resolution: {integrity: sha512-pPAckG6etgAsEBusmZiFwM9bldLSNkn++YuC4jCTJACdK5hLOVnOzX7eSL2FgaU6Gomd6wIw21snUX2dYroMZQ==}
-
-  '@prisma/driver-adapter-utils@7.1.0':
-    resolution: {integrity: sha512-AlVLzeXkw81+47MvQ9M8DvTiHkRfJ8xzklTbYjpskb0cTTDVHboTI/OVwT6Wcep/bNvfLKJYO0nylBiM5rxgww==}
 
   '@prisma/engines-version@5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2':
     resolution: {integrity: sha512-2PTmxFR2yHW/eB3uqWtcgRcgAbG1rwG9ZriSvQw+nnb7c4uCr3RAcGMb6/zfE88SKlC1Nj2ziUvc96Z379mHgQ==}
@@ -2138,9 +2119,6 @@ packages:
 
   '@types/papaparse@5.3.16':
     resolution: {integrity: sha512-T3VuKMC2H0lgsjI9buTB3uuKj3EMD2eap1MOuEQuBQ44EnDx/IkGhU6EwiTf9zG3za4SKlmwKAImdDKdNnCsXg==}
-
-  '@types/pg@8.16.0':
-    resolution: {integrity: sha512-RmhMd/wD+CF8Dfo+cVIy3RR5cl8CyfXQ0tGgW6XBL8L4LM/UTEbNXYRbLwU6w+CgrKBNbrQWt4FUtTfaU5jSYQ==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -3985,17 +3963,6 @@ packages:
   peberminta@0.9.0:
     resolution: {integrity: sha512-XIxfHpEuSJbITd1H3EeQwpcZbTLHc+VVr8ANI9t5sit565tsI4/xK3KWTUFE2e6QiangUkh3B0jihzmGnNrRsQ==}
 
-  pg-int8@1.0.1:
-    resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
-    engines: {node: '>=4.0.0'}
-
-  pg-protocol@1.10.3:
-    resolution: {integrity: sha512-6DIBgBQaTKDJyxnXaLiLR8wBpQQcGWuAESkRBX/t6OwA8YsqP+iVSiond2EDy6Y/dsGk8rh/jtax3js5NeV7JQ==}
-
-  pg-types@2.2.0:
-    resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
-    engines: {node: '>=4'}
-
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
@@ -4089,26 +4056,6 @@ packages:
   postcss@8.5.6:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
-
-  postgres-array@2.0.0:
-    resolution: {integrity: sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==}
-    engines: {node: '>=4'}
-
-  postgres-array@3.0.4:
-    resolution: {integrity: sha512-nAUSGfSDGOaOAEGwqsRY27GPOea7CNipJPOA7lPbdEpx5Kg3qzdP0AaWC5MlhTWV9s4hFX39nomVZ+C4tnGOJQ==}
-    engines: {node: '>=12'}
-
-  postgres-bytea@1.0.0:
-    resolution: {integrity: sha512-xy3pmLuQqRBZBXDULy7KbaitYqLcmxigw14Q5sj8QBVLqEwXfeybIKVWiqAXTlcvdvb0+xkOtDbfQMOf4lST1w==}
-    engines: {node: '>=0.10.0'}
-
-  postgres-date@1.0.7:
-    resolution: {integrity: sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==}
-    engines: {node: '>=0.10.0'}
-
-  postgres-interval@1.2.0:
-    resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
-    engines: {node: '>=0.10.0'}
 
   preact-render-to-string@5.2.6:
     resolution: {integrity: sha512-JyhErpYOvBV1hEPwIxc/fHWXPfnEGdRKxc8gFdAZ7XV4tlzyzG847XAyEZqoDnynP88akM4eaHcSOzNcLWFguw==}
@@ -4929,10 +4876,6 @@ packages:
 
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
-
-  xtend@4.0.2:
-    resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
-    engines: {node: '>=0.4'}
 
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
@@ -6355,11 +6298,6 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@neondatabase/serverless@1.0.2':
-    dependencies:
-      '@types/node': 22.18.12
-      '@types/pg': 8.16.0
-
   '@next/env@15.5.7': {}
 
   '@next/eslint-plugin-next@15.5.5':
@@ -6429,23 +6367,11 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@prisma/adapter-neon@7.1.0':
-    dependencies:
-      '@neondatabase/serverless': 1.0.2
-      '@prisma/driver-adapter-utils': 7.1.0
-      postgres-array: 3.0.4
-
   '@prisma/client@5.22.0(prisma@5.22.0)':
     optionalDependencies:
       prisma: 5.22.0
 
   '@prisma/debug@5.22.0': {}
-
-  '@prisma/debug@7.1.0': {}
-
-  '@prisma/driver-adapter-utils@7.1.0':
-    dependencies:
-      '@prisma/debug': 7.1.0
 
   '@prisma/engines-version@5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2': {}
 
@@ -7372,12 +7298,6 @@ snapshots:
   '@types/papaparse@5.3.16':
     dependencies:
       '@types/node': 20.19.21
-
-  '@types/pg@8.16.0':
-    dependencies:
-      '@types/node': 20.19.21
-      pg-protocol: 1.10.3
-      pg-types: 2.2.0
 
   '@types/prop-types@15.7.15': {}
 
@@ -9473,18 +9393,6 @@ snapshots:
 
   peberminta@0.9.0: {}
 
-  pg-int8@1.0.1: {}
-
-  pg-protocol@1.10.3: {}
-
-  pg-types@2.2.0:
-    dependencies:
-      pg-int8: 1.0.1
-      postgres-array: 2.0.0
-      postgres-bytea: 1.0.0
-      postgres-date: 1.0.7
-      postgres-interval: 1.2.0
-
   picocolors@1.1.1: {}
 
   picomatch@2.3.1: {}
@@ -9568,18 +9476,6 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
-
-  postgres-array@2.0.0: {}
-
-  postgres-array@3.0.4: {}
-
-  postgres-bytea@1.0.0: {}
-
-  postgres-date@1.0.7: {}
-
-  postgres-interval@1.2.0:
-    dependencies:
-      xtend: 4.0.2
 
   preact-render-to-string@5.2.6(preact@10.27.2):
     dependencies:
@@ -10556,8 +10452,6 @@ snapshots:
   xml-name-validator@5.0.0: {}
 
   xmlchars@2.2.0: {}
-
-  xtend@4.0.2: {}
 
   y18n@5.0.8: {}
 
