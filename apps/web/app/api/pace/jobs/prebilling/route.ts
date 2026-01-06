@@ -755,6 +755,90 @@ export async function GET() {
 
     console.log(`✅ Enriched ${jobs.length} jobs with ChangeOrder data`)
 
+    // Fetch dismissal data from local database
+    console.log(`Fetching dismissal data for ${jobs.length} jobs...`)
+
+    const jobNumbers = jobs.map(j => j.job?.toString()).filter(Boolean) as string[]
+    const now = new Date()
+
+    // Fetch all dismissals for these jobs
+    const dismissals = await db.prebillingJobDismissal.findMany({
+      where: {
+        tenantId: membership.tenantId,
+        paceJobNumber: { in: jobNumbers },
+      },
+      orderBy: { dismissedAt: 'desc' },
+      select: {
+        id: true,
+        paceJobNumber: true,
+        note: true,
+        dismissedByName: true,
+        dismissedAt: true,
+        expiresAt: true,
+      },
+    })
+
+    // Group dismissals by job number
+    const dismissalsByJob: Record<string, {
+      isCurrentlyDismissed: boolean
+      activeDismissal: {
+        id: string
+        note: string
+        dismissedByName: string
+        dismissedAt: Date
+        expiresAt: Date
+      } | null
+      dismissalHistory: Array<{
+        id: string
+        note: string
+        dismissedByName: string
+        dismissedAt: Date
+        expiresAt: Date
+        isExpired: boolean
+      }>
+    }> = {}
+
+    for (const dismissal of dismissals) {
+      const jobNum = dismissal.paceJobNumber
+      const isExpired = dismissal.expiresAt <= now
+
+      if (!dismissalsByJob[jobNum]) {
+        dismissalsByJob[jobNum] = {
+          isCurrentlyDismissed: false,
+          activeDismissal: null,
+          dismissalHistory: [],
+        }
+      }
+
+      // Add to history
+      dismissalsByJob[jobNum].dismissalHistory.push({
+        ...dismissal,
+        isExpired,
+      })
+
+      // Check if this is an active dismissal
+      if (!isExpired && !dismissalsByJob[jobNum].activeDismissal) {
+        dismissalsByJob[jobNum].isCurrentlyDismissed = true
+        dismissalsByJob[jobNum].activeDismissal = dismissal
+      }
+    }
+
+    // Add dismissal data to each job
+    jobs.forEach(job => {
+      const jobNum = job.job?.toString()
+      if (jobNum && dismissalsByJob[jobNum]) {
+        job.isDismissed = dismissalsByJob[jobNum].isCurrentlyDismissed
+        job.activeDismissal = dismissalsByJob[jobNum].activeDismissal
+        job.dismissalHistory = dismissalsByJob[jobNum].dismissalHistory
+      } else {
+        job.isDismissed = false
+        job.activeDismissal = null
+        job.dismissalHistory = []
+      }
+    })
+
+    console.log(`✅ Enriched ${jobs.length} jobs with dismissal data`)
+
     // Sort by job number/ID descending for consistent ordering
     jobs.sort((a, b) => {
       const aId = a.job || ''

@@ -3,6 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 
+type DismissalRecord = {
+  id: string
+  note: string
+  dismissedByName: string
+  dismissedAt: string
+  expiresAt: string
+  isExpired?: boolean
+}
+
 type Job = {
   job?: string // The job number/ID
   customer?: string
@@ -31,7 +40,10 @@ type Job = {
   plannerName?: string // Planner name
   plannerEmail?: string // Planner email
   u_calithosuite_note?: string // Calitho Suite note (lowercase to match PACE database field)
-  // Add any other fields you expect from the Job object
+  // Dismissal fields
+  isDismissed?: boolean
+  activeDismissal?: DismissalRecord | null
+  dismissalHistory?: DismissalRecord[]
 }
 
 type DateFilter = 'all' | 'pastdue' | 'thisweek' | 'thismonth' | 'future'
@@ -69,6 +81,14 @@ export default function PrebillingJobsPage() {
   const [selectedJobForNote, setSelectedJobForNote] = useState<Job | null>(null)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+
+  // Dismiss functionality state
+  const [showDismissModal, setShowDismissModal] = useState(false)
+  const [selectedJobForDismiss, setSelectedJobForDismiss] = useState<Job | null>(null)
+  const [dismissNote, setDismissNote] = useState('')
+  const [dismissing, setDismissing] = useState(false)
+  const [showDismissedJobs, setShowDismissedJobs] = useState(false)
+  const [expandedDismissedJobs, setExpandedDismissedJobs] = useState<Set<string>>(new Set())
 
   // Get user session for role check
   const { data: session } = useSession()
@@ -331,6 +351,124 @@ export default function PrebillingJobsPage() {
     }
   }
 
+  // Handle dismissing a job
+  const handleDismissJob = async () => {
+    if (!selectedJobForDismiss?.job || !dismissNote.trim()) return
+
+    setDismissing(true)
+    try {
+      const response = await fetch('/api/pace/jobs/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobNumber: selectedJobForDismiss.job,
+          note: dismissNote.trim(),
+          csrId: selectedJobForDismiss.csr,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to dismiss job')
+      }
+
+      const data = await response.json()
+
+      // Update the job in state with the new dismissal
+      setJobs(prevJobs =>
+        prevJobs.map(job =>
+          job.job === selectedJobForDismiss.job
+            ? {
+                ...job,
+                isDismissed: true,
+                activeDismissal: data.dismissal,
+                dismissalHistory: [
+                  data.dismissal,
+                  ...(job.dismissalHistory || []),
+                ],
+              }
+            : job
+        )
+      )
+
+      // Close modal and reset
+      setShowDismissModal(false)
+      setSelectedJobForDismiss(null)
+      setDismissNote('')
+    } catch (error) {
+      console.error('Failed to dismiss job:', error)
+      alert(error instanceof Error ? error.message : 'Failed to dismiss job')
+    } finally {
+      setDismissing(false)
+    }
+  }
+
+  // Handle undismissing a job
+  const handleUndismissJob = async (job: Job) => {
+    if (!job.job) return
+
+    try {
+      const response = await fetch(`/api/pace/jobs/dismiss?jobNumber=${job.job}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to undismiss job')
+      }
+
+      // Update the job in state
+      setJobs(prevJobs =>
+        prevJobs.map(j =>
+          j.job === job.job
+            ? {
+                ...j,
+                isDismissed: false,
+                activeDismissal: null,
+              }
+            : j
+        )
+      )
+    } catch (error) {
+      console.error('Failed to undismiss job:', error)
+      alert(error instanceof Error ? error.message : 'Failed to undismiss job')
+    }
+  }
+
+  // Check if user can dismiss a job (admin or job's CSR)
+  const canDismissJob = (job: Job): boolean => {
+    if (userRole === 'full_admin' || userRole === 'admin') return true
+    if (userRole === 'customer_service') {
+      // Check if the user's name matches the CSR name
+      if (userName && job.csrName) {
+        const userParts = userName.toLowerCase().split(' ')
+        const csrLower = job.csrName.toLowerCase()
+        return userParts.some((part: string) => part && csrLower.includes(part))
+      }
+    }
+    return false
+  }
+
+  // Get time remaining until dismissal expires
+  const getTimeRemaining = (expiresAt: string): string => {
+    const now = new Date()
+    const expires = new Date(expiresAt)
+    const diffMs = expires.getTime() - now.getTime()
+
+    if (diffMs <= 0) return 'Expired'
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    if (diffHours < 1) {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      return `${diffMinutes}m remaining`
+    }
+    if (diffHours < 24) {
+      return `${diffHours}h remaining`
+    }
+    const diffDays = Math.floor(diffHours / 24)
+    return `${diffDays}d ${diffHours % 24}h remaining`
+  }
+
   // Helper function to format time ago
   const getTimeAgo = (date: Date | null): string => {
     if (!date) return 'Never'
@@ -536,6 +674,11 @@ export default function PrebillingJobsPage() {
   // Filter and sort jobs
   const filteredAndSortedJobs = jobs
     .filter(job => {
+      // Dismissed filter - hide dismissed jobs unless toggle is on
+      if (job.isDismissed && !showDismissedJobs) {
+        return false
+      }
+
       // Search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase()
@@ -1003,6 +1146,30 @@ export default function PrebillingJobsPage() {
                 </button>
               )}
             </div>
+
+            {/* Show Dismissed Toggle */}
+            {(() => {
+              const dismissedCount = jobs.filter(j => j.isDismissed).length
+              if (dismissedCount === 0) return null
+              return (
+                <div className="flex items-center gap-2 border-l border-gray-300 pl-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showDismissedJobs}
+                      onChange={(e) => setShowDismissedJobs(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Show dismissed
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">
+                        {dismissedCount}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Pagination Controls - Compact version */}
@@ -1222,14 +1389,79 @@ export default function PrebillingJobsPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">
                       Issues
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200 w-20">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {paginatedJobs.map((job, index) => (
+                  {paginatedJobs.map((job, index) => {
+                    // Check if this is a dismissed job
+                    const isDismissedJob = job.isDismissed
+                    const isExpanded = expandedDismissedJobs.has(job.job || '')
+
+                    // Render dismissed job row (collapsed or expanded)
+                    if (isDismissedJob && !isExpanded) {
+                      return (
+                        <tr
+                          key={job.job || index}
+                          className="border-b border-gray-100 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                          onClick={() => {
+                            const newSet = new Set(expandedDismissedJobs)
+                            newSet.add(job.job || '')
+                            setExpandedDismissedJobs(newSet)
+                          }}
+                        >
+                          {canSyncPrices && activeAction && (
+                            <td className="pl-6 pr-2 py-3 text-sm w-12">
+                              <span className="text-gray-400 text-xs">-</span>
+                            </td>
+                          )}
+                          <td colSpan={10} className="px-4 py-3">
+                            <div className="flex items-center gap-4">
+                              <span className="font-mono font-semibold text-gray-500">{job.job}</span>
+                              <span className="text-gray-500">{job.customerName || job.customer}</span>
+                              <div className="flex-1" />
+                              <div className="flex items-center gap-2 text-sm">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="text-gray-500">
+                                  Dismissed by {job.activeDismissal?.dismissedByName}: "{(job.activeDismissal?.note || '').substring(0, 40)}..."
+                                </span>
+                                <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
+                                  {getTimeRemaining(job.activeDismissal?.expiresAt || '')}
+                                </span>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleUndismissJob(job)
+                                }}
+                                className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                                title="Undismiss this job"
+                              >
+                                Undismiss
+                              </button>
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    }
+
+                    // Normal or expanded dismissed job row
+                    return (
                     <tr
                       key={job.job || index}
                       onClick={() => handleJobClick(job)}
-                      className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors group"
+                      className={`border-b border-gray-100 cursor-pointer transition-colors group ${
+                        isDismissedJob
+                          ? 'bg-gray-50 hover:bg-gray-100'
+                          : 'hover:bg-blue-50'
+                      }`}
                     >
                       {canSyncPrices && activeAction && (
                         <td className="pl-6 pr-2 py-3 text-sm w-12" onClick={(e) => e.stopPropagation()}>
@@ -1657,8 +1889,53 @@ export default function PrebillingJobsPage() {
                           })()}
                         </div>
                       </td>
+                      {/* Actions Column */}
+                      <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          {isDismissedJob ? (
+                            <>
+                              <button
+                                onClick={() => handleUndismissJob(job)}
+                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                title="Undismiss this job"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const newSet = new Set(expandedDismissedJobs)
+                                  newSet.delete(job.job || '')
+                                  setExpandedDismissedJobs(newSet)
+                                }}
+                                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                title="Collapse"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                              </button>
+                            </>
+                          ) : canDismissJob(job) ? (
+                            <button
+                              onClick={() => {
+                                setSelectedJobForDismiss(job)
+                                setShowDismissModal(true)
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                              title="Dismiss for 72 hours"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
@@ -2400,6 +2677,114 @@ export default function PrebillingJobsPage() {
                   Update {selectedJobIds.size} Job{selectedJobIds.size > 1 ? 's' : ''}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dismiss Modal */}
+      {showDismissModal && selectedJobForDismiss && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Dismiss Job #{selectedJobForDismiss.job}</h3>
+                    <p className="text-sm text-gray-500">{selectedJobForDismiss.customerName || selectedJobForDismiss.customer}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowDismissModal(false)
+                    setSelectedJobForDismiss(null)
+                    setDismissNote('')
+                  }}
+                  className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-4">
+              <textarea
+                value={dismissNote}
+                onChange={(e) => setDismissNote(e.target.value)}
+                placeholder="Why are you dismissing this job?"
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none text-sm"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                This job will be hidden from daily emails for 72 hours.
+              </p>
+
+              {/* Dismissal History */}
+              {selectedJobForDismiss.dismissalHistory && selectedJobForDismiss.dismissalHistory.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                    Previous Dismissals ({selectedJobForDismiss.dismissalHistory.length})
+                  </h4>
+                  <div className="max-h-32 overflow-y-auto space-y-2">
+                    {selectedJobForDismiss.dismissalHistory.map((d, i) => (
+                      <div key={d.id || i} className="text-xs bg-gray-50 p-2 rounded">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-700">{d.dismissedByName}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${d.isExpired ? 'bg-gray-200 text-gray-600' : 'bg-amber-100 text-amber-700'}`}>
+                            {d.isExpired ? 'Expired' : 'Active'}
+                          </span>
+                        </div>
+                        <p className="text-gray-600 mt-1">"{d.note}"</p>
+                        <p className="text-gray-400 mt-1">
+                          {new Date(d.dismissedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDismissModal(false)
+                  setSelectedJobForDismiss(null)
+                  setDismissNote('')
+                }}
+                disabled={dismissing}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDismissJob}
+                disabled={dismissing || !dismissNote.trim()}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+              >
+                {dismissing ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Dismissing...
+                  </>
+                ) : (
+                  'Dismiss'
+                )}
+              </button>
             </div>
           </div>
         </div>

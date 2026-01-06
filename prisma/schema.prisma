@@ -54,6 +54,7 @@ model Tenant {
   pickOrders             PickOrder[]
   kitAssemblies          KitAssembly[]
   storefrontOrders       StorefrontOrder[]
+  prebillingJobDismissals PrebillingJobDismissal[]
 
   @@index([slug])
   @@index([status])
@@ -81,6 +82,7 @@ model User {
   pickOrdersCreated     PickOrder[]            @relation("PickOrderCreatedBy")
   kitAssemblies         KitAssembly[]
   storefrontOrdersCreated StorefrontOrder[]
+  prebillingJobDismissals PrebillingJobDismissal[]
 
   @@index([email])
   @@index([paceCustomerId])
@@ -1834,4 +1836,29 @@ model ItemAddOn {
   @@index([parentItemId])
   @@index([addOnItemId])
   @@index([applyTo])
+}
+
+// ============================================
+// PREBILLING JOB DISMISSAL MODEL
+// ============================================
+
+// Tracks dismissals of prebilling jobs (for 72-hour hide from email notifications)
+// Keeps full history of all dismissals for audit purposes
+model PrebillingJobDismissal {
+  id              String   @id @default(cuid())
+  paceJobNumber   String   // Job number from PACE (e.g., "123456")
+  note            String   // Required note explaining why dismissed
+  dismissedById   String   // User ID who dismissed
+  dismissedByName String   // User name (for display without join)
+  dismissedAt     DateTime @default(now())
+  expiresAt       DateTime // When the dismissal expires (72 hours from dismissedAt)
+  tenantId        String
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dismissedBy     User     @relation(fields: [dismissedById], references: [id])
+
+  @@index([tenantId, paceJobNumber])
+  @@index([tenantId])
+  @@index([expiresAt])
+  @@index([paceJobNumber])
 }

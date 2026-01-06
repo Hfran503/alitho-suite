@@ -592,9 +592,26 @@ export async function GET(request: NextRequest) {
         console.log(`Fetching prebilling jobs for tenant ${tenant.name} (${tenant.id})...`)
 
         // Fetch prebilling jobs
-        const jobs = await fetchPrebillingJobs(tenant.id)
+        const allJobs = await fetchPrebillingJobs(tenant.id)
 
-        console.log(`Found ${jobs.length} prebilling jobs for tenant ${tenant.name}`)
+        console.log(`Found ${allJobs.length} prebilling jobs for tenant ${tenant.name}`)
+
+        // Fetch active dismissals and filter out dismissed jobs from email
+        const now = new Date()
+        const activeDismissals = await db.prebillingJobDismissal.findMany({
+          where: {
+            tenantId: tenant.id,
+            expiresAt: { gt: now }, // Only get non-expired dismissals
+          },
+          select: {
+            paceJobNumber: true,
+          },
+        })
+
+        const dismissedJobNumbers = new Set(activeDismissals.map(d => d.paceJobNumber))
+        const jobs = allJobs.filter(job => !dismissedJobNumbers.has(job.job || ''))
+
+        console.log(`Filtered out ${dismissedJobNumbers.size} dismissed jobs, ${jobs.length} remaining`)
 
         // Group jobs by CSR
         const jobsByCSR = new Map<string, { csrName: string; csrEmail: string | null; jobs: Job[] }>()
