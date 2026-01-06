@@ -375,8 +375,8 @@ export default function PrebillingJobsPage() {
       const data = await response.json()
 
       // Update the job in state with the new dismissal
-      setJobs(prevJobs =>
-        prevJobs.map(job =>
+      setJobs(prevJobs => {
+        const updatedJobs = prevJobs.map(job =>
           job.job === selectedJobForDismiss.job
             ? {
                 ...job,
@@ -389,7 +389,14 @@ export default function PrebillingJobsPage() {
               }
             : job
         )
-      )
+        // Update localStorage cache with new dismissal data
+        try {
+          localStorage.setItem('prebilling_jobs_cache', JSON.stringify(updatedJobs))
+        } catch (e) {
+          console.warn('Failed to update cache:', e)
+        }
+        return updatedJobs
+      })
 
       // Close modal and reset
       setShowDismissModal(false)
@@ -418,8 +425,8 @@ export default function PrebillingJobsPage() {
       }
 
       // Update the job in state
-      setJobs(prevJobs =>
-        prevJobs.map(j =>
+      setJobs(prevJobs => {
+        const updatedJobs = prevJobs.map(j =>
           j.job === job.job
             ? {
                 ...j,
@@ -428,7 +435,14 @@ export default function PrebillingJobsPage() {
               }
             : j
         )
-      )
+        // Update localStorage cache
+        try {
+          localStorage.setItem('prebilling_jobs_cache', JSON.stringify(updatedJobs))
+        } catch (e) {
+          console.warn('Failed to update cache:', e)
+        }
+        return updatedJobs
+      })
     } catch (error) {
       console.error('Failed to undismiss job:', error)
       alert(error instanceof Error ? error.message : 'Failed to undismiss job')
