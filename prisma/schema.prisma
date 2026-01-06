@@ -389,6 +389,7 @@ model BatchImport {
   saturdayDelivery   Boolean           @default(false)
   confirmation       String            @default("none")
   notificationsEmail String?
+  skipAddressVerification Boolean      @default(false)
   fromAddress        Json?
   columnMapping      Json?
   originalData       Json?             // Store original CSV/Excel data for exports

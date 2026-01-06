@@ -606,97 +606,104 @@ async function createShippingLabels(
     // Use the first row for ship_to address (all rows in group have same destination)
     const firstRow = rows[0]
 
-    // Step 0: Validate the ship-to address BEFORE creating labels
-    console.log('[batch-import] 🔍 Step 0: Validating ship-to address...')
-
     // Helper to normalize zip code to first 5 digits
     const normalizeZip = (zip: string): string => {
       return zip.replace(/[^0-9]/g, '').substring(0, 5)
     }
 
-    // Normalize zip code for validation
-    const normalizedZip = normalizeZip(firstRow.shipToZip)
+    // Check if address verification should be skipped
+    if (batch.skipAddressVerification) {
+      console.log('[batch-import] ⏭️  Step 0: Skipping address verification (disabled by user)')
+      // Just normalize the zip code
+      firstRow.shipToZip = normalizeZip(firstRow.shipToZip)
+    } else {
+      // Step 0: Validate the ship-to address BEFORE creating labels
+      console.log('[batch-import] 🔍 Step 0: Validating ship-to address...')
 
-    // Store original address for comparison
-    const originalAddress = {
-      address1: firstRow.shipToAddress1,
-      city: firstRow.shipToCity,
-      state: firstRow.shipToState,
-      zip: normalizedZip,
-    }
+      // Normalize zip code for validation
+      const normalizedZip = normalizeZip(firstRow.shipToZip)
 
-    try {
-      const validationResult = await shipStationClient.validateAddress({
-        name: firstRow.shipToName,
-        company_name: firstRow.shipToCompany || undefined,
-        address_line1: firstRow.shipToAddress1,
-        address_line2: firstRow.shipToAddress2 || undefined,
-        city_locality: firstRow.shipToCity,
-        state_province: firstRow.shipToState,
-        postal_code: normalizedZip,
-        country_code: firstRow.shipToCountry || 'US',
-        phone: firstRow.shipToPhone || undefined,
-      })
+      // Store original address for comparison
+      const originalAddress = {
+        address1: firstRow.shipToAddress1,
+        city: firstRow.shipToCity,
+        state: firstRow.shipToState,
+        zip: normalizedZip,
+      }
 
-      console.log('[batch-import] ✅ Address validation result:', JSON.stringify(validationResult, null, 2))
+      try {
+        const validationResult = await shipStationClient.validateAddress({
+          name: firstRow.shipToName,
+          company_name: firstRow.shipToCompany || undefined,
+          address_line1: firstRow.shipToAddress1,
+          address_line2: firstRow.shipToAddress2 || undefined,
+          city_locality: firstRow.shipToCity,
+          state_province: firstRow.shipToState,
+          postal_code: normalizedZip,
+          country_code: firstRow.shipToCountry || 'US',
+          phone: firstRow.shipToPhone || undefined,
+        })
 
-      // If ShipStation provided a corrected/matched address, use it
-      if (validationResult.matched_address) {
-        const matched = validationResult.matched_address
-        console.log('[batch-import] 📝 ShipStation matched address:')
-        console.log(`[batch-import]    Original: ${firstRow.shipToAddress1}, ${firstRow.shipToCity}, ${firstRow.shipToState} ${normalizedZip}`)
-        console.log(`[batch-import]    Matched: ${matched.address_line1}, ${matched.city_locality}, ${matched.state_province} ${normalizeZip(matched.postal_code)}`)
+        console.log('[batch-import] ✅ Address validation result:', JSON.stringify(validationResult, null, 2))
 
-        // STRATEGY: Trust customer's address lines (address1, address2), but always apply
-        // USPS corrections for City, State, and ZIP since USPS database is authoritative.
-        // This avoids false positives from abbreviations (Drive→DR) or suite number formatting.
-        // We keep the original address lines as-is and only correct City/State/ZIP.
+        // If ShipStation provided a corrected/matched address, use it
+        if (validationResult.matched_address) {
+          const matched = validationResult.matched_address
+          console.log('[batch-import] 📝 ShipStation matched address:')
+          console.log(`[batch-import]    Original: ${firstRow.shipToAddress1}, ${firstRow.shipToCity}, ${firstRow.shipToState} ${normalizedZip}`)
+          console.log(`[batch-import]    Matched: ${matched.address_line1}, ${matched.city_locality}, ${matched.state_province} ${normalizeZip(matched.postal_code)}`)
 
-        // Track meaningful corrections (City, State, ZIP)
-        const correctedZip = normalizeZip(matched.postal_code)
-        const hasCriticalCorrections = correctedZip !== originalAddress.zip
-        const hasMinorCorrections =
-          matched.city_locality.toUpperCase() !== originalAddress.city.toUpperCase() ||
-          matched.state_province !== originalAddress.state
+          // STRATEGY: Trust customer's address lines (address1, address2), but always apply
+          // USPS corrections for City, State, and ZIP since USPS database is authoritative.
+          // This avoids false positives from abbreviations (Drive→DR) or suite number formatting.
+          // We keep the original address lines as-is and only correct City/State/ZIP.
 
-        if (hasCriticalCorrections) {
-          // Critical correction (ZIP code changed)
-          if (correctedZip !== originalAddress.zip) {
-            addressCorrectionNotes.push(`⚠️ ZIP corrected: ${originalAddress.zip} → ${correctedZip}`)
+          // Track meaningful corrections (City, State, ZIP)
+          const correctedZip = normalizeZip(matched.postal_code)
+          const hasCriticalCorrections = correctedZip !== originalAddress.zip
+          const hasMinorCorrections =
+            matched.city_locality.toUpperCase() !== originalAddress.city.toUpperCase() ||
+            matched.state_province !== originalAddress.state
+
+          if (hasCriticalCorrections) {
+            // Critical correction (ZIP code changed)
+            if (correctedZip !== originalAddress.zip) {
+              addressCorrectionNotes.push(`⚠️ ZIP corrected: ${originalAddress.zip} → ${correctedZip}`)
+            }
+            if (matched.city_locality.toUpperCase() !== originalAddress.city.toUpperCase()) {
+              addressCorrectionNotes.push(`City: ${originalAddress.city} → ${matched.city_locality}`)
+            }
+            if (matched.state_province !== originalAddress.state) {
+              addressCorrectionNotes.push(`State: ${originalAddress.state} → ${matched.state_province}`)
+            }
+          } else if (hasMinorCorrections) {
+            // Minor corrections (just city/state formatting)
+            addressCorrectionNotes.push(`✓ Address verified and standardized by USPS`)
           }
-          if (matched.city_locality.toUpperCase() !== originalAddress.city.toUpperCase()) {
-            addressCorrectionNotes.push(`City: ${originalAddress.city} → ${matched.city_locality}`)
-          }
-          if (matched.state_province !== originalAddress.state) {
-            addressCorrectionNotes.push(`State: ${originalAddress.state} → ${matched.state_province}`)
-          }
-        } else if (hasMinorCorrections) {
-          // Minor corrections (just city/state formatting)
-          addressCorrectionNotes.push(`✓ Address verified and standardized by USPS`)
+
+          // Update ONLY City, State, and ZIP (NOT address lines)
+          firstRow.shipToCity = matched.city_locality
+          firstRow.shipToState = matched.state_province
+          firstRow.shipToZip = correctedZip
+
+          console.log(`[batch-import] ✅ Address corrections applied: City=${matched.city_locality}, State=${matched.state_province}, ZIP=${correctedZip}`)
+        } else if (validationResult.status === 'unverified' || validationResult.status === 'error') {
+          const errorMsg = validationResult.messages?.map(m => m.message).join(', ') || 'Address could not be verified'
+          console.warn(`[batch-import] ⚠️  Address validation warning: ${errorMsg}`)
+          console.warn('[batch-import] ⚠️  No matched address provided - continuing with original address')
+          // Normalize the zip code even if validation failed
+          firstRow.shipToZip = normalizedZip
+        } else {
+          console.log('[batch-import] ✅ Address verified successfully')
+          // Normalize zip code
+          firstRow.shipToZip = normalizedZip
         }
-
-        // Update ONLY City, State, and ZIP (NOT address lines)
-        firstRow.shipToCity = matched.city_locality
-        firstRow.shipToState = matched.state_province
-        firstRow.shipToZip = correctedZip
-
-        console.log(`[batch-import] ✅ Address corrections applied: City=${matched.city_locality}, State=${matched.state_province}, ZIP=${correctedZip}`)
-      } else if (validationResult.status === 'unverified' || validationResult.status === 'error') {
-        const errorMsg = validationResult.messages?.map(m => m.message).join(', ') || 'Address could not be verified'
-        console.warn(`[batch-import] ⚠️  Address validation warning: ${errorMsg}`)
-        console.warn('[batch-import] ⚠️  No matched address provided - continuing with original address')
-        // Normalize the zip code even if validation failed
-        firstRow.shipToZip = normalizedZip
-      } else {
-        console.log('[batch-import] ✅ Address verified successfully')
-        // Normalize zip code
+      } catch (validationError: any) {
+        console.warn(`[batch-import] ⚠️  Address validation failed: ${validationError.message}`)
+        console.warn('[batch-import] Continuing with original address (normalized zip)')
+        // Normalize zip code even if validation fails
         firstRow.shipToZip = normalizedZip
       }
-    } catch (validationError: any) {
-      console.warn(`[batch-import] ⚠️  Address validation failed: ${validationError.message}`)
-      console.warn('[batch-import] Continuing with original address (normalized zip)')
-      // Normalize zip code even if validation fails
-      firstRow.shipToZip = normalizedZip
     }
 
     // Check if this is a UPS shipment (UPS doesn't support reference3)

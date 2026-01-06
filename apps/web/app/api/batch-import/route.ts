@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         saturdayDelivery: shippingConfig.saturdayDelivery || false,
         confirmation: shippingConfig.confirmation || 'none',
         notificationsEmail: shippingConfig.notificationsEmail,
+        skipAddressVerification: shippingConfig.skipAddressVerification || false,
         columnMapping: columnMapping || {},
         originalData: originalData || null,
         rows: {

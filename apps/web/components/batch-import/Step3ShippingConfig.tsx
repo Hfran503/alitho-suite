@@ -27,6 +27,7 @@ interface ShippingConfig {
   useCarrierPackage: boolean
   carrierPackageCode?: string
   carrierPackageName?: string
+  skipAddressVerification: boolean
 }
 
 interface Carrier {
@@ -66,6 +67,7 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
   const [confirmation, setConfirmation] = useState('none')
   const [notificationsEmail, setNotificationsEmail] = useState('')
   const [paceShipmentTypeId, setPaceShipmentTypeId] = useState(202)
+  const [skipAddressVerification, setSkipAddressVerification] = useState(false)
 
   const [rates, setRates] = useState<any[]>([])
   const [selectedRate, setSelectedRate] = useState<any>(null)
@@ -243,6 +245,7 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
       useCarrierPackage,
       carrierPackageCode: useCarrierPackage ? carrierPackageCode : undefined,
       carrierPackageName: useCarrierPackage ? carrierPackageName : undefined,
+      skipAddressVerification,
     }
 
     onComplete(config)
@@ -596,6 +599,23 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
                 <p className="mt-1 text-xs text-gray-500">
                   Default: 202 for creating shipments in PACE.
                 </p>
+              </div>
+
+              <div className="pt-2 border-t border-gray-200">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={skipAddressVerification}
+                    onChange={(e) => setSkipAddressVerification(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="text-xs text-gray-900 font-medium">Skip Address Verification</span>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Skip USPS address validation before creating labels. Use this if you trust your addresses are correct.
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
           </div>
