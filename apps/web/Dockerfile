@@ -43,6 +43,9 @@ RUN pnpm --filter @repo/ui build || true
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter web build
 
+# Ensure static directory exists (may be empty in some builds)
+RUN mkdir -p apps/web/.next/static
+
 # Stage 3: Runner
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
