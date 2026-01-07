@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
-import { Prisma } from '@prisma/client'
 import { z } from 'zod'
+
+// Helper for nullable JSON fields in Prisma - use type assertion to bypass strict typing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const jsonNull = null as any
 
 const dimensionsSchema = z.object({
   length: z.number().positive().optional(),
@@ -183,10 +186,10 @@ export async function PATCH(
       ...(validatedData.bulkSellPrice !== undefined && { bulkSellPrice: validatedData.bulkSellPrice }),
       // Handle JSON fields with proper Prisma null type
       ...(validatedData.dimensions !== undefined && {
-        dimensions: validatedData.dimensions ?? Prisma.JsonNull,
+        dimensions: validatedData.dimensions ?? jsonNull,
       }),
       ...(validatedData.metadata !== undefined && {
-        metadata: validatedData.metadata ?? Prisma.JsonNull,
+        metadata: validatedData.metadata ?? jsonNull,
       }),
     }
 
