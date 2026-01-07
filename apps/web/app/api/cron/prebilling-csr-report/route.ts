@@ -608,7 +608,7 @@ export async function GET(request: NextRequest) {
           },
         })
 
-        const dismissedJobNumbers = new Set(activeDismissals.map(d => d.paceJobNumber))
+        const dismissedJobNumbers = new Set(activeDismissals.map((d: { paceJobNumber: string }) => d.paceJobNumber))
         const jobs = allJobs.filter(job => !dismissedJobNumbers.has(job.job || ''))
 
         console.log(`Filtered out ${dismissedJobNumbers.size} dismissed jobs, ${jobs.length} remaining`)
