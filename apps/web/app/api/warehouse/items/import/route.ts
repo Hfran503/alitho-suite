@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db, Prisma } from '@repo/database'
+import { db } from '@repo/database'
+import { Prisma } from '@prisma/client'
 import { normalizeCategory } from '@/lib/warehouse/constants'
 
 interface ImportResult {
