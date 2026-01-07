@@ -55,6 +55,12 @@ export function OrderDetailPanel({
     if (!editedOrder) return;
 
     try {
+      // Check if we should update status from missing_address to completed
+      const hasRequiredAddress = editedOrder.address1?.trim() &&
+                                  editedOrder.city?.trim() &&
+                                  editedOrder.country?.trim();
+      const shouldUpdateStatus = order.status === 'missing_address' && hasRequiredAddress;
+
       const response = await fetch(`/api/atlassian/orders/${editedOrder.id}`, {
         method: 'PATCH',
         headers: {
@@ -80,13 +86,17 @@ export function OrderDetailPanel({
           manager: editedOrder.manager,
           department: editedOrder.department,
           location: editedOrder.location,
+          ...(shouldUpdateStatus && { status: 'completed' }),
         }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setSuccessMessage('Order updated successfully!');
+        const message = shouldUpdateStatus
+          ? 'Order updated and moved to Ready to Process!'
+          : 'Order updated successfully!';
+        setSuccessMessage(message);
         setIsEditing(false);
         setTimeout(() => {
           onOrderUpdated();
