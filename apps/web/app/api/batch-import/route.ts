@@ -4,6 +4,56 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { queueBatchImport } from '@/lib/queue/batch-import-queue'
 
+/**
+ * Parse date string in various formats (MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD, etc.)
+ * Handles 2-digit years by assuming 2000s (e.g., "26" → 2026)
+ */
+function parseShipDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null
+
+  const trimmed = dateStr.trim()
+  if (!trimmed) return null
+
+  // Try MM/DD/YY or MM/DD/YYYY format (US date format)
+  const usDateMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (usDateMatch) {
+    const month = parseInt(usDateMatch[1], 10)
+    const day = parseInt(usDateMatch[2], 10)
+    let year = parseInt(usDateMatch[3], 10)
+
+    // Convert 2-digit year to 4-digit (assume 2000s for years 00-99)
+    if (year < 100) {
+      year = 2000 + year
+    }
+
+    // Create date (month is 0-indexed in JavaScript)
+    const date = new Date(year, month - 1, day)
+
+    // Validate the date is valid
+    if (!isNaN(date.getTime()) && date.getMonth() === month - 1) {
+      return date
+    }
+  }
+
+  // Try ISO format (YYYY-MM-DD)
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const date = new Date(trimmed)
+    if (!isNaN(date.getTime())) {
+      return date
+    }
+  }
+
+  // Fallback to native Date parsing
+  const fallbackDate = new Date(trimmed)
+  if (!isNaN(fallbackDate.getTime())) {
+    return fallbackDate
+  }
+
+  console.warn(`[API] Could not parse date: "${dateStr}"`)
+  return null
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -65,16 +115,16 @@ export async function POST(req: NextRequest) {
         originalData: originalData || null,
         rows: {
           create: rows.map((row: any) => {
-            // Log shipDate conversion for debugging
+            // Parse shipDate using robust parser that handles MM/DD/YY format
+            const parsedShipDate = parseShipDate(row.shipDate)
             if (row.shipDate) {
-              const parsedDate = new Date(row.shipDate)
-              console.log(`[API] Row ${row.rowNumber} shipDate: "${row.shipDate}" → ${parsedDate.toISOString()} (${parsedDate.toLocaleDateString()})`)
+              console.log(`[API] Row ${row.rowNumber} shipDate: "${row.shipDate}" → ${parsedShipDate?.toISOString() ?? 'null'} (${parsedShipDate?.toLocaleDateString() ?? 'invalid'})`)
             }
             return {
             rowNumber: row.rowNumber,
             position: row.position || null,
             status: 'PENDING',
-            shipDate: row.shipDate ? new Date(row.shipDate) : null,
+            shipDate: parsedShipDate,
             jobNumber: row.jobNumber,
             shipToName: row.shipToName ? (row.shipToName.length > 60 ? row.shipToName.substring(0, 60) : row.shipToName) : null,
             shipToCompany: row.shipToCompany ? (row.shipToCompany.length > 60 ? row.shipToCompany.substring(0, 60) : row.shipToCompany) : null,

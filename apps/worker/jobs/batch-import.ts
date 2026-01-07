@@ -830,10 +830,20 @@ async function createShippingLabels(
       console.log(`[batch-import] 📋 Adding NotificationsEmail: ${batch.notificationsEmail}`)
     }
 
+    // Format ship date for ShipStation (ISO format without timezone: "2024-09-23T00:00:00.000")
+    let shipDateForLabel: string | undefined
+    if (firstRow.shipDate) {
+      const shipDate = firstRow.shipDate instanceof Date ? firstRow.shipDate : new Date(firstRow.shipDate)
+      // Format as ISO without the 'Z' timezone suffix
+      shipDateForLabel = shipDate.toISOString().replace('Z', '')
+      console.log(`[batch-import] 📅 Using ship date from file: ${shipDateForLabel}`)
+    }
+
     const labelRequest: any = {
       shipment: {
         carrier_id: batch.carrierId,
         service_code: batch.serviceCode,
+        ship_date: shipDateForLabel,
         ship_to: {
           name: firstRow.shipToName,
           company_name: firstRow.shipToCompany || undefined,
