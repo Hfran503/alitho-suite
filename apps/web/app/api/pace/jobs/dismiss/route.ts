@@ -78,6 +78,7 @@ export async function POST(request: Request) {
         dismissedByName: dismissal.dismissedByName,
         dismissedAt: dismissal.dismissedAt,
         expiresAt: dismissal.expiresAt,
+        isExpired: false, // New dismissals are never expired
       },
     })
   } catch (error) {
@@ -90,8 +91,8 @@ export async function POST(request: Request) {
 }
 
 /**
- * DELETE - Cancel/undismiss a job (remove active dismissal)
- * Only removes non-expired dismissals, history remains
+ * DELETE - Cancel/undismiss a job (expire active dismissal immediately)
+ * Marks active dismissals as expired instead of deleting, so history is preserved
  */
 export async function DELETE(request: Request) {
   try {
@@ -122,20 +123,24 @@ export async function DELETE(request: Request) {
 
     const now = new Date()
 
-    // Delete only active (non-expired) dismissals for this job
-    const result = await db.prebillingJobDismissal.deleteMany({
+    // Expire active dismissals immediately instead of deleting
+    // This preserves the full history of all dismissals
+    const result = await db.prebillingJobDismissal.updateMany({
       where: {
         tenantId: tenantId,
         paceJobNumber: jobNumber.toString(),
         expiresAt: {
-          gt: now, // Only delete if not yet expired
+          gt: now, // Only update if currently active (not yet expired)
         },
+      },
+      data: {
+        expiresAt: now, // Set expiration to now, marking it as expired
       },
     })
 
     return NextResponse.json({
       success: true,
-      deletedCount: result.count,
+      expiredCount: result.count,
     })
   } catch (error) {
     console.error('Undismiss job error:', error)

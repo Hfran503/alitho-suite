@@ -800,7 +800,9 @@ export async function GET() {
 
     for (const dismissal of dismissals) {
       const jobNum = dismissal.paceJobNumber
-      const isExpired = dismissal.expiresAt <= now
+      // Ensure proper Date comparison - Prisma returns Date objects but JSON serialization may affect this
+      const expiresAtDate = new Date(dismissal.expiresAt)
+      const isExpired = expiresAtDate <= now
 
       if (!dismissalsByJob[jobNum]) {
         dismissalsByJob[jobNum] = {
@@ -827,7 +829,8 @@ export async function GET() {
     jobs.forEach(job => {
       const jobNum = job.job?.toString()
       if (jobNum && dismissalsByJob[jobNum]) {
-        job.isDismissed = dismissalsByJob[jobNum].isCurrentlyDismissed
+        // Explicitly set as boolean to ensure proper filtering
+        job.isDismissed = Boolean(dismissalsByJob[jobNum].isCurrentlyDismissed)
         job.activeDismissal = dismissalsByJob[jobNum].activeDismissal
         job.dismissalHistory = dismissalsByJob[jobNum].dismissalHistory
       } else {

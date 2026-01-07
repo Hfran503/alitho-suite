@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { normalizeCategory } from '@/lib/warehouse/constants'
 
 interface ImportResult {
@@ -203,32 +203,40 @@ export async function POST(request: NextRequest) {
         const trackRefVal = getValue('trackByReference')?.toLowerCase()
         const trackByReference = trackRefVal === 'yes' || trackRefVal === 'true' || trackRefVal === '1' ? true : false
 
-        const itemData = {
-          sku,
-          upc: getValue('upc') || null,
-          name,
-          description: getValue('description') || null,
-          category: normalizeCategory(getValue('category')),
-          weight: parseNum(getValue('weight')) || null,
-          dimensions: dimensions ?? null,
-          customerId,
-          isActive,
-          trackByReference,
-        }
-
         if (existingId) {
-          // Update existing item
+          // Update existing item - use Prisma-specific types
           await db.inventoryItem.update({
             where: { id: existingId },
-            data: itemData,
+            data: {
+              sku,
+              upc: getValue('upc') || null,
+              name,
+              description: getValue('description') || null,
+              category: normalizeCategory(getValue('category')),
+              weight: parseNum(getValue('weight')) || null,
+              dimensions: dimensions ?? Prisma.JsonNull,
+              isActive,
+              trackByReference,
+              // Handle customer relation properly
+              ...(customerId ? { customer: { connect: { id: customerId } } } : {}),
+            },
           })
           results.push({ row: rowNum, sku, status: 'updated' })
           updated++
         } else {
-          // Create new item
+          // Create new item - can use customerId directly
           await db.inventoryItem.create({
             data: {
-              ...itemData,
+              sku,
+              upc: getValue('upc') || null,
+              name,
+              description: getValue('description') || null,
+              category: normalizeCategory(getValue('category')),
+              weight: parseNum(getValue('weight')) || null,
+              dimensions: dimensions ?? Prisma.JsonNull,
+              customerId,
+              isActive,
+              trackByReference,
               tenantId: membership.tenantId,
             },
           })

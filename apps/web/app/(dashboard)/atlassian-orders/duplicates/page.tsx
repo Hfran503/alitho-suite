@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Download, Check, Archive, ExternalLink } from 'lucide-react';
+import { Loader2, Download, Check, Archive, ExternalLink, ArrowRightLeft } from 'lucide-react';
 import { AtlassianOrder, AtlassianOrderFull, formatDate, getStatusBadgeColor, getStatusDisplayText } from '@/components/atlassian-orders';
 
 export default function DuplicatesPage() {
@@ -100,6 +100,51 @@ export default function DuplicatesPage() {
         }, 1500);
       } else {
         throw new Error(data.error || 'Failed to archive order');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUseNewOrder = async (duplicateId: string, originalId: string) => {
+    setActionLoading(true);
+    setSuccessMessage(null);
+
+    try {
+      // Archive the original order
+      const archiveResponse = await fetch(`/api/atlassian/orders/${originalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+
+      if (!archiveResponse.ok) {
+        throw new Error('Failed to archive original order');
+      }
+
+      // Mark the duplicate as ready to process
+      const readyResponse = await fetch(`/api/atlassian/orders/${duplicateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'completed',
+          duplicateOfOrderId: null,
+        }),
+      });
+
+      const data = await readyResponse.json();
+
+      if (data.success) {
+        setSuccessMessage('Original archived, new order moved to Ready to Process!');
+        setTimeout(() => {
+          fetchDuplicates();
+          setSelectedDuplicate(null);
+          setSuccessMessage(null);
+        }, 1500);
+      } else {
+        throw new Error(data.error || 'Failed to update new order');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -229,6 +274,27 @@ export default function DuplicatesPage() {
                         )}
                         Archive
                       </Button>
+                      {/* Show "Use New Order" only when original is missing address */}
+                      {selectedDuplicate.duplicateOfOrder &&
+                       (selectedDuplicate.duplicateOfOrder as AtlassianOrder).status === 'missing_address' && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => handleUseNewOrder(
+                            selectedDuplicate.id,
+                            (selectedDuplicate.duplicateOfOrder as AtlassianOrder).id
+                          )}
+                          disabled={actionLoading}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {actionLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <ArrowRightLeft className="h-4 w-4 mr-2" />
+                          )}
+                          Use New Order
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -243,9 +309,14 @@ export default function DuplicatesPage() {
                     <div className="text-sm font-semibold text-blue-700">
                       Original
                       {selectedDuplicate.duplicateOfOrder && (
-                        <span className="ml-2 text-xs font-normal text-gray-500">
-                          #{selectedDuplicate.duplicateOfOrder.orderNumber}
-                        </span>
+                        <>
+                          <span className="ml-2 text-xs font-normal text-gray-500">
+                            #{selectedDuplicate.duplicateOfOrder.orderNumber}
+                          </span>
+                          <Badge className={`ml-2 text-xs ${getStatusBadgeColor((selectedDuplicate.duplicateOfOrder as AtlassianOrder).status)}`}>
+                            {getStatusDisplayText((selectedDuplicate.duplicateOfOrder as AtlassianOrder).status)}
+                          </Badge>
+                        </>
                       )}
                     </div>
                   </div>

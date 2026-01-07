@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@repo/database'
+import { db, Prisma } from '@repo/database'
 import { z } from 'zod'
 
 const dimensionsSchema = z.object({
@@ -158,7 +158,12 @@ export async function PATCH(
 
     // Build update data with proper null handling for JSON fields
     const updateData = {
-      ...(validatedData.customerId !== undefined && { customerId: validatedData.customerId }),
+      // Handle customer relation - use connect/disconnect for proper Prisma types
+      ...(validatedData.customerId !== undefined && {
+        customer: validatedData.customerId
+          ? { connect: { id: validatedData.customerId } }
+          : { disconnect: true }
+      }),
       ...(validatedData.sku !== undefined && { sku: validatedData.sku }),
       ...(validatedData.upc !== undefined && { upc: validatedData.upc }),
       ...(validatedData.name !== undefined && { name: validatedData.name }),
@@ -177,10 +182,10 @@ export async function PATCH(
       ...(validatedData.bulkSellPrice !== undefined && { bulkSellPrice: validatedData.bulkSellPrice }),
       // Handle JSON fields with proper Prisma null type
       ...(validatedData.dimensions !== undefined && {
-        dimensions: validatedData.dimensions ?? null,
+        dimensions: validatedData.dimensions ?? Prisma.JsonNull,
       }),
       ...(validatedData.metadata !== undefined && {
-        metadata: validatedData.metadata ?? null,
+        metadata: validatedData.metadata ?? Prisma.JsonNull,
       }),
     }
 

@@ -69,16 +69,22 @@ export default function ArchivePage() {
     setSuccessMessage(null);
 
     try {
+      // Find the order to check if it was a duplicate
+      const order = orders.find(o => o.id === orderId);
+      const isDuplicate = order?.duplicateOfOrderId != null;
+      const newStatus = isDuplicate ? 'potential_duplicate' : 'completed';
+
       const response = await fetch(`/api/atlassian/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed' }),
+        body: JSON.stringify({ status: newStatus }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setSuccessMessage('Order restored to Ready to Process!');
+        const destination = isDuplicate ? 'Duplicates' : 'Ready to Process';
+        setSuccessMessage(`Order restored to ${destination}!`);
         setTimeout(() => {
           fetchOrders();
           setSuccessMessage(null);
