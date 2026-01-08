@@ -635,7 +635,7 @@ export function ProcessShipmentShipStationModal({
             shipFrom: fromAddress,
             shipTo: toAddress,
             packages,
-            shipDate: shipDate ? new Date(shipDate).toISOString() : undefined,
+            shipDate: shipDate ? `${shipDate}T12:00:00.000` : undefined,
             isReturnLabel: false, // Always create outbound first
             advancedOptions: Object.keys(advancedOptionsPayload).length > 0 ? advancedOptionsPayload : undefined,
             confirmation: advancedOptions.confirmation !== 'none' ? advancedOptions.confirmation : undefined,
@@ -682,7 +682,7 @@ export function ProcessShipmentShipStationModal({
                 shipFrom: toAddress, // Reversed - customer ships back
                 shipTo: fromAddress, // Reversed - to warehouse
                 packages,
-                shipDate: shipDate ? new Date(shipDate).toISOString() : undefined,
+                shipDate: shipDate ? `${shipDate}T12:00:00.000` : undefined,
                 isReturnLabel: true,
                 rmaNumber: rmaNumber || undefined,
                 chargeEvent: 'carrier_default',

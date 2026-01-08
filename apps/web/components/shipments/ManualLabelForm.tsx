@@ -540,7 +540,7 @@ export function ManualLabelForm() {
             shipFrom: fromAddress,
             shipTo: toAddress,
             packages,
-            shipDate: shipDate ? new Date(shipDate).toISOString() : undefined,
+            shipDate: shipDate ? `${shipDate}T12:00:00.000` : undefined,
             isReturnLabel: false,
             advancedOptions: Object.keys(advancedOptionsPayload).length > 0 ? advancedOptionsPayload : undefined,
             confirmation: advancedOptions.confirmation !== 'none' ? advancedOptions.confirmation : undefined,
@@ -610,7 +610,7 @@ export function ManualLabelForm() {
                 shipFrom: toAddress,
                 shipTo: fromAddress,
                 packages,
-                shipDate: shipDate ? new Date(shipDate).toISOString() : undefined,
+                shipDate: shipDate ? `${shipDate}T12:00:00.000` : undefined,
                 isReturnLabel: true,
                 rmaNumber: rmaNumber || undefined,
                 chargeEvent: 'carrier_default',
@@ -1726,8 +1726,8 @@ function Step4Options({
   setShipmentReference,
   labelMessages,
   setLabelMessages,
-  advancedOptions: _advancedOptions,
-  setAdvancedOptions: _setAdvancedOptions,
+  advancedOptions,
+  setAdvancedOptions,
   cartons,
 }: any) {
   const totalPackages = cartons.reduce((sum: number, c: CartonConfig) => sum + c.count, 0)
@@ -1820,6 +1820,190 @@ function Step4Options({
           </div>
         </div>
       </div>
+
+      {/* Third Party Billing - Show prominently when selected */}
+      {advancedOptions.billToParty === 'third_party' && (
+        <div className="bg-white border-2 border-blue-300 rounded-lg p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h4 className="font-bold text-gray-900 text-sm">Third Party Billing</h4>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800 mb-4">
+            <strong>Note:</strong> Third party billing selected. The shipping costs will be billed to the account specified below.
+            {' '}Change billing option in <strong>Advanced Options</strong> if needed.
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Bill To Account <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={advancedOptions.billToAccount}
+                onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToAccount: e.target.value })}
+                placeholder="Account number"
+                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">
+                Third party account number
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Country Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={advancedOptions.billToCountryCode}
+                  onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToCountryCode: e.target.value.toUpperCase() })}
+                  placeholder="US"
+                  maxLength={2}
+                  className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-0.5">
+                  ISO 3166-1 alpha-2
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Postal Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={advancedOptions.billToPostalCode}
+                  onChange={(e) => setAdvancedOptions({ ...advancedOptions, billToPostalCode: e.target.value })}
+                  placeholder="12345"
+                  className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Validated for FedEx
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Options (Optional) */}
+      <details className="bg-white border-2 border-gray-200 rounded-lg shadow-sm">
+        <summary className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors font-bold text-sm text-gray-900 flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            Advanced Options
+            <span className="text-xs font-normal text-gray-500">(Optional)</span>
+          </span>
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </summary>
+
+        <div className="px-4 pb-4 pt-2 space-y-4 border-t border-gray-200">
+          {/* Billing Options */}
+          <div className="space-y-3">
+            <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Billing Options</h5>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bill To Party</label>
+              <select
+                value={advancedOptions.billToParty}
+                onChange={(e) => setAdvancedOptions({
+                  ...advancedOptions,
+                  billToParty: e.target.value as 'sender' | 'recipient' | 'third_party'
+                })}
+                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="sender">Sender (Default)</option>
+                <option value="recipient">Recipient (FedEx Ground Collect)</option>
+                <option value="third_party">Third Party</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-0.5">Who pays for shipping costs</p>
+            </div>
+
+            {/* Show note when third party is selected */}
+            {advancedOptions.billToParty === 'third_party' && (
+              <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800">
+                <strong>Third Party Billing:</strong> The billing information fields are displayed prominently above (before Advanced Options) for easy access.
+                Scroll up to see and edit the Bill To Account, Country Code, and Postal Code fields.
+              </div>
+            )}
+          </div>
+
+          {/* Delivery Options */}
+          <div className="space-y-3 pt-3 border-t border-gray-200">
+            <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Delivery Options</h5>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Signature Confirmation</label>
+              <select
+                value={advancedOptions.confirmation}
+                onChange={(e) => setAdvancedOptions({
+                  ...advancedOptions,
+                  confirmation: e.target.value as 'none' | 'delivery' | 'signature' | 'adult_signature' | 'direct_signature'
+                })}
+                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="none">None</option>
+                <option value="delivery">Delivery</option>
+                <option value="signature">Signature</option>
+                <option value="adult_signature">Adult Signature</option>
+                <option value="direct_signature">Direct Signature</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-0.5">Require signature on delivery</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="saturdayDelivery"
+                checked={advancedOptions.saturdayDelivery}
+                onChange={(e) => setAdvancedOptions({ ...advancedOptions, saturdayDelivery: e.target.checked })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="saturdayDelivery" className="text-xs font-medium text-gray-700">
+                Saturday Delivery
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="containsAlcohol"
+                checked={advancedOptions.containsAlcohol}
+                onChange={(e) => setAdvancedOptions({ ...advancedOptions, containsAlcohol: e.target.checked })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="containsAlcohol" className="text-xs font-medium text-gray-700">
+                Contains Alcohol
+              </label>
+            </div>
+          </div>
+
+          {/* Notification Options */}
+          <div className="space-y-3 pt-3 border-t border-gray-200">
+            <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Notifications</h5>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Notification Email</label>
+              <input
+                type="email"
+                value={advancedOptions.notificationsEmail}
+                onChange={(e) => setAdvancedOptions({ ...advancedOptions, notificationsEmail: e.target.value })}
+                placeholder="customer@example.com"
+                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">Email for shipping notifications</p>
+            </div>
+          </div>
+        </div>
+      </details>
 
       {/* Return Label Options */}
       <div className="bg-white border-2 border-gray-200 rounded-lg p-4 shadow-sm">
