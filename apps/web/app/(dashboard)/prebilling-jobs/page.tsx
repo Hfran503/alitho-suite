@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 
 type DismissalRecord = {
@@ -89,7 +89,6 @@ export default function PrebillingJobsPage() {
   const [dismissNote, setDismissNote] = useState('')
   const [dismissing, setDismissing] = useState(false)
   const [showDismissedJobs, setShowDismissedJobs] = useState(false)
-  const [expandedDismissedJobs, setExpandedDismissedJobs] = useState<Set<string>>(new Set())
 
   // Get user session for role check
   const { data: session } = useSession()
@@ -475,26 +474,6 @@ export default function PrebillingJobsPage() {
     return false
   }
 
-  // Get time remaining until dismissal expires
-  const getTimeRemaining = (expiresAt: string): string => {
-    const now = new Date()
-    const expires = new Date(expiresAt)
-    const diffMs = expires.getTime() - now.getTime()
-
-    if (diffMs <= 0) return 'Expired'
-
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    if (diffHours < 1) {
-      const diffMinutes = Math.floor(diffMs / (1000 * 60))
-      return `${diffMinutes}m remaining`
-    }
-    if (diffHours < 24) {
-      return `${diffHours}h remaining`
-    }
-    const diffDays = Math.floor(diffHours / 24)
-    return `${diffDays}d ${diffHours % 24}h remaining`
-  }
-
   // Helper function to format time ago
   const getTimeAgo = (date: Date | null): string => {
     if (!date) return 'Never'
@@ -700,9 +679,13 @@ export default function PrebillingJobsPage() {
   // Filter and sort jobs
   const filteredAndSortedJobs = jobs
     .filter(job => {
-      // Dismissed filter - hide dismissed jobs unless toggle is on
-      if (job.isDismissed && !showDismissedJobs) {
-        return false
+      // Dismissed filter - show ONLY dismissed OR ONLY active based on toggle
+      if (showDismissedJobs) {
+        // When toggle is ON, show ONLY dismissed jobs
+        if (!job.isDismissed) return false
+      } else {
+        // When toggle is OFF, show ONLY active jobs
+        if (job.isDismissed) return false
       }
 
       // Search filter
@@ -772,6 +755,20 @@ export default function PrebillingJobsPage() {
       return isDateInRange(job.promiseDateTime, dateFilter)
     })
     .sort((a, b) => {
+      // When showing dismissed jobs, sort by dismissal date (most recent first)
+      if (showDismissedJobs) {
+        const aDismissedAt = a.activeDismissal?.dismissedAt ? new Date(a.activeDismissal.dismissedAt) : null
+        const bDismissedAt = b.activeDismissal?.dismissedAt ? new Date(b.activeDismissal.dismissedAt) : null
+
+        if (!aDismissedAt && !bDismissedAt) return 0
+        if (!aDismissedAt) return 1
+        if (!bDismissedAt) return -1
+
+        // Most recent dismissals first
+        return bDismissedAt.getTime() - aDismissedAt.getTime()
+      }
+
+      // For active jobs, use the selected sort field
       // Special handling for date sorting
       if (sortField === 'promiseDateTime') {
         const aDate = a.promiseDateTime ? new Date(a.promiseDateTime) : null
@@ -1188,7 +1185,7 @@ export default function PrebillingJobsPage() {
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <span className="text-sm text-gray-700">
-                      Show dismissed
+                      View dismissed jobs only
                       <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">
                         {dismissedCount}
                       </span>
@@ -1425,69 +1422,16 @@ export default function PrebillingJobsPage() {
                   {paginatedJobs.map((job, index) => {
                     // Check if this is a dismissed job
                     const isDismissedJob = job.isDismissed
-                    const isExpanded = expandedDismissedJobs.has(job.job || '')
 
-                    // Render dismissed job row (collapsed or expanded)
-                    if (isDismissedJob && !isExpanded) {
-                      return (
-                        <tr
-                          key={job.job || index}
-                          className="border-b border-gray-100 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
-                          onClick={() => {
-                            const newSet = new Set(expandedDismissedJobs)
-                            newSet.add(job.job || '')
-                            setExpandedDismissedJobs(newSet)
-                          }}
-                        >
-                          {canSyncPrices && activeAction && (
-                            <td className="pl-6 pr-2 py-3 text-sm w-12">
-                              <span className="text-gray-400 text-xs">-</span>
-                            </td>
-                          )}
-                          <td colSpan={10} className="px-4 py-3">
-                            <div className="flex items-center gap-4">
-                              <span className="font-mono font-semibold text-gray-500">{job.job}</span>
-                              <span className="text-gray-500">{job.customerName || job.customer}</span>
-                              <div className="flex-1" />
-                              <div className="flex items-center gap-2 text-sm">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span className="text-gray-500">
-                                  Dismissed by {job.activeDismissal?.dismissedByName}: "{(job.activeDismissal?.note || '').substring(0, 40)}..."
-                                </span>
-                                <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
-                                  {getTimeRemaining(job.activeDismissal?.expiresAt || '')}
-                                </span>
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleUndismissJob(job)
-                                }}
-                                className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                                title="Undismiss this job"
-                              >
-                                Undismiss
-                              </button>
-                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    }
-
-                    // Normal or expanded dismissed job row
+                    // All jobs now render in full table format
                     return (
+                    <React.Fragment key={job.job || index}>
                     <tr
-                      key={job.job || index}
                       onClick={() => handleJobClick(job)}
-                      className={`border-b border-gray-100 cursor-pointer transition-colors group ${
+                      className={`cursor-pointer transition-colors group ${
                         isDismissedJob
-                          ? 'bg-gray-50 hover:bg-gray-100'
-                          : 'hover:bg-blue-50'
+                          ? 'bg-blue-50/30 hover:bg-blue-50'
+                          : 'hover:bg-blue-50 border-b border-gray-100'
                       }`}
                     >
                       {canSyncPrices && activeAction && (
@@ -1506,9 +1450,16 @@ export default function PrebillingJobsPage() {
                       )}
                       <td className="px-4 py-3 text-sm cursor-pointer" onClick={() => handleJobClick(job)}>
                         <div className="flex flex-col gap-0.5">
-                          <span className="font-mono font-semibold text-blue-600 group-hover:text-blue-700">
-                            {job.job || '-'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-semibold text-blue-600 group-hover:text-blue-700">
+                              {job.job || '-'}
+                            </span>
+                            {isDismissedJob && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                                Dismissed
+                              </span>
+                            )}
+                          </div>
                           {(job.adminStatusDescription || job.adminStatus) && (
                             <span className="text-xs text-gray-500">
                               {job.adminStatusDescription || job.adminStatus}
@@ -1920,31 +1871,18 @@ export default function PrebillingJobsPage() {
                       <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           {isDismissedJob ? (
-                            <>
-                              <button
-                                onClick={() => handleUndismissJob(job)}
-                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                                title="Undismiss this job"
-                              >
+                            <button
+                              onClick={() => handleUndismissJob(job)}
+                              className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200 shadow-sm hover:shadow"
+                              title="Restore this job to active status"
+                            >
+                              <div className="flex items-center gap-1.5">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const newSet = new Set(expandedDismissedJobs)
-                                  newSet.delete(job.job || '')
-                                  setExpandedDismissedJobs(newSet)
-                                }}
-                                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                                title="Collapse"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                </svg>
-                              </button>
-                            </>
+                                <span>Restore</span>
+                              </div>
+                            </button>
                           ) : canDismissJob(job) ? (
                             <button
                               onClick={() => {
@@ -1962,6 +1900,36 @@ export default function PrebillingJobsPage() {
                         </div>
                       </td>
                     </tr>
+                    {/* Full-width dismissal note row */}
+                    {isDismissedJob && job.activeDismissal && (
+                      <tr className="border-b border-gray-100 bg-blue-50/30">
+                        <td colSpan={canSyncPrices && activeAction ? 11 : 10} className="px-6 py-3">
+                          <div className="flex items-start gap-3 bg-gradient-to-r from-amber-50 to-amber-100/50 px-4 py-3 rounded-lg border border-amber-200">
+                            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                            </svg>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-amber-900">Dismissal Note</span>
+                                <span className="text-xs text-amber-700">
+                                  by {job.activeDismissal.dismissedByName} • {new Date(job.activeDismissal.dismissedAt).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              <p className="text-sm text-amber-900 leading-relaxed">
+                                "{job.activeDismissal.note}"
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )})}
                 </tbody>
               </table>
