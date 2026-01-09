@@ -219,7 +219,7 @@ export default async function CRMDashboardPage() {
           <h2 className="text-xl font-semibold mb-4">Recent Opportunities</h2>
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="divide-y">
-              {recentActivity.map((opp) => (
+              {recentActivity.map((opp: any) => (
                 <Link
                   key={opp.id}
                   href={`/crm/opportunities/${opp.id}`}
