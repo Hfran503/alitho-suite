@@ -125,7 +125,7 @@ export async function POST(
       where: { quoteId: id },
     })
 
-    const subtotal = allItems.reduce((sum, item) => sum + Number(item.total), 0)
+    const subtotal = allItems.reduce((sum: number, item: any) => sum + Number(item.total), 0)
     const tax = Number(quote.tax)
     const newTotal = subtotal + tax
 
@@ -203,7 +203,7 @@ export async function PATCH(
 
     // Recalculate quote totals
     const subtotal = itemsWithTotals.reduce(
-      (sum, item) => sum + Number(item.total),
+      (sum: number, item: any) => sum + Number(item.total),
       0
     )
     const tax = Number(quote.tax)
