@@ -61,7 +61,7 @@ export async function POST(
         validUntil: existing.validUntil,
         notes: existing.notes,
         items: {
-          create: existing.items.map(item => ({
+          create: existing.items.map((item: any) => ({
             name: item.name,
             description: item.description,
             quantity: item.quantity,
