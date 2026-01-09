@@ -77,7 +77,7 @@ export async function PATCH(
       where: { quoteId: id },
     })
 
-    const subtotal = allItems.reduce((sum: number, item) => sum + Number(item.total), 0)
+    const subtotal = allItems.reduce((sum: number, item: any) => sum + Number(item.total), 0)
     const tax = Number(quote.tax)
     const newTotal = subtotal + tax
 
@@ -145,7 +145,7 @@ export async function DELETE(
       where: { quoteId: id },
     })
 
-    const subtotal = allItems.reduce((sum: number, item) => sum + Number(item.total), 0)
+    const subtotal = allItems.reduce((sum: number, item: any) => sum + Number(item.total), 0)
     const tax = Number(quote.tax)
     const newTotal = subtotal + tax
 
