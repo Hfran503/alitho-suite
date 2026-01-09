@@ -55,6 +55,10 @@ model Tenant {
   kitAssemblies          KitAssembly[]
   storefrontOrders       StorefrontOrder[]
   prebillingJobDismissals PrebillingJobDismissal[]
+  contacts               Contact[]
+  opportunities          Opportunity[]
+  quotes                 Quote[]
+  productTypes           ProductType[]
 
   @@index([slug])
   @@index([status])
@@ -1861,4 +1865,183 @@ model PrebillingJobDismissal {
   @@index([tenantId])
   @@index([expiresAt])
   @@index([paceJobNumber])
+}
+
+// ============================================
+// CRM MODELS
+// ============================================
+
+// Contact - CRM-specific customer/lead tracking
+model Contact {
+  id              String    @id @default(cuid())
+  tenantId        String
+
+  // Basic Info
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  company         String?
+  title           String?    // Job title
+
+  // Status
+  status          String     @default("active") // active, inactive
+
+  // Timestamps
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunities   Opportunity[]
+  quotes          Quote[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([status])
+}
+
+// Opportunity - Sales opportunity tracking
+model Opportunity {
+  id                  String    @id @default(cuid())
+  opportunityNumber   String    // Auto-generated: OPP-2024-0001
+  tenantId            String
+  contactId           String
+
+  // Core Info
+  title               String
+  description         String?   @db.Text
+
+  // Value
+  amount              Decimal   @db.Decimal(12, 2)
+
+  // Pipeline
+  stage               String    @default("prospect") // prospect, quoted, negotiation, won, lost
+  status              String    @default("open") // open, closed
+
+  // Timeline
+  expectedCloseDate   DateTime?
+  closedAt            DateTime?
+
+  // Notes
+  notes               String?   @db.Text
+
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact             Contact   @relation(fields: [contactId], references: [id])
+  quotes              Quote[]
+
+  @@unique([tenantId, opportunityNumber])
+  @@index([tenantId])
+  @@index([contactId])
+  @@index([stage])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Quote - Customer quotation with versioning support
+model Quote {
+  id                  String    @id @default(cuid())
+  quoteNumber         String    // Base number: QT-2024-0001
+  version             Int       @default(1) // 1, 2, 3 for versioning
+  tenantId            String
+  opportunityId       String?   // Optional link to opportunity
+  contactId           String
+
+  // Content
+  title               String?
+  description         String?   @db.Text
+
+  // Pricing
+  subtotal            Decimal   @db.Decimal(12, 2)
+  tax                 Decimal   @db.Decimal(12, 2) @default(0)
+  total               Decimal   @db.Decimal(12, 2)
+
+  // Status & Validity
+  status              String    @default("draft") // draft, sent, accepted, rejected, expired
+  validUntil          DateTime?
+
+  // Document
+  pdfUrl              String?   // S3/storage URL for generated PDF
+
+  // Notes
+  notes               String?   @db.Text
+
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  sentAt              DateTime?
+  acceptedAt          DateTime?
+
+  // Relations
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity         Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  contact             Contact   @relation(fields: [contactId], references: [id])
+  items               QuoteItem[]
+
+  @@unique([tenantId, quoteNumber, version]) // Unique per version
+  @@index([tenantId])
+  @@index([opportunityId])
+  @@index([contactId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// QuoteItem - Line items for quotes
+model QuoteItem {
+  id              String    @id @default(cuid())
+  quoteId         String
+
+  // Product/Service
+  name            String
+  description     String?
+  quantity        Int
+  unitPrice       Decimal   @db.Decimal(12, 2)
+  total           Decimal   @db.Decimal(12, 2) // quantity × unitPrice
+
+  // Display
+  sortOrder       Int       @default(0)
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  quote           Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+// ProductType - Standard products for quote requests
+model ProductType {
+  id              String    @id @default(cuid())
+  tenantId        String
+
+  // Product Info
+  name            String    // Display name (e.g., "Custom Boxes")
+  description     String?   // Optional description
+  slug            String    // URL-friendly identifier (e.g., "custom-boxes")
+
+  // Configurable Attributes (JSON)
+  // Format: { attributes: [{ name, label, type, required, options: [{ value, label }] }] }
+  attributes      Json?
+
+  // Status & Display
+  isActive        Boolean   @default(true)
+  sortOrder       Int       @default(0)
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([isActive])
 }
