@@ -56,6 +56,15 @@ export default function ProductTypesPage() {
   // Image upload state
   const [uploadingImage, setUploadingImage] = useState(false)
 
+  // Helper to convert old static URLs to API route URLs (for Docker volume support)
+  const getImageUrl = (url: string | null | undefined): string | null => {
+    if (!url) return null
+    if (url.startsWith('/product-images/')) {
+      return url.replace('/product-images/', '/api/images/product/')
+    }
+    return url
+  }
+
   // Attributes management
   const [attributes, setAttributes] = useState<ProductAttribute[]>([])
   const [editingAttributeIndex, setEditingAttributeIndex] = useState<number | null>(null)
@@ -434,9 +443,9 @@ export default function ProductTypesPage() {
               {productTypes.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell>
-                    {product.imageUrl ? (
+                    {getImageUrl(product.imageUrl) ? (
                       <img
-                        src={product.imageUrl}
+                        src={getImageUrl(product.imageUrl)!}
                         alt={product.name}
                         className="w-10 h-10 object-cover rounded"
                       />
@@ -585,7 +594,7 @@ export default function ProductTypesPage() {
                         {formData.imageUrl ? (
                           <div className="relative inline-block">
                             <img
-                              src={formData.imageUrl}
+                              src={getImageUrl(formData.imageUrl) || formData.imageUrl}
                               alt="Product preview"
                               className="w-40 h-40 object-cover rounded-lg border border-gray-200"
                             />

@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(bytes)
     await writeFile(filepath, buffer)
 
-    // Return public URL
-    const publicUrl = `/product-images/${filename}`
+    // Return API URL for serving images (works with Docker volumes in production)
+    const publicUrl = `/api/images/product/${filename}`
 
     return NextResponse.json({
       success: true,

@@ -82,6 +82,15 @@ export default function RequestQuotePage() {
     fetchProductTypes()
   }, [])
 
+  // Helper to convert old static URLs to API route URLs (for Docker volume support)
+  const getImageUrl = (url: string | null): string | null => {
+    if (!url) return null
+    if (url.startsWith('/product-images/')) {
+      return url.replace('/product-images/', '/api/images/product/')
+    }
+    return url
+  }
+
   const handleProductClick = (product: ProductType) => {
     setSelectedProduct(product)
     setEditingItemId(null)
@@ -421,9 +430,9 @@ export default function RequestQuotePage() {
                   {quoteItems.map((item) => (
                     <div key={item.id} className="border-b border-gray-100 pb-4">
                       <div className="flex gap-3">
-                        {item.productType.imageUrl ? (
+                        {getImageUrl(item.productType.imageUrl) ? (
                           <img
-                            src={item.productType.imageUrl}
+                            src={getImageUrl(item.productType.imageUrl)!}
                             alt={item.productType.name}
                             className="w-12 h-12 object-cover rounded"
                           />
@@ -494,9 +503,9 @@ export default function RequestQuotePage() {
               >
                 {/* Product Image */}
                 <div className="aspect-square bg-gray-100 relative overflow-hidden">
-                  {product.imageUrl ? (
+                  {getImageUrl(product.imageUrl) ? (
                     <img
-                      src={product.imageUrl}
+                      src={getImageUrl(product.imageUrl)!}
                       alt={product.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -541,9 +550,9 @@ export default function RequestQuotePage() {
                       key={item.id}
                       className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-100"
                     >
-                      {item.productType.imageUrl ? (
+                      {getImageUrl(item.productType.imageUrl) ? (
                         <img
-                          src={item.productType.imageUrl}
+                          src={getImageUrl(item.productType.imageUrl)!}
                           alt={item.productType.name}
                           className="w-full h-full object-cover"
                         />
@@ -652,9 +661,9 @@ export default function RequestQuotePage() {
 
               {/* Product Image */}
               <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-6">
-                {selectedProduct.imageUrl ? (
+                {getImageUrl(selectedProduct.imageUrl) ? (
                   <img
-                    src={selectedProduct.imageUrl}
+                    src={getImageUrl(selectedProduct.imageUrl)!}
                     alt={selectedProduct.name}
                     className="w-full h-full object-cover"
                   />
