@@ -27,35 +27,6 @@ function useGlobalStyles() {
   }, [])
 }
 
-function Snowflakes() {
-  useEffect(() => {
-    const hero = document.querySelector(`.${styles.heroSection}`)
-    if (!hero) return
-
-    const createSnowflake = () => {
-      const snowflake = document.createElement('div')
-      snowflake.className = styles.snowflake
-      snowflake.innerHTML = '❄'
-      snowflake.style.left = Math.random() * 100 + 'vw'
-      snowflake.style.animationDuration = Math.random() * 3 + 2 + 's'
-      snowflake.style.fontSize = Math.random() * 1 + 0.5 + 'em'
-      snowflake.style.opacity = (Math.random() * 0.6 + 0.4).toString()
-
-      hero.appendChild(snowflake)
-
-      snowflake.addEventListener('animationend', () => {
-        snowflake.remove()
-      })
-    }
-
-    const interval = setInterval(createSnowflake, 200)
-
-    return () => clearInterval(interval)
-  }, [])
-
-  return null
-}
-
 const gifts = [
   
   {
@@ -156,17 +127,10 @@ export default function HolidayGiftPage() {
 
   return (
     <section className={styles.heroSection}>
-      <Snowflakes />
-
-      <div className={`${styles.ornament} ${styles.ornament1}`}></div>
-      <div className={`${styles.ornament} ${styles.ornament2}`}></div>
-      <div className={`${styles.ornament} ${styles.ornament3}`}></div>
-      <div className={`${styles.ornament} ${styles.ornament4}`}></div>
-
       <div className={styles.heroContent}>
         <div className={styles.logoSection}>
           <img
-            src="/images/calitho-christmas-logo-white.png"
+            src="/images/calitho-logo-white.png"
             alt="Calitho"
             className={styles.companyLogo}
           />
@@ -175,11 +139,11 @@ export default function HolidayGiftPage() {
 
         {step === 1 ? (
           <div className={styles.giftMessage}>
-            <p className={styles.seasonGreeting}>🎄 Happy Holidays! 🎄</p>
+            <p className={styles.seasonGreeting}>Happy New Year! 🎉</p>
 
             <div className={styles.giftBox}>
               <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="20" y="35" width="60" height="50" fill="#ff6b6b" stroke="#c92a2a" strokeWidth="2"/>
+                <rect x="20" y="35" width="60" height="50" fill="#4ecdc4" stroke="#1a9b8e" strokeWidth="2"/>
                 <rect x="20" y="25" width="60" height="10" fill="#ffd700" stroke="#daa520" strokeWidth="2"/>
                 <rect x="47" y="25" width="6" height="60" fill="#ffd700"/>
                 <rect x="20" y="47" width="60" height="6" fill="#ffd700"/>
@@ -203,12 +167,12 @@ export default function HolidayGiftPage() {
           </div>
         ) : step === 2 ? (
           <div className={styles.giftMessage}>
-            <p className={styles.seasonGreeting}>🎄 Happy Holidays! 🎁</p>
+            <p className={styles.seasonGreeting}>Happy New Year! 🎁</p>
 
             <h2 className={styles.giftTitle}>Choose Your Perfect Gift</h2>
 
             <p className={styles.giftDescription}>
-             We hope this gift brings a little joy to your holidays and helps you step into the new year feeling playful, energized or blissfully calm.  
+             We hope this gift brings a little joy and helps you step into 2026 feeling playful, energized or blissfully calm.
             </p>
 
             <div className={styles.giftGrid}>
@@ -218,11 +182,6 @@ export default function HolidayGiftPage() {
                   onClick={() => handleGiftSelect(gift)}
                   className={styles.giftCard}
                 >
-                  {gift.id === 'chill-out' && (
-                    <div className={styles.shippingBadge}>
-                      Ships January 2026
-                    </div>
-                  )}
                   <img
                     src={gift.image}
                     alt={gift.name}
@@ -233,10 +192,6 @@ export default function HolidayGiftPage() {
                 </button>
               ))}
             </div>
-
-            <p className={styles.shippingNote}>
-              * The Chill Out Gift Box will be shipped in January 2026
-            </p>
           </div>
         ) : step === 3 ? (
           <div className={styles.giftMessage}>

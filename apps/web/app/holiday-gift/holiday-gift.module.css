@@ -12,24 +12,6 @@
   padding: 2rem 0;
 }
 
-.snowflake {
-  position: fixed;
-  top: -10px;
-  color: white;
-  font-size: 1em;
-  user-select: none;
-  pointer-events: none;
-  z-index: 1;
-  animation: fall linear forwards;
-  opacity: 0.8;
-}
-
-@keyframes fall {
-  to {
-    transform: translateY(100vh);
-  }
-}
-
 .heroContent {
   position: relative;
   z-index: 10;
@@ -67,10 +49,10 @@
 
 .seasonGreeting {
   font-size: 2rem;
-  color: #ff6b6b;
+  color: #ffd700;
   font-weight: 600;
   margin-bottom: 1rem;
-  text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
 }
 
 .giftTitle {
@@ -154,51 +136,6 @@
   box-shadow: 0 10px 30px rgba(255, 215, 0, 0.2);
 }
 
-.ornament {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  opacity: 0.6;
-  animation: float 6s ease-in-out infinite;
-}
-
-.ornament1 {
-  top: 10%;
-  left: 10%;
-  background: radial-gradient(circle at 30% 30%, #ff6b6b, #c92a2a);
-  animation-delay: 0s;
-}
-
-.ornament2 {
-  top: 20%;
-  right: 15%;
-  background: radial-gradient(circle at 30% 30%, #4ecdc4, #1a9b8e);
-  animation-delay: 1s;
-}
-
-.ornament3 {
-  bottom: 15%;
-  left: 15%;
-  background: radial-gradient(circle at 30% 30%, #ffd700, #daa520);
-  animation-delay: 2s;
-}
-
-.ornament4 {
-  bottom: 25%;
-  right: 10%;
-  background: radial-gradient(circle at 30% 30%, #95e1d3, #38ada9);
-  animation-delay: 1.5s;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(180deg);
-  }
-}
 
 @keyframes fadeInDown {
   from {
@@ -288,10 +225,10 @@
 
 @keyframes borderGlow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(196, 30, 58, 0.3), 0 0 40px rgba(34, 139, 34, 0.2);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), 0 0 40px rgba(78, 205, 196, 0.2);
   }
   50% {
-    box-shadow: 0 0 30px rgba(34, 139, 34, 0.4), 0 0 50px rgba(196, 30, 58, 0.3);
+    box-shadow: 0 0 30px rgba(78, 205, 196, 0.4), 0 0 50px rgba(255, 215, 0, 0.3);
   }
 }
 
@@ -331,13 +268,13 @@
   position: absolute;
   top: 10px;
   left: 10px;
-  background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+  background: linear-gradient(135deg, #4ecdc4, #38ada9);
   color: white;
   font-size: 0.7rem;
   font-weight: 700;
   padding: 8px 14px;
   border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.5);
+  box-shadow: 0 4px 15px rgba(78, 205, 196, 0.5);
   z-index: 10;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -346,7 +283,7 @@
 .shippingNote {
   margin-top: 2rem;
   font-size: 0.95rem;
-  color: #ffb3b3;
+  color: #b8dce8;
   font-style: italic;
 }
 
