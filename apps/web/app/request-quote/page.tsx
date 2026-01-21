@@ -61,6 +61,9 @@ export default function RequestQuotePage() {
   const [quantities, setQuantities] = useState<string[]>([''])
   const [customDescription, setCustomDescription] = useState('')
 
+  // Custom product modal state
+  const [customModalOpen, setCustomModalOpen] = useState(false)
+
   // Checkout state
   const [showCheckout, setShowCheckout] = useState(false)
   const [formData, setFormData] = useState({
@@ -108,7 +111,13 @@ export default function RequestQuotePage() {
     setAttributeValues({})
     setQuantities([''])
     setCustomDescription('')
-    setSidebarOpen(true)
+
+    // Open modal for custom product, sidebar for regular products
+    if (product.id === 'custom') {
+      setCustomModalOpen(true)
+    } else {
+      setSidebarOpen(true)
+    }
   }
 
   const handleEditItem = (item: QuoteItem) => {
@@ -117,7 +126,13 @@ export default function RequestQuotePage() {
     setAttributeValues(item.attributeValues)
     setQuantities(item.quantities)
     setCustomDescription(item.attributeValues.customDescription || '')
-    setSidebarOpen(true)
+
+    // Open modal for custom product, sidebar for regular products
+    if (item.productType.id === 'custom') {
+      setCustomModalOpen(true)
+    } else {
+      setSidebarOpen(true)
+    }
   }
 
   const handleRemoveItem = (itemId: string) => {
@@ -130,6 +145,15 @@ export default function RequestQuotePage() {
     setEditingItemId(null)
     setAttributeValues({})
     setQuantities([''])
+  }
+
+  const closeCustomModal = () => {
+    setCustomModalOpen(false)
+    setSelectedProduct(null)
+    setEditingItemId(null)
+    setCustomDescription('')
+    setQuantities([''])
+    setError(null)
   }
 
   const handleAttributeChange = (name: string, value: any) => {
@@ -204,7 +228,12 @@ export default function RequestQuotePage() {
       setQuoteItems([...quoteItems, newItem])
     }
 
-    closeSidebar()
+    // Close the appropriate dialog
+    if (selectedProduct.id === 'custom') {
+      closeCustomModal()
+    } else {
+      closeSidebar()
+    }
   }
 
   const formatItemSummary = (item: QuoteItem): string => {
@@ -691,6 +720,134 @@ export default function RequestQuotePage() {
         </div>
       )}
 
+      {/* Custom Product Modal */}
+      {customModalOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={closeCustomModal}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Custom Request</h2>
+                    <p className="text-sm text-gray-500">Describe your custom product needs</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeCustomModal}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-red-800 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                {/* Description */}
+                <div className="mb-6">
+                  <Label className="text-sm font-medium text-gray-900">
+                    What are you looking for? <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    value={customDescription}
+                    onChange={(e) => setCustomDescription(e.target.value)}
+                    placeholder="Describe the product or service you need, including any specific requirements, dimensions, materials, quantities, or other details..."
+                    rows={8}
+                    className="mt-2"
+                  />
+                </div>
+
+                {/* Quantities */}
+                <div>
+                  <Label className="text-sm font-medium text-gray-900">
+                    Quantities <span className="text-red-500">*</span>
+                  </Label>
+                  <p className="text-xs text-gray-500 mb-2">Add quantities you need pricing for</p>
+                  <div className="space-y-2">
+                    {quantities.map((qty, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          type="text"
+                          value={qty}
+                          onChange={(e) => {
+                            const newQuantities = [...quantities]
+                            newQuantities[index] = e.target.value
+                            setQuantities(newQuantities)
+                          }}
+                          placeholder="e.g., 100, 500, 1000"
+                          className="flex-1"
+                        />
+                        {quantities.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setQuantities(quantities.filter((_, i) => i !== index))}
+                            className="shrink-0"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setQuantities([...quantities, ''])}
+                      className="w-full"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Another Quantity
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                <Button
+                  variant="outline"
+                  onClick={closeCustomModal}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddToQuote}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700"
+                >
+                  {editingItemId ? 'Update Quote' : 'Add to Quote'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Configuration Sidebar */}
       {sidebarOpen && selectedProduct && (
         <>
@@ -727,16 +884,7 @@ export default function RequestQuotePage() {
 
               {/* Product Image */}
               <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-6">
-                {selectedProduct.id === 'custom' ? (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
-                    <div className="text-center">
-                      <svg className="w-16 h-16 text-teal-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                      <p className="text-teal-600 text-sm font-medium mt-2">Custom Request</p>
-                    </div>
-                  </div>
-                ) : getImageUrl(selectedProduct.imageUrl) ? (
+                {getImageUrl(selectedProduct.imageUrl) ? (
                   <img
                     src={getImageUrl(selectedProduct.imageUrl)!}
                     alt={selectedProduct.name}
@@ -757,24 +905,8 @@ export default function RequestQuotePage() {
                 <p className="text-gray-600 text-sm mb-6">{selectedProduct.description}</p>
               )}
 
-              {/* Custom Product Description */}
-              {selectedProduct.id === 'custom' && (
-                <div className="mb-6">
-                  <Label className="text-sm font-medium text-gray-900">
-                    Describe what you need <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    value={customDescription}
-                    onChange={(e) => setCustomDescription(e.target.value)}
-                    placeholder="Please describe the product or service you are looking for, including any specific requirements, dimensions, materials, or other details..."
-                    rows={5}
-                    className="mt-2"
-                  />
-                </div>
-              )}
-
               {/* Attributes */}
-              {selectedProduct.id !== 'custom' && selectedProduct.attributes?.attributes && selectedProduct.attributes.attributes.length > 0 && (
+              {selectedProduct.attributes?.attributes && selectedProduct.attributes.attributes.length > 0 && (
                 <div className="space-y-4 mb-6">
                   <h4 className="font-medium text-gray-900">Options</h4>
                   {selectedProduct.attributes.attributes.map((attr) => (
