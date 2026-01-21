@@ -25,6 +25,7 @@ export async function GET() {
         description: true,
         slug: true,
         attributes: true,
+        imageUrl: true,
       },
     })
 

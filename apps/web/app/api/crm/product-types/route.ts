@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { name, description, slug, isActive, sortOrder, attributes } = body
+    const { name, description, slug, isActive, sortOrder, attributes, imageUrl } = body
 
     // Validate required fields
     if (!name || !slug) {
@@ -96,6 +96,7 @@ export async function POST(request: Request) {
         description: description || null,
         slug,
         attributes: attributes || null,
+        imageUrl: imageUrl || null,
         isActive: isActive !== undefined ? isActive : true,
         sortOrder: sortOrder !== undefined ? sortOrder : 0,
       },

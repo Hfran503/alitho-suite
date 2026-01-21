@@ -76,7 +76,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { name, description, slug, isActive, sortOrder, attributes } = body
+    const { name, description, slug, isActive, sortOrder, attributes, imageUrl } = body
 
     // If slug is being changed, check if it already exists
     if (slug && slug !== productType.slug) {
@@ -104,6 +104,7 @@ export async function PATCH(
         ...(description !== undefined && { description }),
         ...(slug !== undefined && { slug }),
         ...(attributes !== undefined && { attributes }),
+        ...(imageUrl !== undefined && { imageUrl }),
         ...(isActive !== undefined && { isActive }),
         ...(sortOrder !== undefined && { sortOrder }),
       },

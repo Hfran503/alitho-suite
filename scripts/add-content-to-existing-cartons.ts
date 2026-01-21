@@ -12,8 +12,8 @@
 import { getPaceApiCredentials } from '@repo/shared'
 
 // Configuration - Update these values as needed
-const JOB_ID = '1002849'
-const JOB_PRODUCT_ID = 65702
+const JOB_ID = '1003073'
+const JOB_PRODUCT_ID = 66710
 const QUANTITY = 1
 
 interface JobShipment {

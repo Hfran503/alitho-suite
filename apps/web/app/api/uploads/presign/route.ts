@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { generatePresignedUploadUrl } from '@/lib/s3'
+import { generatePresignedUploadUrl, getPublicUrl } from '@/lib/s3'
 import { db } from '@repo/database'
 import { createPresignedUploadSchema } from '@repo/types'
 import { nanoid } from 'nanoid'
@@ -51,12 +51,16 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Get the public URL for the uploaded file
+    const publicUrl = getPublicUrl(key)
+
     return NextResponse.json({
       success: true,
       data: {
         attachmentId: attachment.id,
         uploadUrl,
         key,
+        publicUrl,
       },
     })
   } catch (error) {

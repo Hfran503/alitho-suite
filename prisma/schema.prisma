@@ -2030,6 +2030,9 @@ model ProductType {
   // Format: { attributes: [{ name, label, type, required, options: [{ value, label }] }] }
   attributes      Json?
 
+  // Product Image (S3 URL)
+  imageUrl        String?
+
   // Status & Display
   isActive        Boolean   @default(true)
   sortOrder       Int       @default(0)

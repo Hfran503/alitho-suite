@@ -19,6 +19,7 @@ interface ProductType {
   name: string
   description: string | null
   slug: string
+  imageUrl: string | null
   isActive: boolean
   sortOrder: number
   attributes: any
@@ -47,9 +48,13 @@ export default function ProductTypesPage() {
     name: '',
     description: '',
     slug: '',
+    imageUrl: '',
     isActive: true,
     sortOrder: 0,
   })
+
+  // Image upload state
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   // Attributes management
   const [attributes, setAttributes] = useState<ProductAttribute[]>([])
@@ -90,6 +95,7 @@ export default function ProductTypesPage() {
       name: '',
       description: '',
       slug: '',
+      imageUrl: '',
       isActive: true,
       sortOrder: 0,
     })
@@ -103,6 +109,7 @@ export default function ProductTypesPage() {
       name: product.name,
       description: product.description || '',
       slug: product.slug,
+      imageUrl: product.imageUrl || '',
       isActive: product.isActive,
       sortOrder: product.sortOrder,
     })
@@ -187,6 +194,52 @@ export default function ProductTypesPage() {
     })
   }
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be less than 5MB')
+      return
+    }
+
+    setUploadingImage(true)
+    setError(null)
+
+    try {
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', file)
+
+      const response = await fetch('/api/uploads/product-image', {
+        method: 'POST',
+        body: uploadFormData,
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to upload image')
+      }
+
+      const { data } = await response.json()
+      setFormData({ ...formData, imageUrl: data.url })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload image')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setFormData({ ...formData, imageUrl: '' })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -201,7 +254,12 @@ export default function ProductTypesPage() {
         method: editingProduct ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          name: formData.name,
+          description: formData.description,
+          slug: formData.slug,
+          imageUrl: formData.imageUrl || null,
+          isActive: formData.isActive,
+          sortOrder: formData.sortOrder,
           attributes: attributes.length > 0 ? { attributes } : null,
         }),
       })
@@ -252,6 +310,53 @@ export default function ProductTypesPage() {
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.error || 'Failed to update product type')
+      }
+
+      await fetchProductTypes()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    }
+  }
+
+  const handleDuplicate = async (product: ProductType) => {
+    try {
+      // Generate a unique name and slug for the duplicate
+      const baseName = product.name.replace(/\s*\(Copy(?:\s*\d+)?\)$/, '')
+      const baseSlug = product.slug.replace(/-copy(?:-\d+)?$/, '')
+
+      // Find existing copies to determine the next number
+      const existingCopies = productTypes.filter(
+        (p) => p.name.startsWith(baseName) && p.name.includes('(Copy')
+      )
+
+      let newName: string
+      let newSlug: string
+
+      if (existingCopies.length === 0) {
+        newName = `${baseName} (Copy)`
+        newSlug = `${baseSlug}-copy`
+      } else {
+        const copyNumber = existingCopies.length + 1
+        newName = `${baseName} (Copy ${copyNumber})`
+        newSlug = `${baseSlug}-copy-${copyNumber}`
+      }
+
+      const response = await fetch('/api/crm/product-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName,
+          slug: newSlug,
+          description: product.description || '',
+          isActive: product.isActive,
+          sortOrder: product.sortOrder,
+          attributes: product.attributes,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to duplicate product type')
       }
 
       await fetchProductTypes()
@@ -316,6 +421,7 @@ export default function ProductTypesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead>Attributes</TableHead>
@@ -327,6 +433,21 @@ export default function ProductTypesPage() {
             <TableBody>
               {productTypes.map((product) => (
                 <TableRow key={product.id}>
+                  <TableCell>
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-10 h-10 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>
                     <code className="text-sm bg-gray-100 px-2 py-1 rounded">{product.slug}</code>
@@ -355,6 +476,13 @@ export default function ProductTypesPage() {
                         onClick={() => handleOpenEdit(product)}
                       >
                         Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDuplicate(product)}
+                      >
+                        Duplicate
                       </Button>
                       <Button
                         size="sm"
@@ -448,6 +576,58 @@ export default function ProductTypesPage() {
                         placeholder="Optional description"
                         rows={2}
                       />
+                    </div>
+
+                    {/* Product Image */}
+                    <div>
+                      <Label>Product Image</Label>
+                      <div className="mt-2">
+                        {formData.imageUrl ? (
+                          <div className="relative inline-block">
+                            <img
+                              src={formData.imageUrl}
+                              alt="Product preview"
+                              className="w-40 h-40 object-cover rounded-lg border border-gray-200"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleRemoveImage}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-teal-500 hover:bg-teal-50 transition-colors">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageUpload}
+                              className="hidden"
+                              disabled={uploadingImage}
+                            />
+                            {uploadingImage ? (
+                              <div className="flex flex-col items-center">
+                                <svg className="animate-spin h-8 w-8 text-teal-600" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span className="mt-2 text-sm text-gray-500">Uploading...</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span className="mt-2 text-sm text-gray-500">Click to upload</span>
+                                <span className="text-xs text-gray-400">Max 5MB</span>
+                              </div>
+                            )}
+                          </label>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

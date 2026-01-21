@@ -20,18 +20,38 @@ interface ProductType {
   name: string
   slug: string
   description: string | null
+  imageUrl: string | null
   attributes?: {
     attributes: ProductAttribute[]
   } | null
+}
+
+interface QuoteItem {
+  id: string
+  productType: ProductType
+  attributeValues: Record<string, any>
+  quantities: string[]
 }
 
 export default function RequestQuotePage() {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [quoteType, setQuoteType] = useState<'standard' | 'custom'>('standard')
   const [productTypes, setProductTypes] = useState<ProductType[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
+
+  // Quote cart
+  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([])
+
+  // Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [attributeValues, setAttributeValues] = useState<Record<string, any>>({})
+  const [quantities, setQuantities] = useState<string[]>([''])
+
+  // Checkout state
+  const [showCheckout, setShowCheckout] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -39,12 +59,8 @@ export default function RequestQuotePage() {
     phone: '',
     company: '',
     title: '',
-    projectDetails: '',
-    estimatedBudget: '',
+    additionalNotes: '',
   })
-  const [standardProducts, setStandardProducts] = useState([
-    { productType: '', quantities: [''], attributeValues: {} as Record<string, any> }
-  ])
 
   // Fetch product types on mount
   useEffect(() => {
@@ -66,56 +82,113 @@ export default function RequestQuotePage() {
     fetchProductTypes()
   }, [])
 
-  const handleAddProduct = () => {
-    setStandardProducts([...standardProducts, { productType: '', quantities: [''], attributeValues: {} }])
+  const handleProductClick = (product: ProductType) => {
+    setSelectedProduct(product)
+    setEditingItemId(null)
+    setAttributeValues({})
+    setQuantities([''])
+    setSidebarOpen(true)
   }
 
-  const handleRemoveProduct = (index: number) => {
-    if (standardProducts.length > 1) {
-      setStandardProducts(standardProducts.filter((_, i) => i !== index))
+  const handleEditItem = (item: QuoteItem) => {
+    setSelectedProduct(item.productType)
+    setEditingItemId(item.id)
+    setAttributeValues(item.attributeValues)
+    setQuantities(item.quantities)
+    setSidebarOpen(true)
+  }
+
+  const handleRemoveItem = (itemId: string) => {
+    setQuoteItems(quoteItems.filter(item => item.id !== itemId))
+  }
+
+  const closeSidebar = () => {
+    setSidebarOpen(false)
+    setSelectedProduct(null)
+    setEditingItemId(null)
+    setAttributeValues({})
+    setQuantities([''])
+  }
+
+  const handleAttributeChange = (name: string, value: any) => {
+    setAttributeValues({ ...attributeValues, [name]: value })
+  }
+
+  const handleQuantityChange = (index: number, value: string) => {
+    const updated = [...quantities]
+    updated[index] = value
+    setQuantities(updated)
+  }
+
+  const handleAddQuantity = () => {
+    setQuantities([...quantities, ''])
+  }
+
+  const handleRemoveQuantity = (index: number) => {
+    if (quantities.length > 1) {
+      setQuantities(quantities.filter((_, i) => i !== index))
     }
   }
 
-  const handleProductChange = (index: number, field: string, value: string) => {
-    const updated = [...standardProducts]
-    updated[index] = { ...updated[index], [field]: value }
+  const handleAddToQuote = () => {
+    if (!selectedProduct) return
 
-    // Reset attributes when product type changes
-    if (field === 'productType') {
-      updated[index].attributeValues = {}
+    // Validate required attributes
+    const attrs = selectedProduct.attributes?.attributes || []
+    for (const attr of attrs) {
+      if (attr.required && !attributeValues[attr.name]) {
+        setError(`Please select ${attr.label}`)
+        return
+      }
     }
 
-    setStandardProducts(updated)
-  }
-
-  const handleAttributeChange = (productIndex: number, attributeName: string, value: any) => {
-    const updated = [...standardProducts]
-    updated[productIndex].attributeValues[attributeName] = value
-    setStandardProducts(updated)
-  }
-
-  const handleQuantityChange = (productIndex: number, quantityIndex: number, value: string) => {
-    const updated = [...standardProducts]
-    updated[productIndex].quantities[quantityIndex] = value
-    setStandardProducts(updated)
-  }
-
-  const handleAddQuantity = (productIndex: number) => {
-    const updated = [...standardProducts]
-    updated[productIndex].quantities.push('')
-    setStandardProducts(updated)
-  }
-
-  const handleRemoveQuantity = (productIndex: number, quantityIndex: number) => {
-    const updated = [...standardProducts]
-    if (updated[productIndex].quantities.length > 1) {
-      updated[productIndex].quantities = updated[productIndex].quantities.filter((_, i) => i !== quantityIndex)
+    // Validate at least one quantity
+    const validQuantities = quantities.filter(q => q && q.trim() !== '')
+    if (validQuantities.length === 0) {
+      setError('Please enter at least one quantity')
+      return
     }
-    setStandardProducts(updated)
+
+    setError(null)
+
+    if (editingItemId) {
+      // Update existing item
+      setQuoteItems(quoteItems.map(item =>
+        item.id === editingItemId
+          ? { ...item, attributeValues, quantities: validQuantities }
+          : item
+      ))
+    } else {
+      // Add new item
+      const newItem: QuoteItem = {
+        id: `item-${Date.now()}`,
+        productType: selectedProduct,
+        attributeValues,
+        quantities: validQuantities,
+      }
+      setQuoteItems([...quoteItems, newItem])
+    }
+
+    closeSidebar()
   }
 
-  const getSelectedProductType = (slug: string): ProductType | undefined => {
-    return productTypes.find(p => p.slug === slug)
+  const formatItemSummary = (item: QuoteItem): string => {
+    const attrs = item.productType.attributes?.attributes || []
+    const parts: string[] = []
+
+    attrs.forEach(attr => {
+      const value = item.attributeValues[attr.name]
+      if (value !== undefined && value !== null && value !== '') {
+        if ((attr.type === 'select' || attr.type === 'radio') && attr.options) {
+          const option = attr.options.find(opt => opt.value === value)
+          if (option) parts.push(option.label)
+        } else if (attr.type === 'checkbox' && value) {
+          parts.push(attr.label)
+        }
+      }
+    })
+
+    return parts.join(' • ') || 'No options selected'
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,66 +197,46 @@ export default function RequestQuotePage() {
     setError(null)
 
     try {
-      // Format project details based on quote type
-      let projectDetails = formData.projectDetails
+      // Format project details from quote items
+      const productsText = quoteItems
+        .map((item, i) => {
+          let text = `Product ${i + 1}:\n- Type: ${item.productType.name}`
+          text += `\n- Quantities: ${item.quantities.join(', ')}`
 
-      if (quoteType === 'standard') {
-        // Validate at least one product with required fields
-        const validProducts = standardProducts.filter(p => {
-          const hasProductType = !!p.productType
-          const hasValidQuantity = p.quantities.some(q => q && q.trim() !== '')
-          return hasProductType && hasValidQuantity
-        })
-        if (validProducts.length === 0) {
-          setError('Please add at least one product with type and at least one quantity')
-          setLoading(false)
-          return
-        }
-
-        // Format standard products as structured text
-        const productsText = validProducts
-          .map((p, i) => {
-            const productType = getSelectedProductType(p.productType)
-            let text = `Product ${i + 1}:\n- Type: ${productType?.name || p.productType}`
-
-            // Add quantities
-            const validQuantities = p.quantities.filter(q => q && q.trim() !== '')
-            if (validQuantities.length > 0) {
-              text += `\n- Quantities: ${validQuantities.join(', ')}`
+          const attrs = item.productType.attributes?.attributes || []
+          attrs.forEach(attr => {
+            const value = item.attributeValues[attr.name]
+            if (value !== undefined && value !== null && value !== '') {
+              if ((attr.type === 'select' || attr.type === 'radio') && attr.options) {
+                const option = attr.options.find(opt => opt.value === value)
+                text += `\n- ${attr.label}: ${option?.label || value}`
+              } else if (attr.type === 'checkbox') {
+                text += `\n- ${attr.label}: ${value ? 'Yes' : 'No'}`
+              }
             }
-
-            // Add attribute values
-            if (productType?.attributes?.attributes && Object.keys(p.attributeValues).length > 0) {
-              productType.attributes.attributes.forEach(attr => {
-                const value = p.attributeValues[attr.name]
-                if (value !== undefined && value !== null && value !== '') {
-                  // Find the label for select/radio options
-                  if ((attr.type === 'select' || attr.type === 'radio') && attr.options) {
-                    const option = attr.options.find(opt => opt.value === value)
-                    text += `\n- ${attr.label}: ${option?.label || value}`
-                  } else if (attr.type === 'checkbox') {
-                    text += `\n- ${attr.label}: ${value ? 'Yes' : 'No'}`
-                  } else {
-                    text += `\n- ${attr.label}: ${value}`
-                  }
-                }
-              })
-            }
-
-            return text
           })
-          .join('\n\n')
 
-        projectDetails = `STANDARD PRODUCTS REQUEST:\n\n${productsText}`
+          return text
+        })
+        .join('\n\n')
+
+      let projectDetails = `STANDARD PRODUCTS REQUEST:\n\n${productsText}`
+      if (formData.additionalNotes) {
+        projectDetails += `\n\nAdditional Notes:\n${formData.additionalNotes}`
       }
 
       const response = await fetch('/api/public/quote-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          title: formData.title,
           projectDetails,
-          quoteType,
+          quoteType: 'standard',
         }),
       })
 
@@ -200,6 +253,7 @@ export default function RequestQuotePage() {
     }
   }
 
+  // Success screen
   if (submitted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 flex items-center justify-center p-4">
@@ -230,391 +284,524 @@ export default function RequestQuotePage() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Request a Quote</h1>
-          <p className="text-xl text-gray-600">
-            Tell us about your project and we'll get back to you with a detailed quote.
-          </p>
-        </div>
+  // Checkout screen
+  if (showCheckout) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 py-12 px-4">
+        <div className="max-w-4xl mx-auto">
+          <button
+            onClick={() => setShowCheckout(false)}
+            className="flex items-center text-teal-600 hover:text-teal-700 mb-6"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Products
+          </button>
 
-        {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-10">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-red-800">
-              {error}
-            </div>
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Contact Form */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                <h1 className="text-2xl font-bold text-gray-900 mb-6">Complete Your Quote Request</h1>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Personal Information */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Contact Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">First Name *</Label>
-                  <Input
-                    id="firstName"
-                    required
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    placeholder="John"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    required
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    placeholder="Doe"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="email">Email Address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="john@example.com"
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="(925) 682-1111"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="company">Company Name</Label>
-                <Input
-                  id="company"
-                  value={formData.company}
-                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  placeholder="Acme Corporation"
-                />
-              </div>
-              <div>
-                <Label htmlFor="title">Job Title</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Marketing Director"
-                />
-              </div>
-            </div>
-
-            {/* Quote Type Selection */}
-            <div className="pt-6 border-t border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                Quote Type
-              </h2>
-              <div className="space-y-3">
-                <label className="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="quoteType"
-                    value="standard"
-                    checked={quoteType === 'standard'}
-                    onChange={(e) => setQuoteType(e.target.value as 'standard' | 'custom')}
-                    className="mt-1 mr-3"
-                  />
-                  <div>
-                    <div className="font-semibold text-gray-900">Standard Products</div>
-                    <div className="text-sm text-gray-600">Select from our pre-configured product offerings</div>
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-red-800">
+                    {error}
                   </div>
-                </label>
-                <label className="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="quoteType"
-                    value="custom"
-                    checked={quoteType === 'custom'}
-                    onChange={(e) => setQuoteType(e.target.value as 'standard' | 'custom')}
-                    className="mt-1 mr-3"
-                  />
-                  <div>
-                    <div className="font-semibold text-gray-900">Custom Project</div>
-                    <div className="text-sm text-gray-600">Describe your unique requirements in detail</div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="firstName">First Name *</Label>
+                      <Input
+                        id="firstName"
+                        required
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                        placeholder="John"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="lastName">Last Name *</Label>
+                      <Input
+                        id="lastName"
+                        required
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                        placeholder="Doe"
+                      />
+                    </div>
                   </div>
-                </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="email">Email Address *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        required
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="john@example.com"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="(925) 682-1111"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="company">Company Name</Label>
+                      <Input
+                        id="company"
+                        value={formData.company}
+                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        placeholder="Acme Corporation"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="title">Job Title</Label>
+                      <Input
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        placeholder="Marketing Director"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="additionalNotes">Additional Notes</Label>
+                    <Textarea
+                      id="additionalNotes"
+                      value={formData.additionalNotes}
+                      onChange={(e) => setFormData({ ...formData, additionalNotes: e.target.value })}
+                      placeholder="Any special requirements or questions?"
+                      rows={4}
+                      className="resize-none"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white py-6 text-lg font-semibold"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center">
+                        <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Submitting...
+                      </span>
+                    ) : (
+                      'Submit Quote Request'
+                    )}
+                  </Button>
+                </form>
               </div>
             </div>
 
-            {/* Project Details - Conditional based on quote type */}
-            <div className="pt-6 border-t border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                {quoteType === 'standard' ? 'Product Selection' : 'Project Details'}
-              </h2>
-
-              {quoteType === 'standard' ? (
-                <div className="space-y-6">
-                  {standardProducts.map((product, index) => (
-                    <div key={index} className="p-4 md:p-6 border border-gray-200 rounded-lg bg-gray-50">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-semibold text-gray-900">Product {index + 1}</h3>
-                        {standardProducts.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveProduct(index)}
-                            className="text-red-600 hover:text-red-700 text-sm"
-                          >
-                            Remove
-                          </button>
+            {/* Order Summary */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Quote Summary</h2>
+                <div className="space-y-4">
+                  {quoteItems.map((item) => (
+                    <div key={item.id} className="border-b border-gray-100 pb-4">
+                      <div className="flex gap-3">
+                        {item.productType.imageUrl ? (
+                          <img
+                            src={item.productType.imageUrl}
+                            alt={item.productType.name}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
+                            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
                         )}
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor={`productType-${index}`}>Product Type *</Label>
-                          <select
-                            id={`productType-${index}`}
-                            required
-                            value={product.productType}
-                            onChange={(e) => handleProductChange(index, 'productType', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            disabled={loadingProducts}
-                          >
-                            <option value="">
-                              {loadingProducts ? 'Loading products...' : 'Select a product'}
-                            </option>
-                            {productTypes.map((type) => (
-                              <option key={type.id} value={type.slug}>
-                                {type.name}
-                              </option>
-                            ))}
-                            {!loadingProducts && productTypes.length === 0 && (
-                              <option value="" disabled>
-                                No products available
-                              </option>
-                            )}
-                          </select>
-                        </div>
-
-                        {/* Dynamic Product Attributes */}
-                        {product.productType && (() => {
-                          const selectedProduct = getSelectedProductType(product.productType)
-                          const attrs = selectedProduct?.attributes?.attributes
-                          if (!attrs || attrs.length === 0) return null
-
-                          return (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {attrs.map((attr) => (
-                                <div key={attr.name}>
-                              <Label htmlFor={`${attr.name}-${index}`}>
-                                {attr.label} {attr.required && <span className="text-red-500">*</span>}
-                              </Label>
-
-                              {/* Select Dropdown */}
-                              {attr.type === 'select' && (
-                                <select
-                                  id={`${attr.name}-${index}`}
-                                  required={attr.required}
-                                  value={product.attributeValues[attr.name] || ''}
-                                  onChange={(e) => handleAttributeChange(index, attr.name, e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                >
-                                  <option value="">Select {attr.label}</option>
-                                  {attr.options?.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-
-                              {/* Radio Buttons */}
-                              {attr.type === 'radio' && (
-                                <div className="space-y-2">
-                                  {attr.options?.map((opt) => (
-                                    <label
-                                      key={opt.value}
-                                      className="flex items-center gap-2 cursor-pointer"
-                                    >
-                                      <input
-                                        type="radio"
-                                        name={`${attr.name}-${index}`}
-                                        value={opt.value}
-                                        checked={product.attributeValues[attr.name] === opt.value}
-                                        onChange={(e) => handleAttributeChange(index, attr.name, e.target.value)}
-                                        required={attr.required}
-                                        className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                                      />
-                                      <span className="text-sm text-gray-700">{opt.label}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Checkbox */}
-                              {attr.type === 'checkbox' && (
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    id={`${attr.name}-${index}`}
-                                    checked={!!product.attributeValues[attr.name]}
-                                    onChange={(e) => handleAttributeChange(index, attr.name, e.target.checked)}
-                                    className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
-                                  />
-                                  <span className="text-sm text-gray-700">Yes</span>
-                                </label>
-                              )}
-                            </div>
-                              ))}
-                            </div>
-                          )
-                        })()}
-
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <Label>Quantities * <span className="text-xs text-gray-500 font-normal">(request pricing for multiple volumes)</span></Label>
-                            <button
-                              type="button"
-                              onClick={() => handleAddQuantity(index)}
-                              className="text-teal-600 hover:text-teal-700 text-sm flex items-center gap-1"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                              Add Quantity
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {product.quantities.map((qty, qtyIndex) => (
-                              <div key={qtyIndex} className="flex gap-2 items-center">
-                                <Input
-                                  type="number"
-                                  required={qtyIndex === 0}
-                                  min="1"
-                                  value={qty}
-                                  onChange={(e) => handleQuantityChange(index, qtyIndex, e.target.value)}
-                                  placeholder={qtyIndex === 0 ? "1000" : "2500"}
-                                  className="flex-1"
-                                />
-                                {product.quantities.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveQuantity(index, qtyIndex)}
-                                    className="text-red-600 hover:text-red-700 text-sm px-2"
-                                  >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Add multiple quantities to get pricing for different volume tiers (e.g., 500, 1000, 2500)
-                          </p>
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900 text-sm">{item.productType.name}</h3>
+                          <p className="text-xs text-gray-500">{formatItemSummary(item)}</p>
+                          <p className="text-xs text-teal-600 mt-1">Qty: {item.quantities.join(', ')}</p>
                         </div>
                       </div>
                     </div>
                   ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAddProduct}
-                    className="w-full border-dashed border-2 border-teal-300 text-teal-600 hover:bg-teal-50"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Another Product
-                  </Button>
                 </div>
-              ) : (
+                <p className="text-xs text-gray-500 mt-4">
+                  {quoteItems.length} product{quoteItems.length !== 1 ? 's' : ''} in your quote
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Main product browsing view
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <h1 className="text-3xl font-bold text-gray-900">Request a Quote</h1>
+          <p className="text-gray-600 mt-1">Browse our products and add them to your quote</p>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Loading State */}
+        {loadingProducts ? (
+          <div className="text-center py-12">
+            <svg className="animate-spin h-8 w-8 mx-auto text-teal-600" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-gray-500 mt-4">Loading products...</p>
+          </div>
+        ) : productTypes.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-2xl shadow">
+            <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No products available</h3>
+            <p className="text-gray-600">Please check back later or contact us directly.</p>
+          </div>
+        ) : (
+          /* Product Grid */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {productTypes.map((product) => (
+              <div
+                key={product.id}
+                onClick={() => handleProductClick(product)}
+                className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer overflow-hidden group"
+              >
+                {/* Product Image */}
+                <div className="aspect-square bg-gray-100 relative overflow-hidden">
+                  {product.imageUrl ? (
+                    <img
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-teal-600/0 group-hover:bg-teal-600/10 transition-colors flex items-center justify-center">
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white text-teal-600 px-4 py-2 rounded-full font-medium shadow-lg">
+                      Add to Quote
+                    </span>
+                  </div>
+                </div>
+                {/* Product Info */}
+                <div className="p-4">
+                  <h3 className="font-semibold text-gray-900 group-hover:text-teal-600 transition-colors">
+                    {product.name}
+                  </h3>
+                  {product.description && (
+                    <p className="text-sm text-gray-500 mt-1 line-clamp-2">{product.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quote Cart */}
+      {quoteItems.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex -space-x-2">
+                  {quoteItems.slice(0, 3).map((item) => (
+                    <div
+                      key={item.id}
+                      className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-100"
+                    >
+                      {item.productType.imageUrl ? (
+                        <img
+                          src={item.productType.imageUrl}
+                          alt={item.productType.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {quoteItems.length > 3 && (
+                    <div className="w-10 h-10 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+                      +{quoteItems.length - 3}
+                    </div>
+                  )}
+                </div>
                 <div>
-                  <Label htmlFor="projectDetails">Tell us about your project *</Label>
-                  <Textarea
-                    id="projectDetails"
-                    required={quoteType === 'custom'}
-                    value={formData.projectDetails}
-                    onChange={(e) => setFormData({ ...formData, projectDetails: e.target.value })}
-                    placeholder="Please describe what you need, including quantities, specifications, timeline, etc."
-                    rows={6}
-                    className="resize-none"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Be as detailed as possible to help us provide an accurate quote.
+                  <p className="font-medium text-gray-900">
+                    {quoteItems.length} product{quoteItems.length !== 1 ? 's' : ''} in your quote
                   </p>
+                  <button
+                    onClick={() => setQuoteItems([])}
+                    className="text-sm text-red-600 hover:text-red-700"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="hidden md:flex gap-2 max-w-md overflow-x-auto">
+                  {quoteItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 bg-gray-100 rounded-full pl-3 pr-1 py-1 text-sm"
+                    >
+                      <span className="truncate max-w-[100px]">{item.productType.name}</span>
+                      <button
+                        onClick={() => handleEditItem(item)}
+                        className="p-1 hover:bg-gray-200 rounded-full"
+                      >
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleRemoveItem(item.id)}
+                        className="p-1 hover:bg-gray-200 rounded-full"
+                      >
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  onClick={() => setShowCheckout(true)}
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
+                  Continue to Quote
+                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Configuration Sidebar */}
+      {sidebarOpen && selectedProduct && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={closeSidebar}
+          />
+
+          {/* Sidebar */}
+          <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[450px] bg-white shadow-2xl z-50 flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingItemId ? 'Edit Product' : 'Configure Product'}
+              </h2>
+              <button
+                onClick={closeSidebar}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-red-800 text-sm">
+                  {error}
                 </div>
               )}
-            </div>
 
-            <div>
-              <Label htmlFor="estimatedBudget">Estimated Budget (USD)</Label>
-              <Input
-                id="estimatedBudget"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.estimatedBudget}
-                onChange={(e) => setFormData({ ...formData, estimatedBudget: e.target.value })}
-                placeholder="50000.00"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Optional - Helps us tailor our proposal to your needs.
-              </p>
-            </div>
-
-            {/* Submit */}
-            <div className="pt-6 border-t border-gray-200">
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-teal-600 hover:bg-teal-700 text-white py-6 text-lg font-semibold"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Submitting...
-                  </span>
+              {/* Product Image */}
+              <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-6">
+                {selectedProduct.imageUrl ? (
+                  <img
+                    src={selectedProduct.imageUrl}
+                    alt={selectedProduct.name}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  'Submit Quote Request'
+                  <div className="w-full h-full flex items-center justify-center">
+                    <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
                 )}
-              </Button>
-              <p className="text-xs text-center text-gray-500 mt-4">
-                By submitting this form, you agree to be contacted about your quote request.
-              </p>
-            </div>
-          </form>
-        </div>
+              </div>
 
-        {/* Additional Info */}
-        <div className="mt-8 text-center">
+              {/* Product Info */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{selectedProduct.name}</h3>
+              {selectedProduct.description && (
+                <p className="text-gray-600 text-sm mb-6">{selectedProduct.description}</p>
+              )}
+
+              {/* Attributes */}
+              {selectedProduct.attributes?.attributes && selectedProduct.attributes.attributes.length > 0 && (
+                <div className="space-y-4 mb-6">
+                  <h4 className="font-medium text-gray-900">Options</h4>
+                  {selectedProduct.attributes.attributes.map((attr) => (
+                    <div key={attr.name}>
+                      <Label className="text-sm">
+                        {attr.label} {attr.required && <span className="text-red-500">*</span>}
+                      </Label>
+
+                      {/* Select Dropdown */}
+                      {attr.type === 'select' && (
+                        <select
+                          value={attributeValues[attr.name] || ''}
+                          onChange={(e) => handleAttributeChange(attr.name, e.target.value)}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        >
+                          <option value="">Select {attr.label}</option>
+                          {attr.options?.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Radio Buttons */}
+                      {attr.type === 'radio' && (
+                        <div className="mt-2 space-y-2">
+                          {attr.options?.map((opt) => (
+                            <label
+                              key={opt.value}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                name={attr.name}
+                                value={opt.value}
+                                checked={attributeValues[attr.name] === opt.value}
+                                onChange={(e) => handleAttributeChange(attr.name, e.target.value)}
+                                className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                              />
+                              <span className="text-sm text-gray-700">{opt.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Checkbox */}
+                      {attr.type === 'checkbox' && (
+                        <label className="flex items-center gap-2 cursor-pointer mt-2">
+                          <input
+                            type="checkbox"
+                            checked={!!attributeValues[attr.name]}
+                            onChange={(e) => handleAttributeChange(attr.name, e.target.checked)}
+                            className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                          />
+                          <span className="text-sm text-gray-700">Yes</span>
+                        </label>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Quantities */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-medium">
+                    Quantities <span className="text-red-500">*</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={handleAddQuantity}
+                    className="text-teal-600 hover:text-teal-700 text-sm flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Quantity
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  Request pricing for different volume tiers (e.g., 500, 1000, 2500)
+                </p>
+                <div className="space-y-2">
+                  {quantities.map((qty, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={qty}
+                        onChange={(e) => handleQuantityChange(index, e.target.value)}
+                        placeholder={index === 0 ? "1000" : "2500"}
+                        className="flex-1"
+                      />
+                      {quantities.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQuantity(index)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-200">
+              <Button
+                onClick={handleAddToQuote}
+                className="w-full bg-teal-600 hover:bg-teal-700 py-6 text-lg font-semibold"
+              >
+                {editingItemId ? 'Update in Quote' : 'Add to Quote'}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Contact Info Footer */}
+      <div className="bg-white border-t border-gray-200 py-8 mt-8">
+        <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-gray-600">
             Need immediate assistance?{' '}
             <a href="tel:+19256821111" className="text-teal-600 hover:text-teal-700 font-semibold">
