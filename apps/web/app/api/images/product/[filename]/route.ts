@@ -39,7 +39,8 @@ export async function GET(
     const mimeType = MIME_TYPES[extension] || 'image/jpeg'
 
     // Return the image with appropriate headers
-    return new NextResponse(fileBuffer, {
+    // Convert Buffer to Uint8Array for NextResponse compatibility
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': mimeType,
         'Cache-Control': 'public, max-age=31536000, immutable',
