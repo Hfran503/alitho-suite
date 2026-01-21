@@ -33,6 +33,16 @@ interface QuoteItem {
   quantities: string[]
 }
 
+// Custom product type for "Other" option
+const CUSTOM_PRODUCT: ProductType = {
+  id: 'custom',
+  name: 'Custom / Other',
+  slug: 'custom',
+  description: 'Request a quote for a custom product or something not listed above',
+  imageUrl: null,
+  attributes: null,
+}
+
 export default function RequestQuotePage() {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -49,6 +59,7 @@ export default function RequestQuotePage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [attributeValues, setAttributeValues] = useState<Record<string, any>>({})
   const [quantities, setQuantities] = useState<string[]>([''])
+  const [customDescription, setCustomDescription] = useState('')
 
   // Checkout state
   const [showCheckout, setShowCheckout] = useState(false)
@@ -96,6 +107,7 @@ export default function RequestQuotePage() {
     setEditingItemId(null)
     setAttributeValues({})
     setQuantities([''])
+    setCustomDescription('')
     setSidebarOpen(true)
   }
 
@@ -104,6 +116,7 @@ export default function RequestQuotePage() {
     setEditingItemId(item.id)
     setAttributeValues(item.attributeValues)
     setQuantities(item.quantities)
+    setCustomDescription(item.attributeValues.customDescription || '')
     setSidebarOpen(true)
   }
 
@@ -142,12 +155,20 @@ export default function RequestQuotePage() {
   const handleAddToQuote = () => {
     if (!selectedProduct) return
 
-    // Validate required attributes
-    const attrs = selectedProduct.attributes?.attributes || []
-    for (const attr of attrs) {
-      if (attr.required && !attributeValues[attr.name]) {
-        setError(`Please select ${attr.label}`)
+    // For custom product, validate description
+    if (selectedProduct.id === 'custom') {
+      if (!customDescription.trim()) {
+        setError('Please describe what you are looking for')
         return
+      }
+    } else {
+      // Validate required attributes for regular products
+      const attrs = selectedProduct.attributes?.attributes || []
+      for (const attr of attrs) {
+        if (attr.required && !attributeValues[attr.name]) {
+          setError(`Please select ${attr.label}`)
+          return
+        }
       }
     }
 
@@ -160,11 +181,16 @@ export default function RequestQuotePage() {
 
     setError(null)
 
+    // Build attribute values, including custom description if applicable
+    const finalAttributeValues = selectedProduct.id === 'custom'
+      ? { customDescription: customDescription.trim() }
+      : attributeValues
+
     if (editingItemId) {
       // Update existing item
       setQuoteItems(quoteItems.map(item =>
         item.id === editingItemId
-          ? { ...item, attributeValues, quantities: validQuantities }
+          ? { ...item, attributeValues: finalAttributeValues, quantities: validQuantities }
           : item
       ))
     } else {
@@ -172,7 +198,7 @@ export default function RequestQuotePage() {
       const newItem: QuoteItem = {
         id: `item-${Date.now()}`,
         productType: selectedProduct,
-        attributeValues,
+        attributeValues: finalAttributeValues,
         quantities: validQuantities,
       }
       setQuoteItems([...quoteItems, newItem])
@@ -182,6 +208,12 @@ export default function RequestQuotePage() {
   }
 
   const formatItemSummary = (item: QuoteItem): string => {
+    // Handle custom product
+    if (item.productType.id === 'custom') {
+      const desc = item.attributeValues.customDescription || ''
+      return desc.length > 50 ? desc.substring(0, 50) + '...' : desc
+    }
+
     const attrs = item.productType.attributes?.attributes || []
     const parts: string[] = []
 
@@ -211,6 +243,12 @@ export default function RequestQuotePage() {
         .map((item, i) => {
           let text = `Product ${i + 1}:\n- Type: ${item.productType.name}`
           text += `\n- Quantities: ${item.quantities.join(', ')}`
+
+          // Handle custom product
+          if (item.productType.id === 'custom') {
+            text += `\n- Description: ${item.attributeValues.customDescription || 'No description provided'}`
+            return text
+          }
 
           const attrs = item.productType.attributes?.attributes || []
           attrs.forEach(attr => {
@@ -534,6 +572,34 @@ export default function RequestQuotePage() {
                 </div>
               </div>
             ))}
+
+            {/* Custom/Other Product Card */}
+            <div
+              onClick={() => handleProductClick(CUSTOM_PRODUCT)}
+              className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer overflow-hidden group border-2 border-dashed border-gray-300 hover:border-teal-500"
+            >
+              <div className="aspect-square bg-gray-50 relative overflow-hidden flex items-center justify-center">
+                <div className="text-center">
+                  <svg className="w-16 h-16 text-gray-400 mx-auto group-hover:text-teal-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-teal-600/0 group-hover:bg-teal-600/5 transition-colors flex items-center justify-center">
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white text-teal-600 px-4 py-2 rounded-full font-medium shadow-lg">
+                    Add to Quote
+                  </span>
+                </div>
+              </div>
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 group-hover:text-teal-600 transition-colors">
+                  Custom / Other
+                </h3>
+                <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                  Need something not listed? Describe your custom request.
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -661,7 +727,16 @@ export default function RequestQuotePage() {
 
               {/* Product Image */}
               <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-6">
-                {getImageUrl(selectedProduct.imageUrl) ? (
+                {selectedProduct.id === 'custom' ? (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
+                    <div className="text-center">
+                      <svg className="w-16 h-16 text-teal-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      <p className="text-teal-600 text-sm font-medium mt-2">Custom Request</p>
+                    </div>
+                  </div>
+                ) : getImageUrl(selectedProduct.imageUrl) ? (
                   <img
                     src={getImageUrl(selectedProduct.imageUrl)!}
                     alt={selectedProduct.name}
@@ -682,8 +757,24 @@ export default function RequestQuotePage() {
                 <p className="text-gray-600 text-sm mb-6">{selectedProduct.description}</p>
               )}
 
+              {/* Custom Product Description */}
+              {selectedProduct.id === 'custom' && (
+                <div className="mb-6">
+                  <Label className="text-sm font-medium text-gray-900">
+                    Describe what you need <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    value={customDescription}
+                    onChange={(e) => setCustomDescription(e.target.value)}
+                    placeholder="Please describe the product or service you are looking for, including any specific requirements, dimensions, materials, or other details..."
+                    rows={5}
+                    className="mt-2"
+                  />
+                </div>
+              )}
+
               {/* Attributes */}
-              {selectedProduct.attributes?.attributes && selectedProduct.attributes.attributes.length > 0 && (
+              {selectedProduct.id !== 'custom' && selectedProduct.attributes?.attributes && selectedProduct.attributes.attributes.length > 0 && (
                 <div className="space-y-4 mb-6">
                   <h4 className="font-medium text-gray-900">Options</h4>
                   {selectedProduct.attributes.attributes.map((attr) => (
