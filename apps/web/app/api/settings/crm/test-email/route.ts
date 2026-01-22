@@ -1,116 +1,125 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
 import { enqueueEmail } from '@/lib/queue'
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user and tenant
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: {
+          include: { tenant: true }
+        }
+      }
+    })
+
+    if (!user || !user.memberships[0]) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 404 })
+    }
+
+    const tenantId = user.memberships[0].tenantId
+
     const body = await request.json()
-    const { firstName, lastName, email, phone, company, title, projectDetails, estimatedBudget, attachments } = body
+    const { type } = body // 'customer' or 'internal'
 
-    // Type for attachments
-    interface Attachment {
-      filename: string
-      originalName: string
-      url: string
-      size: number
-    }
-    const typedAttachments: Attachment[] = attachments || []
+    // Get CRM settings
+    const crmSettings = await db.crmSettings.findUnique({
+      where: { tenantId },
+    })
 
-    // Validate required fields
-    if (!firstName || !lastName || !email || !projectDetails) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // For now, we'll use a default tenant (the first tenant)
-    // In production, you might want to handle this differently based on subdomain, etc.
-    const defaultTenant = await db.tenant.findFirst()
-
-    if (!defaultTenant) {
-      return NextResponse.json(
-        { error: 'System configuration error' },
-        { status: 500 }
-      )
-    }
-
-    // Check if contact already exists by email
-    let contact = await db.contact.findFirst({
-      where: {
-        email: email.toLowerCase(),
-        tenantId: defaultTenant.id,
+    // Get a recent opportunity for sample data
+    const sampleOpportunity = await db.opportunity.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        contact: true,
       },
     })
 
-    // Create contact if doesn't exist
-    if (!contact) {
-      contact = await db.contact.create({
-        data: {
-          tenantId: defaultTenant.id,
-          firstName,
-          lastName,
-          email: email.toLowerCase(),
-          phone: phone || null,
-          company: company || null,
-          title: title || null,
-          status: 'active',
-        },
-      })
+    // Sample data for test email
+    const testData = {
+      firstName: sampleOpportunity?.contact?.firstName || 'John',
+      lastName: sampleOpportunity?.contact?.lastName || 'Doe',
+      email: session.user.email || 'test@example.com',
+      phone: sampleOpportunity?.contact?.phone || '(555) 123-4567',
+      company: sampleOpportunity?.contact?.company || 'Acme Corporation',
+      title: sampleOpportunity?.contact?.title || 'Marketing Director',
+      opportunityNumber: sampleOpportunity?.opportunityNumber || 'OPP-2026-0001',
+      opportunityId: sampleOpportunity?.id || 'test-id',
+      projectDetails: sampleOpportunity?.description || 'STANDARD PRODUCTS REQUEST: Product 1: - Type: Business Cards - Quantities: 500, 1000 - Paper Type: 100# Silk Cover - Card Size: 3.5 × 2 in - Print Sides: Double-Sided - Finish: Matte Product 2: - Type: Brochures - Quantities: 250, 500 - Paper Type: 100# Gloss Text - Size: 8.5 × 11 in - Fold Type: Tri-fold Additional Notes: Please include our updated logo.',
+      estimatedBudget: '$500 - $1,000',
+      attachments: [] as { filename: string; originalName: string; url: string; size: number }[],
     }
 
-    // Generate opportunity number
-    const year = new Date().getFullYear()
-    const lastOpp = await db.opportunity.findFirst({
-      where: {
-        tenantId: defaultTenant.id,
-        opportunityNumber: {
-          startsWith: `OPP-${year}-`,
-        },
-      },
-      orderBy: {
-        opportunityNumber: 'desc',
-      },
-    })
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://calithosuite.com'
 
-    let nextNumber = 1
-    if (lastOpp) {
-      const lastNumber = parseInt(lastOpp.opportunityNumber.split('-')[2])
-      nextNumber = lastNumber + 1
-    }
+    if (type === 'customer') {
+      // Send test customer email
+      const customerEmailHtml = generateCustomerEmailHtml(testData)
 
-    const opportunityNumber = `OPP-${year}-${nextNumber.toString().padStart(4, '0')}`
-
-    // Create opportunity with attachments in metadata
-    const opportunity = await db.opportunity.create({
-      data: {
-        tenantId: defaultTenant.id,
-        opportunityNumber,
-        contactId: contact.id,
-        title: `Quote Request - ${company || `${firstName} ${lastName}`}`,
-        description: projectDetails,
-        amount: estimatedBudget ? parseFloat(estimatedBudget) : 0,
-        stage: 'prospect',
-        status: 'open',
-        notes: `Submitted via public quote request form\nEstimated Budget: ${estimatedBudget || 'Not provided'}`,
-        metadata: typedAttachments.length > 0 ? ({ attachments: typedAttachments } as any) : undefined,
-      },
-    })
-
-    // Send email notifications
-    try {
-      // Fetch CRM settings to check if emails are enabled
-      const crmSettings = await db.crmSettings.findUnique({
-        where: { tenantId: defaultTenant.id }
+      await enqueueEmail({
+        to: session.user.email,
+        subject: `[TEST] Quote Request Received - ${testData.opportunityNumber}`,
+        html: customerEmailHtml,
+        tenantId,
       })
 
-      const enableCustomerEmail = crmSettings?.enableCustomerEmail ?? true
-      const enableInternalEmail = crmSettings?.enableInternalEmail ?? true
+      return NextResponse.json({
+        success: true,
+        message: `Test customer email sent to ${session.user.email}`,
+      })
+    } else if (type === 'internal') {
+      // Check if internal email is configured
       const notificationEmail = crmSettings?.quoteRequestNotificationEmail
+      if (!notificationEmail) {
+        return NextResponse.json(
+          { error: 'No internal notification email configured' },
+          { status: 400 }
+        )
+      }
 
-      // Send customer acknowledgment email
-      if (enableCustomerEmail) {
-        const customerEmailHtml = `
+      const internalEmailHtml = generateInternalEmailHtml(testData, baseUrl)
+
+      // Send to configured email(s)
+      const notificationEmails = notificationEmail.split(',').map((e: string) => e.trim()).filter(Boolean)
+
+      await enqueueEmail({
+        to: notificationEmails,
+        subject: `[TEST] New Quote Request: ${testData.company} - ${testData.opportunityNumber}`,
+        html: internalEmailHtml,
+        tenantId,
+      })
+
+      return NextResponse.json({
+        success: true,
+        message: `Test internal email sent to ${notificationEmails.join(', ')}`,
+      })
+    }
+
+    return NextResponse.json({ error: 'Invalid email type' }, { status: 400 })
+  } catch (error) {
+    console.error('Error sending test email:', error)
+    return NextResponse.json(
+      { error: 'Failed to send test email' },
+      { status: 500 }
+    )
+  }
+}
+
+function generateCustomerEmailHtml(data: {
+  firstName: string
+  opportunityNumber: string
+  company: string
+}) {
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -125,8 +134,8 @@ export async function POST(request: Request) {
           <!-- Header -->
           <tr>
             <td style="background-color: #0d9488; padding: 40px 40px; text-align: center;">
-              <div style="width: 64px; height: 64px; background-color: rgba(255,255,255,0.2); border-radius: 50%; margin: 0 auto 16px; line-height: 64px;">
-                <span style="font-size: 32px; color: white;">✓</span>
+              <div style="width: 64px; height: 64px; background-color: rgba(255,255,255,0.2); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+                <span style="font-size: 32px;">✓</span>
               </div>
               <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Quote Request Received</h1>
               <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 16px;">We'll get back to you shortly</p>
@@ -137,7 +146,7 @@ export async function POST(request: Request) {
           <tr>
             <td style="padding: 40px;">
               <p style="margin: 0 0 24px; color: #1e293b; font-size: 16px; line-height: 1.6;">
-                Hi <strong>${firstName}</strong>,
+                Hi <strong>${data.firstName}</strong>,
               </p>
               <p style="margin: 0 0 24px; color: #475569; font-size: 16px; line-height: 1.6;">
                 Thank you for reaching out! We've received your quote request and our team is already reviewing the details.
@@ -151,11 +160,11 @@ export async function POST(request: Request) {
                       <tr>
                         <td>
                           <p style="margin: 0 0 4px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Request Number</p>
-                          <p style="margin: 0; color: #0d9488; font-size: 20px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace;">${opportunityNumber}</p>
+                          <p style="margin: 0; color: #0d9488; font-size: 20px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace;">${data.opportunityNumber}</p>
                         </td>
                         <td align="right">
                           <p style="margin: 0 0 4px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Company</p>
-                          <p style="margin: 0; color: #1e293b; font-size: 16px; font-weight: 600;">${company || 'Not provided'}</p>
+                          <p style="margin: 0; color: #1e293b; font-size: 16px; font-weight: 600;">${data.company || 'Not provided'}</p>
                         </td>
                       </tr>
                     </table>
@@ -230,47 +239,49 @@ export async function POST(request: Request) {
   </table>
 </body>
 </html>`
+}
 
-        await enqueueEmail({
-          to: email.toLowerCase(),
-          subject: `Quote Request Received - ${opportunityNumber}`,
-          html: customerEmailHtml,
-          tenantId: defaultTenant.id,
-        })
+function generateInternalEmailHtml(
+  data: {
+    firstName: string
+    lastName: string
+    email: string
+    phone: string
+    company: string
+    title: string
+    opportunityNumber: string
+    opportunityId: string
+    projectDetails: string
+    estimatedBudget: string
+    attachments: { filename: string; originalName: string; url: string; size: number }[]
+  },
+  baseUrl: string
+) {
+  const opportunityUrl = `${baseUrl}/crm/opportunities/${data.opportunityId}`
+
+  // Format project details for HTML email
+  const formattedProjectDetails = data.projectDetails
+    .split('\n')
+    .map((line: string) => {
+      if (line.startsWith('---') && line.endsWith('---')) {
+        const productName = line.replace(/^-+\s*/, '').replace(/\s*-+$/, '')
+        return `<div style="background-color: #ccfbf1; border-left: 4px solid #0d9488; padding: 12px 16px; margin: 16px 0 12px 0; font-weight: 600; color: #134e4a; border-radius: 0 8px 8px 0;">${productName}</div>`
       }
+      if (line.includes(':')) {
+        const [label, ...valueParts] = line.split(':')
+        const value = valueParts.join(':').trim()
+        if (value) {
+          return `<p style="margin: 6px 0; padding-left: 16px; color: #374151; font-size: 14px;"><span style="color: #6b7280; font-weight: 500;">${label.trim()}:</span> ${value}</p>`
+        }
+      }
+      if (line.trim() === '') {
+        return '<div style="height: 12px;"></div>'
+      }
+      return `<p style="margin: 6px 0; padding-left: 16px; color: #374151; font-size: 14px;">${line}</p>`
+    })
+    .join('')
 
-      // Send internal notification email (supports multiple comma-separated emails)
-      const notificationEmails = notificationEmail
-        ? notificationEmail.split(',').map((e: string) => e.trim()).filter(Boolean)
-        : []
-
-      if (enableInternalEmail && notificationEmails.length > 0) {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://calithosuite.com'
-        const opportunityUrl = `${baseUrl}/crm/opportunities/${opportunity.id}`
-
-        // Format project details for HTML email - convert newlines to proper HTML
-        const formattedProjectDetails = projectDetails
-          .split('\n')
-          .map((line: string) => {
-            if (line.startsWith('---') && line.endsWith('---')) {
-              const productName = line.replace(/^-+\s*/, '').replace(/\s*-+$/, '')
-              return `<div style="background-color: #ccfbf1; border-left: 4px solid #0d9488; padding: 12px 16px; margin: 16px 0 12px 0; font-weight: 600; color: #134e4a; border-radius: 0 8px 8px 0;">${productName}</div>`
-            }
-            if (line.includes(':')) {
-              const [label, ...valueParts] = line.split(':')
-              const value = valueParts.join(':').trim()
-              if (value) {
-                return `<p style="margin: 6px 0; padding-left: 16px; color: #374151; font-size: 14px;"><span style="color: #6b7280; font-weight: 500;">${label.trim()}:</span> ${value}</p>`
-              }
-            }
-            if (line.trim() === '') {
-              return '<div style="height: 12px;"></div>'
-            }
-            return `<p style="margin: 6px 0; padding-left: 16px; color: #374151; font-size: 14px;">${line}</p>`
-          })
-          .join('')
-
-        const internalEmailHtml = `
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -289,7 +300,7 @@ export async function POST(request: Request) {
                 <span style="font-size: 32px; color: white;">📋</span>
               </div>
               <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">New Quote Request</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 16px;">${company || `${firstName} ${lastName}`}</p>
+              <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 16px;">${data.company || `${data.firstName} ${data.lastName}`}</p>
             </td>
           </tr>
 
@@ -304,11 +315,11 @@ export async function POST(request: Request) {
                       <tr>
                         <td>
                           <p style="margin: 0 0 4px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Request Number</p>
-                          <p style="margin: 0; color: #0d9488; font-size: 20px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace;">${opportunityNumber}</p>
+                          <p style="margin: 0; color: #0d9488; font-size: 20px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace;">${data.opportunityNumber}</p>
                         </td>
                         <td align="right">
                           <p style="margin: 0 0 4px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Budget</p>
-                          <p style="margin: 0; color: #1e293b; font-size: 16px; font-weight: 600;">${estimatedBudget || 'Not provided'}</p>
+                          <p style="margin: 0; color: #1e293b; font-size: 16px; font-weight: 600;">${data.estimatedBudget || 'Not provided'}</p>
                         </td>
                       </tr>
                     </table>
@@ -322,27 +333,27 @@ export async function POST(request: Request) {
                 <tr>
                   <td width="50%" style="padding-bottom: 12px;">
                     <p style="margin: 0 0 2px; color: #64748b; font-size: 12px;">Name</p>
-                    <p style="margin: 0; color: #1e293b; font-size: 15px; font-weight: 500;">${firstName} ${lastName}</p>
+                    <p style="margin: 0; color: #1e293b; font-size: 15px; font-weight: 500;">${data.firstName} ${data.lastName}</p>
                   </td>
                   <td width="50%" style="padding-bottom: 12px;">
                     <p style="margin: 0 0 2px; color: #64748b; font-size: 12px;">Company</p>
-                    <p style="margin: 0; color: #1e293b; font-size: 15px; font-weight: 500;">${company || 'Not provided'}</p>
+                    <p style="margin: 0; color: #1e293b; font-size: 15px; font-weight: 500;">${data.company || 'Not provided'}</p>
                   </td>
                 </tr>
                 <tr>
                   <td width="50%" style="padding-bottom: 12px;">
                     <p style="margin: 0 0 2px; color: #64748b; font-size: 12px;">Email</p>
-                    <a href="mailto:${email}" style="color: #0d9488; font-size: 14px; text-decoration: none; font-weight: 500;">${email}</a>
+                    <a href="mailto:${data.email}" style="color: #0d9488; font-size: 14px; text-decoration: none; font-weight: 500;">${data.email}</a>
                   </td>
                   <td width="50%" style="padding-bottom: 12px;">
                     <p style="margin: 0 0 2px; color: #64748b; font-size: 12px;">Phone</p>
-                    <a href="tel:${phone}" style="color: #0d9488; font-size: 14px; text-decoration: none; font-weight: 500;">${phone || 'Not provided'}</a>
+                    <a href="tel:${data.phone}" style="color: #0d9488; font-size: 14px; text-decoration: none; font-weight: 500;">${data.phone || 'Not provided'}</a>
                   </td>
                 </tr>
                 <tr>
                   <td colspan="2">
                     <p style="margin: 0 0 2px; color: #64748b; font-size: 12px;">Title</p>
-                    <p style="margin: 0; color: #1e293b; font-size: 14px;">${title || 'Not provided'}</p>
+                    <p style="margin: 0; color: #1e293b; font-size: 14px;">${data.title || 'Not provided'}</p>
                   </td>
                 </tr>
               </table>
@@ -357,13 +368,13 @@ export async function POST(request: Request) {
                 </tr>
               </table>
 
-              ${typedAttachments.length > 0 ? `
+              ${data.attachments.length > 0 ? `
               <!-- Attachments -->
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0fdfa; border-radius: 12px; border: 1px solid #ccfbf1; margin-top: 16px;">
                 <tr>
                   <td style="padding: 24px;">
-                    <p style="margin: 0 0 16px; color: #0d9488; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Attachments (${typedAttachments.length})</p>
-                    ${typedAttachments.map((att: Attachment) => `
+                    <p style="margin: 0 0 16px; color: #0d9488; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Attachments (${data.attachments.length})</p>
+                    ${data.attachments.map((att) => `
                       <a href="${baseUrl}${att.url}" style="display: block; background-color: #ffffff; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; text-decoration: none; border: 1px solid #ccfbf1;" target="_blank">
                         <table width="100%" cellpadding="0" cellspacing="0">
                           <tr>
@@ -407,32 +418,4 @@ export async function POST(request: Request) {
   </table>
 </body>
 </html>`
-
-        await enqueueEmail({
-          to: notificationEmails,
-          subject: `New Quote Request: ${company || `${firstName} ${lastName}`} - ${opportunityNumber}`,
-          html: internalEmailHtml,
-          tenantId: defaultTenant.id,
-        })
-      }
-    } catch (emailError) {
-      // Log email error but don't fail the request
-      console.error('Failed to send quote request notification emails:', emailError)
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Quote request submitted successfully',
-      data: {
-        opportunityId: opportunity.id,
-        opportunityNumber: opportunity.opportunityNumber,
-      },
-    })
-  } catch (error) {
-    console.error('Error creating quote request:', error)
-    return NextResponse.json(
-      { error: 'Failed to submit quote request' },
-      { status: 500 }
-    )
-  }
 }

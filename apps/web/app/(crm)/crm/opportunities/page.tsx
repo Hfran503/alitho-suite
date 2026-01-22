@@ -63,6 +63,34 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   closed: { label: 'Closed', color: 'bg-gray-100 text-gray-800' },
 }
 
+// Parse quote request description to get a summary
+function getDescriptionSummary(description: string | null): { isQuoteRequest: boolean; summary: string; productCount: number; productTypes: string[] } | null {
+  if (!description) return null
+
+  // Check if this is a quote request format
+  const requestTypeMatch = description.match(/^(STANDARD|RUSH) PRODUCTS REQUEST:/)
+  if (!requestTypeMatch) {
+    return { isQuoteRequest: false, summary: description, productCount: 0, productTypes: [] }
+  }
+
+  // Count products and extract types
+  const productTypes: string[] = []
+  const typeMatches = description.matchAll(/- Type:\s*([^-]+?)(?=\s*-|$)/g)
+  for (const match of typeMatches) {
+    productTypes.push(match[1].trim())
+  }
+
+  const productCount = productTypes.length
+  const requestType = requestTypeMatch[1]
+
+  return {
+    isQuoteRequest: true,
+    summary: `${requestType} request`,
+    productCount,
+    productTypes,
+  }
+}
+
 export default function OpportunitiesListPage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
@@ -277,9 +305,24 @@ export default function OpportunitiesListPage() {
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{opp.title}</div>
-                      {opp.description && (
-                        <div className="text-xs text-gray-500 line-clamp-1">{opp.description}</div>
-                      )}
+                      {opp.description && (() => {
+                        const summary = getDescriptionSummary(opp.description)
+                        if (summary?.isQuoteRequest) {
+                          return (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs font-normal">
+                                {summary.productCount} item{summary.productCount !== 1 ? 's' : ''}
+                              </Badge>
+                              <span className="text-xs text-gray-500 truncate max-w-[200px]">
+                                {summary.productTypes.join(', ')}
+                              </span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div className="text-xs text-gray-500 line-clamp-1">{opp.description}</div>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Link

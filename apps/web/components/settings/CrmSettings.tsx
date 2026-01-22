@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
-import { Mail, Bell, Users, Loader2, Check } from 'lucide-react';
+import { Mail, Bell, Users, Loader2, Check, Send } from 'lucide-react';
 
 interface CrmSettingsData {
   id?: string;
@@ -19,6 +19,7 @@ interface CrmSettingsData {
 export function CrmSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sendingTestEmail, setSendingTestEmail] = useState<'customer' | 'internal' | null>(null);
   const [settings, setSettings] = useState<CrmSettingsData>({
     quoteRequestNotificationEmail: '',
     enableCustomerEmail: true,
@@ -26,6 +27,33 @@ export function CrmSettings() {
   });
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const sendTestEmail = async (type: 'customer' | 'internal') => {
+    setSendingTestEmail(type);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch('/api/settings/crm/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message);
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        throw new Error(data.error || 'Failed to send test email');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSendingTestEmail(null);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -166,51 +194,105 @@ export function CrmSettings() {
 
           <div className="border-t pt-6 space-y-4">
             {/* Enable Customer Email */}
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Mail className="h-4 w-4 text-green-600" />
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Mail className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <Label htmlFor="enableCustomerEmail" className="text-sm font-medium">
+                      Customer Acknowledgment Email
+                    </Label>
+                    <p className="text-sm text-gray-500">
+                      Send a confirmation email to customers when they submit a quote request.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="enableCustomerEmail" className="text-sm font-medium">
-                    Customer Acknowledgment Email
-                  </Label>
-                  <p className="text-sm text-gray-500">
-                    Send a confirmation email to customers when they submit a quote request.
-                  </p>
-                </div>
+                <Switch
+                  id="enableCustomerEmail"
+                  checked={settings.enableCustomerEmail}
+                  onCheckedChange={(checked) =>
+                    setSettings({ ...settings, enableCustomerEmail: checked })
+                  }
+                />
               </div>
-              <Switch
-                id="enableCustomerEmail"
-                checked={settings.enableCustomerEmail}
-                onCheckedChange={(checked) =>
-                  setSettings({ ...settings, enableCustomerEmail: checked })
-                }
-              />
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => sendTestEmail('customer')}
+                  disabled={sendingTestEmail !== null}
+                  className="text-green-700 border-green-300 hover:bg-green-50"
+                >
+                  {sendingTestEmail === 'customer' ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3 w-3 mr-2" />
+                      Send Test Email to Me
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-gray-500 mt-2">
+                  Sends a sample customer email to your account email address
+                </p>
+              </div>
             </div>
 
             {/* Enable Internal Email */}
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Bell className="h-4 w-4 text-purple-600" />
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Bell className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <Label htmlFor="enableInternalEmail" className="text-sm font-medium">
+                      Internal Team Notification
+                    </Label>
+                    <p className="text-sm text-gray-500">
+                      Send a notification to the internal email when a new quote request is submitted.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="enableInternalEmail" className="text-sm font-medium">
-                    Internal Team Notification
-                  </Label>
-                  <p className="text-sm text-gray-500">
-                    Send a notification to the internal email when a new quote request is submitted.
-                  </p>
-                </div>
+                <Switch
+                  id="enableInternalEmail"
+                  checked={settings.enableInternalEmail}
+                  onCheckedChange={(checked) =>
+                    setSettings({ ...settings, enableInternalEmail: checked })
+                  }
+                />
               </div>
-              <Switch
-                id="enableInternalEmail"
-                checked={settings.enableInternalEmail}
-                onCheckedChange={(checked) =>
-                  setSettings({ ...settings, enableInternalEmail: checked })
-                }
-              />
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => sendTestEmail('internal')}
+                  disabled={sendingTestEmail !== null || !settings.quoteRequestNotificationEmail}
+                  className="text-purple-700 border-purple-300 hover:bg-purple-50"
+                >
+                  {sendingTestEmail === 'internal' ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3 w-3 mr-2" />
+                      Send Test Email
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-gray-500 mt-2">
+                  {settings.quoteRequestNotificationEmail
+                    ? `Sends a sample internal notification to: ${settings.quoteRequestNotificationEmail}`
+                    : 'Configure an internal notification email above to send a test'}
+                </p>
+              </div>
             </div>
           </div>
 

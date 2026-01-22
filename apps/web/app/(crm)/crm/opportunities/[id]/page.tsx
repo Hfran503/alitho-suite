@@ -85,6 +85,73 @@ const QUOTE_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   expired: { label: 'Expired', color: 'bg-orange-100 text-orange-800' },
 }
 
+// Parse quote request description into structured items
+interface ParsedProduct {
+  name: string
+  type?: string
+  quantities?: string
+  fields: { label: string; value: string }[]
+}
+
+interface ParsedDescription {
+  requestType: string | null
+  products: ParsedProduct[]
+  additionalNotes: string | null
+}
+
+function parseQuoteDescription(description: string): ParsedDescription | null {
+  if (!description) return null
+
+  // Check if this is a quote request format
+  const requestTypeMatch = description.match(/^(STANDARD|RUSH) PRODUCTS REQUEST:/)
+  if (!requestTypeMatch) return null
+
+  const requestType = requestTypeMatch[1]
+  const products: ParsedProduct[] = []
+  let additionalNotes: string | null = null
+
+  // Extract additional notes first
+  const notesMatch = description.match(/Additional Notes:\s*(.+)$/)
+  if (notesMatch) {
+    additionalNotes = notesMatch[1].trim()
+  }
+
+  // Split by "Product N:" pattern
+  const productParts = description.split(/Product \d+:/).slice(1)
+
+  for (const part of productParts) {
+    const cleanPart = part.replace(/Additional Notes:.*$/, '').trim()
+    if (!cleanPart) continue
+
+    const product: ParsedProduct = {
+      name: '',
+      fields: [],
+    }
+
+    // Parse fields with "- Field: Value" pattern
+    const fieldMatches = cleanPart.matchAll(/- ([^:]+):\s*([^-]+?)(?=\s*-|$)/g)
+    for (const match of fieldMatches) {
+      const label = match[1].trim()
+      const value = match[2].trim()
+
+      if (label === 'Type') {
+        product.type = value
+        product.name = value
+      } else if (label === 'Quantities') {
+        product.quantities = value
+      } else if (value) {
+        product.fields.push({ label, value })
+      }
+    }
+
+    if (product.name || product.fields.length > 0) {
+      products.push(product)
+    }
+  }
+
+  return products.length > 0 ? { requestType, products, additionalNotes } : null
+}
+
 export default function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -393,12 +460,68 @@ export default function OpportunityDetailPage({ params }: { params: Promise<{ id
             <div className="text-lg">{formatDate(opportunity.createdAt)}</div>
           </div>
         </div>
-        {opportunity.description && (
-          <div className="mt-6">
-            <div className="text-sm text-gray-600 mb-1">Description</div>
-            <p className="text-gray-800">{opportunity.description}</p>
-          </div>
-        )}
+        {opportunity.description && (() => {
+          const parsed = parseQuoteDescription(opportunity.description)
+          if (parsed) {
+            return (
+              <div className="mt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="text-sm text-gray-600">Request Type</div>
+                  <Badge className={parsed.requestType === 'RUSH' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}>
+                    {parsed.requestType}
+                  </Badge>
+                </div>
+
+                <div className="text-sm text-gray-600 mb-3">Requested Items ({parsed.products.length})</div>
+                <div className="space-y-3">
+                  {parsed.products.map((product, index) => (
+                    <div
+                      key={index}
+                      className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Product {index + 1}</span>
+                          <h4 className="text-lg font-semibold text-gray-900">{product.name || 'Custom Product'}</h4>
+                        </div>
+                        {product.quantities && (
+                          <div className="text-right">
+                            <span className="text-xs font-medium text-gray-500 uppercase">Quantities</span>
+                            <p className="font-medium text-teal-600">{product.quantities}</p>
+                          </div>
+                        )}
+                      </div>
+                      {product.fields.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-gray-200">
+                          {product.fields.map((field, fieldIndex) => (
+                            <div key={fieldIndex}>
+                              <span className="text-xs font-medium text-gray-500">{field.label}</span>
+                              <p className="text-sm text-gray-800">{field.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {parsed.additionalNotes && (
+                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <span className="text-xs font-medium text-yellow-800 uppercase">Additional Notes</span>
+                    <p className="text-gray-800 mt-1">{parsed.additionalNotes}</p>
+                  </div>
+                )}
+              </div>
+            )
+          }
+          // Fallback to plain text for non-quote-request descriptions
+          return (
+            <div className="mt-6">
+              <div className="text-sm text-gray-600 mb-1">Description</div>
+              <p className="text-gray-800 whitespace-pre-wrap">{opportunity.description}</p>
+            </div>
+          )
+        })()}
         {opportunity.notes && (
           <div className="mt-6">
             <div className="text-sm text-gray-600 mb-1">Notes</div>
