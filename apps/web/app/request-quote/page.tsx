@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import Link from 'next/link'
 
 interface ProductAttribute {
   name: string
@@ -424,16 +423,11 @@ export default function RequestQuotePage() {
             <p className="text-lg text-gray-600 mb-8">
               Thank you for your interest. Our team will review your request and get back to you within 1-2 business days.
             </p>
-            <div className="bg-teal-50 border border-teal-200 rounded-lg p-6 mb-8">
+            <div className="bg-teal-50 border border-teal-200 rounded-lg p-6">
               <p className="text-sm text-teal-800">
                 We've sent a confirmation email to <strong>{formData.email}</strong>
               </p>
             </div>
-            <Link href="/">
-              <Button className="bg-teal-600 hover:bg-teal-700">
-                Return to Home
-              </Button>
-            </Link>
           </div>
         </div>
       </div>
