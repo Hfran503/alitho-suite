@@ -96,11 +96,20 @@ export default function RequestQuotePage() {
     fetchProductTypes()
   }, [])
 
-  // Helper to convert old static URLs to API route URLs (for Docker volume support)
+  // Helper to convert image URLs to API route URLs (for Docker volume support)
   const getImageUrl = (url: string | null): string | null => {
     if (!url) return null
+    // Already using API route
+    if (url.startsWith('/api/images/product/')) {
+      return url
+    }
+    // Old static URL format
     if (url.startsWith('/product-images/')) {
       return url.replace('/product-images/', '/api/images/product/')
+    }
+    // Just filename - prepend the API route
+    if (!url.startsWith('/') && !url.startsWith('http')) {
+      return `/api/images/product/${url}`
     }
     return url
   }
