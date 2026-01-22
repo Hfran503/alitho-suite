@@ -3,7 +3,10 @@ import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'product-images')
+// In Next.js standalone mode (Docker), files are in apps/web/public
+// In development, they're directly in public
+const STANDALONE_DIR = path.join(process.cwd(), 'apps', 'web', 'public', 'product-images')
+const DEV_DIR = path.join(process.cwd(), 'public', 'product-images')
 
 // Map file extensions to MIME types
 const MIME_TYPES: Record<string, string> = {
@@ -24,9 +27,14 @@ export async function GET(
 
     // Sanitize filename to prevent directory traversal
     const sanitizedFilename = path.basename(filename)
-    const filepath = path.join(UPLOAD_DIR, sanitizedFilename)
 
-    // Check if file exists
+    // Check both possible locations (standalone Docker vs development)
+    let filepath = path.join(STANDALONE_DIR, sanitizedFilename)
+    if (!existsSync(filepath)) {
+      filepath = path.join(DEV_DIR, sanitizedFilename)
+    }
+
+    // Check if file exists in either location
     if (!existsSync(filepath)) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
