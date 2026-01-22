@@ -70,6 +70,7 @@ export default function ContactsListPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -161,6 +162,60 @@ export default function ContactsListPage() {
     }
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      // Fetch all contacts for export
+      const params = new URLSearchParams()
+      params.set('limit', '10000') // Get all contacts
+      if (search) params.set('search', search)
+      if (statusFilter) params.set('status', statusFilter)
+
+      const response = await fetch(`/api/crm/contacts?${params.toString()}`)
+      if (!response.ok) throw new Error('Failed to fetch contacts for export')
+
+      const data = await response.json()
+      const contactsToExport = data.data || []
+
+      if (contactsToExport.length === 0) {
+        alert('No contacts to export')
+        return
+      }
+
+      // Create CSV content
+      const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Title', 'Status', 'Opportunities', 'Created Date']
+      const csvRows = [
+        headers.join(','),
+        ...contactsToExport.map((contact: Contact) => [
+          `"${(contact.firstName || '').replace(/"/g, '""')}"`,
+          `"${(contact.lastName || '').replace(/"/g, '""')}"`,
+          `"${(contact.email || '').replace(/"/g, '""')}"`,
+          `"${(contact.phone || '').replace(/"/g, '""')}"`,
+          `"${(contact.company || '').replace(/"/g, '""')}"`,
+          `"${(contact.title || '').replace(/"/g, '""')}"`,
+          `"${contact.status}"`,
+          contact._count?.opportunities || 0,
+          `"${formatDate(contact.createdAt)}"`,
+        ].join(','))
+      ]
+
+      const csvContent = csvRows.join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.setAttribute('href', url)
+      link.setAttribute('download', `contacts-${new Date().toISOString().split('T')[0]}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export contacts')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div>
       {/* Header */}
@@ -169,15 +224,39 @@ export default function ContactsListPage() {
           <h1 className="text-2xl font-bold">Contacts</h1>
           <p className="text-gray-600">Manage customer and prospect contacts</p>
         </div>
-        <Button
-          className="bg-teal-600 hover:bg-teal-700"
-          onClick={() => setDialogOpen(true)}
-        >
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Contact
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <>
+                <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Exporting...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export
+              </>
+            )}
+          </Button>
+          <Button
+            className="bg-teal-600 hover:bg-teal-700"
+            onClick={() => setDialogOpen(true)}
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Contact
+          </Button>
+        </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
