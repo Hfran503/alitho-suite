@@ -6,7 +6,20 @@ import { existsSync } from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'product-images')
+// In Next.js standalone mode (Docker), files are in apps/web/public
+// In development, they're directly in public
+const STANDALONE_DIR = path.join(process.cwd(), 'apps', 'web', 'public', 'product-images')
+const DEV_DIR = path.join(process.cwd(), 'public', 'product-images')
+
+// Determine which directory to use based on environment
+function getUploadDir(): string {
+  // Check if we're in standalone mode by looking for the apps/web structure
+  const standaloneParent = path.join(process.cwd(), 'apps', 'web', 'public')
+  if (existsSync(standaloneParent)) {
+    return STANDALONE_DIR
+  }
+  return DEV_DIR
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,9 +46,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File must be less than 5MB' }, { status: 400 })
     }
 
+    // Determine upload directory (standalone Docker vs development)
+    const uploadDir = getUploadDir()
+
     // Ensure upload directory exists
-    if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true })
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true })
     }
 
     // Generate unique filename
@@ -43,7 +59,7 @@ export async function POST(req: NextRequest) {
     const uniqueId = nanoid(10)
     const timestamp = Date.now()
     const filename = `${timestamp}-${uniqueId}.${fileExtension}`
-    const filepath = path.join(UPLOAD_DIR, filename)
+    const filepath = path.join(uploadDir, filename)
 
     // Convert file to buffer and save
     const bytes = await file.arrayBuffer()
