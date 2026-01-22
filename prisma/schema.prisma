@@ -37,6 +37,7 @@ model Tenant {
   portalPageConfigurations PortalPageConfiguration[]
   estimateSettings       EstimateSettings?
   shipmentSettings       ShipmentSettings?
+  crmSettings            CrmSettings?
   netsuiteIntegration    NetSuiteIntegration?
   orders                 Order[]
   shipmentTypeMappings   ShipmentTypeMapping[]
@@ -806,6 +807,19 @@ model ShipmentSettings {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model CrmSettings {
+  id                           String   @id @default(cuid())
+  quoteRequestNotificationEmail String?  // Email address to receive internal quote request notifications
+  enableCustomerEmail          Boolean  @default(true)  // Send acknowledgment email to customer
+  enableInternalEmail          Boolean  @default(true)  // Send notification to internal team
+  tenantId                     String   @unique
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  tenant                       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1925,6 +1939,9 @@ model Opportunity {
 
   // Notes
   notes               String?   @db.Text
+
+  // Metadata (attachments, etc.)
+  metadata            Json?
 
   // Timestamps
   createdAt           DateTime  @default(now())

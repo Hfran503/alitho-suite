@@ -11,6 +11,7 @@ import { DepartmentsSettings } from '@/components/settings/DepartmentsSettings'
 import { EstimateSettings } from '@/components/settings/EstimateSettings'
 import { SecuritySettings } from '@/components/settings/SecuritySettings'
 import { ModulesSettings } from '@/components/settings/ModulesSettings'
+import { CrmSettings } from '@/components/settings/CrmSettings'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -28,10 +29,11 @@ import {
   Settings,
   ChevronRight,
   Boxes,
+  Briefcase,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'portal-pages' | 'departments' | 'estimates' | 'teams' | 'billing' | 'security' | 'modules'
+type Tab = 'users' | 'sessions' | 'integrations' | 'shipment-types' | 'menu-config' | 'portal-pages' | 'departments' | 'estimates' | 'crm' | 'teams' | 'billing' | 'security' | 'modules'
 
 interface TabItem {
   id: Tab
@@ -54,6 +56,7 @@ export default function SettingsPage() {
     { id: 'portal-pages', name: 'Portal Pages', description: 'Manage portal content', icon: Globe, category: 'configuration' },
     { id: 'departments', name: 'Departments', description: 'Organize teams and roles', icon: Building2, category: 'configuration' },
     { id: 'estimates', name: 'Estimates', description: 'Quote configuration', icon: FileText, category: 'configuration' },
+    { id: 'crm', name: 'CRM', description: 'CRM & notifications', icon: Briefcase, category: 'configuration' },
     { id: 'security', name: 'Security', description: 'Authentication & secrets', icon: Shield, category: 'security' },
     { id: 'modules', name: 'Modules', description: 'Enable/disable features', icon: Boxes, category: 'modules' },
     { id: 'teams', name: 'Teams', description: 'Team collaboration', icon: UsersRound, disabled: true, category: 'general' },
@@ -188,6 +191,7 @@ export default function SettingsPage() {
                 {activeTab === 'portal-pages' && <PortalPagesSettings />}
                 {activeTab === 'departments' && <DepartmentsSettings />}
                 {activeTab === 'estimates' && <EstimateSettings />}
+                {activeTab === 'crm' && <CrmSettings />}
                 {activeTab === 'security' && <SecuritySettings />}
                 {activeTab === 'modules' && <ModulesSettings />}
                 {activeTab === 'teams' && (

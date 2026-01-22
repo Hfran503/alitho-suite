@@ -111,8 +111,11 @@ export async function enqueuePdfGeneration(data: {
 export async function enqueueEmail(data: {
   to: string | string[]
   subject: string
-  templateName: string
-  templateData: Record<string, any>
+  templateName?: string
+  templateData?: Record<string, any>
+  text?: string
+  html?: string
+  tenantId: string
 }) {
   return await emailQueue.add('send-email', data, {
     attempts: 5,

@@ -76,6 +76,58 @@ export default function RequestQuotePage() {
     additionalNotes: '',
   })
 
+  // File attachment state
+  const [attachments, setAttachments] = useState<{ filename: string; originalName: string; url: string; size: number }[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    // Check total file count
+    if (attachments.length + files.length > 5) {
+      setUploadError('Maximum 5 files allowed')
+      return
+    }
+
+    setUploadingFiles(true)
+    setUploadError(null)
+
+    try {
+      const formData = new FormData()
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i])
+      }
+
+      const response = await fetch('/api/public/quote-attachments', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload files')
+      }
+
+      setAttachments([...attachments, ...data.data.files])
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Failed to upload files')
+    } finally {
+      setUploadingFiles(false)
+    }
+  }
+
+  const handleRemoveAttachment = (filename: string) => {
+    setAttachments(attachments.filter(a => a.filename !== filename))
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
   // Fetch product types on mount
   useEffect(() => {
     const fetchProductTypes = async () => {
@@ -335,6 +387,12 @@ export default function RequestQuotePage() {
           title: formData.title,
           projectDetails,
           quoteType: 'standard',
+          attachments: attachments.map(a => ({
+            filename: a.filename,
+            originalName: a.originalName,
+            url: a.url,
+            size: a.size,
+          })),
         }),
       })
 
@@ -488,6 +546,95 @@ export default function RequestQuotePage() {
                       rows={4}
                       className="resize-none"
                     />
+                  </div>
+
+                  {/* File Attachments */}
+                  <div>
+                    <Label>Attachments (Optional)</Label>
+                    <p className="text-sm text-gray-500 mb-3">
+                      Upload reference files, artwork, or specifications (PDF, images, Word, Excel - max 10MB each, up to 5 files)
+                    </p>
+
+                    {uploadError && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-red-800 text-sm">
+                        {uploadError}
+                      </div>
+                    )}
+
+                    {/* Upload Area */}
+                    <label
+                      className={`relative block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                        uploadingFiles
+                          ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                          : 'border-gray-300 hover:border-teal-500 hover:bg-teal-50/50'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx"
+                        onChange={(e) => handleFileUpload(e.target.files)}
+                        disabled={uploadingFiles || attachments.length >= 5}
+                        className="sr-only"
+                      />
+                      {uploadingFiles ? (
+                        <div className="flex flex-col items-center">
+                          <svg className="animate-spin h-8 w-8 text-teal-600 mb-2" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          <span className="text-gray-600">Uploading...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <svg className="h-10 w-10 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="text-gray-600">
+                            {attachments.length >= 5 ? 'Maximum files reached' : 'Click to upload or drag and drop'}
+                          </span>
+                        </div>
+                      )}
+                    </label>
+
+                    {/* Uploaded Files List */}
+                    {attachments.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {attachments.map((file) => (
+                          <div
+                            key={file.filename}
+                            className="flex items-center justify-between bg-gray-50 rounded-lg p-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="shrink-0 w-8 h-8 bg-teal-100 rounded flex items-center justify-center">
+                                {file.originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                  <svg className="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{file.originalName}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachment(file.filename)}
+                              className="shrink-0 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <Button
