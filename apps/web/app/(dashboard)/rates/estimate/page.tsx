@@ -26,7 +26,7 @@ interface RateEstimate {
   deliveryDays: number | null
   estimatedDeliveryDate: string | null
   hasMarkup?: boolean
-  markupPercent?: number
+  markupAmount?: number
   processingCost?: number
   // Breakdown fields (Full Rates mode only)
   shippingAmount?: number
@@ -302,7 +302,8 @@ export default function RateEstimatePage() {
         currency: rate.currency,
         deliveryDays: rate.deliveryDays,
         estimatedDeliveryDate: rate.estimatedDeliveryDate,
-        hasMarkup: rate.hasProcessingCost,
+        hasMarkup: rate.hasMarkup,
+        markupAmount: rate.markupAmount,
         processingCost: rate.processingCost,
         // Breakdown fields
         shippingAmount: rate.shippingAmount,
@@ -1012,9 +1013,14 @@ export default function RateEstimatePage() {
                                           {rate.deliveryDays} {rate.deliveryDays === 1 ? 'day' : 'days'}
                                         </p>
                                       )}
-                                      {rate.hasMarkup && (
+                                      {rate.hasMarkup && rate.markupAmount !== undefined && rate.markupAmount > 0 && (
                                         <p className="text-xs text-blue-600 mt-0.5 font-medium">
-                                          Markup included
+                                          Markup: ${rate.markupAmount.toFixed(2)}
+                                        </p>
+                                      )}
+                                      {rate.processingCost !== undefined && rate.processingCost > 0 && (
+                                        <p className="text-xs text-green-600 mt-0.5 font-medium">
+                                          Processing: ${rate.processingCost.toFixed(2)}
                                         </p>
                                       )}
                                     </div>
@@ -1067,9 +1073,16 @@ export default function RateEstimatePage() {
                                             )}
                                           </>
                                         )}
-                                        {/* Show processing cost (markup) if applicable */}
-                                        {rate.processingCost !== undefined && rate.processingCost > 0 && (
+                                        {/* Show markup (percentage) if applicable */}
+                                        {rate.markupAmount !== undefined && rate.markupAmount > 0 && (
                                           <div className="flex justify-between text-blue-600 font-medium border-t border-gray-100 pt-1 mt-1">
+                                            <span>Markup</span>
+                                            <span>${rate.markupAmount.toFixed(2)}</span>
+                                          </div>
+                                        )}
+                                        {/* Show processing fee (fixed dollar) if applicable */}
+                                        {rate.processingCost !== undefined && rate.processingCost > 0 && (
+                                          <div className="flex justify-between text-green-600 font-medium pt-0.5">
                                             <span>Processing Fee</span>
                                             <span>${rate.processingCost.toFixed(2)}</span>
                                           </div>

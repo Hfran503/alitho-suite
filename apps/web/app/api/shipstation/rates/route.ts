@@ -60,12 +60,15 @@ export async function POST(req: NextRequest) {
     const configCarrierIds = (integration.config as any)?.carrierIds || []
     const requestCarrierIds = carrierIds || configCarrierIds
 
-    // Get carrier processing cost configuration
+    // Get carrier markup configuration (both percent and dollar)
     const carriers = (integration.config as any)?.carriers || []
-    const carrierProcessingCostMap = new Map<string, number>()
+    const carrierMarkupMap = new Map<string, { percent: number; dollar: number }>()
     carriers.forEach((carrier: any) => {
-      if (carrier.id && carrier.estimateRateMarkupDollar) {
-        carrierProcessingCostMap.set(carrier.id, carrier.estimateRateMarkupDollar)
+      if (carrier.id) {
+        carrierMarkupMap.set(carrier.id, {
+          percent: carrier.estimateRateMarkupPercent || 0,
+          dollar: carrier.estimateRateMarkupDollar || 0,
+        })
       }
     })
 
@@ -164,14 +167,29 @@ export async function POST(req: NextRequest) {
           const insuranceAmount = rate.insurance_amount?.amount || 0
           const confirmationAmount = rate.confirmation_amount?.amount || 0
           const otherAmount = rate.other_amount?.amount || 0
-          let totalAmount = shippingAmount + insuranceAmount + confirmationAmount + otherAmount
+          const carrierTotal = shippingAmount + insuranceAmount + confirmationAmount + otherAmount
+          let totalAmount = carrierTotal
 
-          // Apply processing cost if configured for this carrier
-          const processingCost = carrierProcessingCostMap.get(rate.carrier_id) || 0
-          const hasProcessingCost = processingCost > 0
-          if (hasProcessingCost) {
-            totalAmount += processingCost
+          // Apply markup if configured for this carrier (both percent and dollar)
+          const markup = carrierMarkupMap.get(rate.carrier_id)
+          let markupAmount = 0
+          let processingCost = 0
+
+          if (markup) {
+            // Apply percentage markup first (this is the "Markup")
+            if (markup.percent > 0) {
+              markupAmount = totalAmount * (markup.percent / 100)
+              totalAmount = totalAmount + markupAmount
+            }
+            // Then apply dollar markup (this is the "Processing Fee")
+            if (markup.dollar > 0) {
+              processingCost = markup.dollar
+              totalAmount = totalAmount + processingCost
+            }
           }
+
+          const hasProcessingCost = processingCost > 0
+          const hasMarkup = markupAmount > 0
 
           return {
             rateId: rate.rate_id,
@@ -183,10 +201,12 @@ export async function POST(req: NextRequest) {
             shipDate: rate.ship_date,
             deliveryDays: rate.delivery_days,
             estimatedDeliveryDate: rate.estimated_delivery_date,
-            // Total amount includes all surcharges + processing cost
+            // Total amount includes all surcharges + markup + processing cost
             amount: totalAmount,
             hasProcessingCost: hasProcessingCost,
             processingCost: processingCost,
+            hasMarkup: hasMarkup,
+            markupAmount: markupAmount,
             // Component breakdown
             shippingAmount: shippingAmount,
             insuranceAmount: insuranceAmount,

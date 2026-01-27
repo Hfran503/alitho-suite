@@ -205,26 +205,25 @@ export async function POST(req: NextRequest) {
     const rates = Array.from(ratesByService.values()).map((rate) => {
       // Check if this carrier has a markup configured
       const markup = carrierMarkupMap.get(rate.carrierId)
+      let markupAmount = 0
+      let processingCost = 0
 
       if (markup) {
-        let hasMarkup = false
-
-        // Apply percentage markup if configured
+        // Apply percentage markup first (this is the "Markup")
         if (markup.percent > 0) {
-          const markupMultiplier = 1 + (markup.percent / 100)
-          rate.amount = rate.amount * markupMultiplier
-          hasMarkup = true
-        }
-
-        // Apply dollar markup if configured
-        if (markup.dollar > 0) {
-          rate.amount = rate.amount + markup.dollar
-          hasMarkup = true
-        }
-
-        if (hasMarkup) {
+          markupAmount = rate.amount * (markup.percent / 100)
+          rate.amount = rate.amount + markupAmount
           rate.hasMarkup = true
         }
+
+        // Then apply dollar markup (this is the "Processing Fee")
+        if (markup.dollar > 0) {
+          processingCost = markup.dollar
+          rate.amount = rate.amount + processingCost
+        }
+
+        rate.markupAmount = markupAmount
+        rate.processingCost = processingCost
       }
 
       return rate
