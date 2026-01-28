@@ -332,6 +332,84 @@ export class ShipStationClient {
       method: 'GET',
     })
   }
+
+  /**
+   * Get bulk shipping rates for multiple shipments (async operation)
+   * This uses a single API call to rate multiple shipments at once
+   */
+  async getBulkRates(params: {
+    shipments: Array<{
+      ship_to: {
+        name?: string
+        phone?: string
+        company_name?: string
+        address_line1: string
+        address_line2?: string
+        city_locality: string
+        state_province: string
+        postal_code: string
+        country_code: string
+        address_residential_indicator?: 'yes' | 'no' | 'unknown'
+      }
+      ship_from: {
+        name?: string
+        phone?: string
+        company_name?: string
+        address_line1: string
+        address_line2?: string
+        city_locality: string
+        state_province: string
+        postal_code: string
+        country_code: string
+        address_residential_indicator?: 'yes' | 'no' | 'unknown'
+      }
+      packages: Array<{
+        weight: {
+          value: number
+          unit: 'pound' | 'ounce' | 'gram' | 'kilogram'
+        }
+        dimensions?: {
+          length: number
+          width: number
+          height: number
+          unit: 'inch' | 'centimeter'
+        }
+      }>
+      confirmation?: 'none' | 'delivery' | 'signature' | 'adult_signature' | 'direct_signature'
+    }>
+    rate_options: {
+      carrier_ids: string[]
+      service_codes?: string[]
+    }
+  }): Promise<Array<{
+    rate_request_id: string
+    shipment_id: string
+    status: 'working' | 'completed' | 'error'
+    created_at: string
+  }>> {
+    return this.request('/rates/bulk', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  }
+
+  /**
+   * Get the results of a bulk rate request
+   */
+  async getBulkRateResult(rateRequestId: string): Promise<any> {
+    return this.request(`/rates/bulk/${rateRequestId}`, {
+      method: 'GET',
+    })
+  }
+
+  /**
+   * Get rates for a shipment by shipment ID (after bulk rate completes)
+   */
+  async getShipmentRates(shipmentId: string): Promise<any> {
+    return this.request(`/shipments/${shipmentId}/rates`, {
+      method: 'GET',
+    })
+  }
 }
 
 /**

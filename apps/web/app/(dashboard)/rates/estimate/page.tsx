@@ -588,8 +588,15 @@ export default function RateEstimatePage() {
     }))
     setBatchResults(initialResults)
 
-    // Process all destinations in parallel
-    const promises = batchDestinations.map(async (dest) => {
+    // Rate limiting configuration
+    // ShipStation allows 200 requests/minute = ~3.3 requests/second
+    // We'll process in small batches with delays to stay well under the limit
+    const BATCH_SIZE = 5 // Process 5 destinations at a time
+    const DELAY_BETWEEN_BATCHES_MS = 2000 // 2 seconds between batches
+    const MAX_RETRIES = 3
+
+    // Helper function to process a single destination with retry logic
+    const processDestination = async (dest: BatchDestination, retryCount = 0): Promise<BatchResult> => {
       try {
         const packages = [
           {
@@ -624,6 +631,15 @@ export default function RateEstimatePage() {
             serviceCode: serviceCode,
           }),
         })
+
+        // Handle rate limiting with retry
+        if (response.status === 429 || (response.status === 500 && retryCount < MAX_RETRIES)) {
+          const retryAfter = response.headers.get('Retry-After')
+          const delay = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount + 1) * 1000
+          console.log(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          return processDestination(dest, retryCount + 1)
+        }
 
         if (!response.ok) {
           const errorData = await response.json()
@@ -660,6 +676,13 @@ export default function RateEstimatePage() {
           cheapestRate,
         }
       } catch (err: any) {
+        // Retry on network errors
+        if (retryCount < MAX_RETRIES && !err.message?.includes('API error')) {
+          const delay = Math.pow(2, retryCount + 1) * 1000
+          console.log(`Network error, retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          return processDestination(dest, retryCount + 1)
+        }
         return {
           destinationId: dest.id,
           destination: dest,
@@ -667,17 +690,30 @@ export default function RateEstimatePage() {
           error: err.message || 'Failed to get rates',
         }
       }
-    })
+    }
 
-    // Update results as they complete
+    // Process destinations in batches to respect rate limits
     let completed = 0
-    for (const promise of promises) {
-      const result = await promise
-      completed++
-      setBatchProgress({ completed, total: batchDestinations.length })
-      setBatchResults((prev) =>
-        prev.map((r) => (r.destinationId === result.destinationId ? result : r))
-      )
+    for (let i = 0; i < batchDestinations.length; i += BATCH_SIZE) {
+      const batch = batchDestinations.slice(i, i + BATCH_SIZE)
+
+      // Process batch in parallel (but limited to BATCH_SIZE concurrent requests)
+      const batchPromises = batch.map(dest => processDestination(dest))
+      const batchResults = await Promise.all(batchPromises)
+
+      // Update UI with batch results
+      for (const result of batchResults) {
+        completed++
+        setBatchProgress({ completed, total: batchDestinations.length })
+        setBatchResults((prev) =>
+          prev.map((r) => (r.destinationId === result.destinationId ? result : r))
+        )
+      }
+
+      // Add delay before next batch (unless this is the last batch)
+      if (i + BATCH_SIZE < batchDestinations.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES_MS))
+      }
     }
 
     setBatchLoading(false)
