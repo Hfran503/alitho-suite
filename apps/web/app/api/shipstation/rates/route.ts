@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { shipFrom, shipTo, packages, carrierIds, residential } = body
+    const { shipFrom, shipTo, packages, carrierIds, serviceCode, residential } = body
 
     // Validate required fields
     if (!shipFrom || !shipTo || !packages || packages.length === 0) {
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     carriers.forEach((carrier: any) => {
       if (carrier.id) {
         carrierMarkupMap.set(carrier.id, {
-          percent: carrier.estimateRateMarkupPercent || 0,
+          percent: carrier.estimateRateMarkup || 0,
           dollar: carrier.estimateRateMarkupDollar || 0,
         })
       }
@@ -142,9 +142,10 @@ export async function POST(req: NextRequest) {
         }),
       },
       rate_options:
-        requestCarrierIds.length > 0
+        requestCarrierIds.length > 0 || serviceCode
           ? {
-              carrier_ids: requestCarrierIds,
+              carrier_ids: requestCarrierIds.length > 0 ? requestCarrierIds : undefined,
+              service_codes: serviceCode ? [serviceCode] : undefined,
             }
           : undefined,
     }
