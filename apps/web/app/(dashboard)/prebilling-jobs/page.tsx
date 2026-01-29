@@ -2,6 +2,16 @@
 
 import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { formatDatePT } from '@/lib/dateUtils'
+
+/** Safely parse a date string, returning null if invalid.
+ *  Handles PACE format "2026-02-09T00:00:00GMT-08:00" by stripping the non-standard "GMT" prefix. */
+function safeParseDate(dateStr: string | undefined): Date | null {
+  if (!dateStr) return null
+  const normalized = dateStr.replace(/GMT([+-]\d{2}:\d{2})$/, '$1')
+  const d = new Date(normalized)
+  return isNaN(d.getTime()) ? null : d
+}
 
 type DismissalRecord = {
   id: string
@@ -498,7 +508,8 @@ export default function PrebillingJobsPage() {
   const isDateInRange = (dateStr: string | undefined, filter: DateFilter): boolean => {
     if (!dateStr) return filter === 'all' // Jobs without due date only show in 'all'
 
-    const dueDate = new Date(dateStr)
+    const dueDate = safeParseDate(dateStr)
+    if (!dueDate) return filter === 'all' // Invalid dates treated like missing dates
     dueDate.setHours(0, 0, 0, 0)
 
     const today = new Date()
@@ -588,8 +599,8 @@ export default function PrebillingJobsPage() {
   }
 
   const hasPastDueIssue = (job: Job): boolean => {
-    if (!job.promiseDateTime) return false
-    const dueDate = new Date(job.promiseDateTime)
+    const dueDate = safeParseDate(job.promiseDateTime)
+    if (!dueDate) return false
     const now = new Date()
     const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
     return daysDiff > 14
@@ -652,11 +663,13 @@ export default function PrebillingJobsPage() {
 
     // Check if past due by more than 14 days
     if (job.promiseDateTime) {
-      const dueDate = new Date(job.promiseDateTime)
-      const now = new Date()
-      const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-      if (daysDiff > 14) {
-        return true // Past due by more than 14 days
+      const dueDate = safeParseDate(job.promiseDateTime)
+      if (dueDate) {
+        const now = new Date()
+        const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysDiff > 14) {
+          return true // Past due by more than 14 days
+        }
       }
     }
 
@@ -771,8 +784,8 @@ export default function PrebillingJobsPage() {
       // For active jobs, use the selected sort field
       // Special handling for date sorting
       if (sortField === 'promiseDateTime') {
-        const aDate = a.promiseDateTime ? new Date(a.promiseDateTime) : null
-        const bDate = b.promiseDateTime ? new Date(b.promiseDateTime) : null
+        const aDate = safeParseDate(a.promiseDateTime)
+        const bDate = safeParseDate(b.promiseDateTime)
 
         // Handle null dates - push them to the end regardless of sort order
         if (!aDate && !bDate) return 0
@@ -1489,15 +1502,12 @@ export default function PrebillingJobsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        {job.promiseDateTime ? (
-                          <span>{new Date(job.promiseDateTime).toLocaleDateString('en-US', {
-                            month: 'numeric',
-                            day: 'numeric',
-                            year: '2-digit'
-                          })}</span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                        {(() => {
+                          const formatted = formatDatePT(job.promiseDateTime, 'M/d/yy')
+                          return formatted === '-'
+                            ? <span className="text-gray-400">-</span>
+                            : <span>{formatted}</span>
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {(() => {
@@ -1823,11 +1833,9 @@ export default function PrebillingJobsPage() {
 
                           {/* Past Due Issue - More than 14 days */}
                           {(() => {
-                            if (!job.promiseDateTime) {
-                              return null
-                            }
+                            const dueDate = safeParseDate(job.promiseDateTime)
+                            if (!dueDate) return null
 
-                            const dueDate = new Date(job.promiseDateTime)
                             const now = new Date()
                             const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -2368,36 +2376,31 @@ export default function PrebillingJobsPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Due Date</label>
-                    {selectedJob.promiseDateTime ? (
-                      (() => {
-                        const dueDate = new Date(selectedJob.promiseDateTime)
-                        const now = new Date()
-                        const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-                        const isPastDue = daysDiff > 14
+                    {(() => {
+                      const dueDate = safeParseDate(selectedJob.promiseDateTime)
+                      if (!dueDate) {
+                        return <p className="text-base font-semibold text-gray-900">-</p>
+                      }
+                      const now = new Date()
+                      const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+                      const isPastDue = daysDiff > 14
 
-                        return (
-                          <div className="flex items-center gap-2">
-                            <p className={`text-base font-semibold ${isPastDue ? 'text-red-600' : 'text-gray-900'}`}>
-                              {dueDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })}
-                            </p>
-                            {isPastDue && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 text-xs rounded-lg font-semibold">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                </svg>
-                                {daysDiff} days overdue 
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })()
-                    ) : (
-                      <p className="text-base font-semibold text-gray-900">-</p>
-                    )}
+                      return (
+                        <div className="flex items-center gap-2">
+                          <p className={`text-base font-semibold ${isPastDue ? 'text-red-600' : 'text-gray-900'}`}>
+                            {formatDatePT(selectedJob.promiseDateTime, 'MMM d, yyyy')}
+                          </p>
+                          {isPastDue && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 text-xs rounded-lg font-semibold">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                              </svg>
+                              {daysDiff} days overdue
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               </section>

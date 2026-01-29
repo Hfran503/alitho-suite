@@ -12,6 +12,16 @@ import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
 export const TIMEZONE = 'America/Los_Angeles';
 
 /**
+ * Normalize PACE date strings to standard ISO 8601.
+ * PACE returns dates like "2026-02-09T00:00:00GMT-08:00" — the "GMT" prefix
+ * before the offset is non-standard and breaks both parseISO and new Date().
+ * This strips "GMT" so it becomes "2026-02-09T00:00:00-08:00".
+ */
+function normalizeDateString(date: string): string {
+  return date.replace(/GMT([+-]\d{2}:\d{2})$/, '$1');
+}
+
+/**
  * Format a date for display in Pacific Time
  * @param date - Date string, Date object, or null
  * @param formatString - date-fns format string (default: 'MMM d, yyyy h:mm a')
@@ -24,7 +34,17 @@ export function formatDatePT(
   if (!date) return '-';
 
   try {
-    const dateObj = typeof date === 'string' ? parseISO(date) : date;
+    let dateObj: Date;
+    if (typeof date === 'string') {
+      const normalized = normalizeDateString(date);
+      dateObj = parseISO(normalized);
+      if (isNaN(dateObj.getTime())) {
+        dateObj = new Date(normalized);
+      }
+    } else {
+      dateObj = date;
+    }
+    if (isNaN(dateObj.getTime())) return '-';
     return formatInTimeZone(dateObj, TIMEZONE, formatString);
   } catch (error) {
     console.error('Error formatting date:', error);
@@ -149,7 +169,17 @@ export function toDateInputValue(date: string | Date | null | undefined): string
   if (!date) return '';
 
   try {
-    const dateObj = typeof date === 'string' ? parseISO(date) : date;
+    let dateObj: Date;
+    if (typeof date === 'string') {
+      const normalized = normalizeDateString(date);
+      dateObj = parseISO(normalized);
+      if (isNaN(dateObj.getTime())) {
+        dateObj = new Date(normalized);
+      }
+    } else {
+      dateObj = date;
+    }
+    if (isNaN(dateObj.getTime())) return '';
     const ptDate = toZonedTime(dateObj, TIMEZONE);
     return format(ptDate, 'yyyy-MM-dd');
   } catch (error) {
