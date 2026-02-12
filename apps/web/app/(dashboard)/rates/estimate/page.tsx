@@ -145,6 +145,7 @@ export default function RateEstimatePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedCarriers, setExpandedCarriers] = useState<Set<string>>(new Set())
+  const [hideMarkup, setHideMarkup] = useState(false)
 
   // Batch quotes state
   const [batchDestinations, setBatchDestinations] = useState<BatchDestination[]>([])
@@ -801,10 +802,11 @@ export default function RateEstimatePage() {
         })
 
         // Final columns
+        const displayAmount = hideMarkup ? rate.amount - (rate.markupAmount || 0) - (rate.processingCost || 0) : rate.amount
         const finalColumns = [
-          rate.markupAmount !== undefined && rate.markupAmount > 0 ? `$${rate.markupAmount.toFixed(2)}` : '',
-          rate.processingCost !== undefined && rate.processingCost > 0 ? `$${rate.processingCost.toFixed(2)}` : '',
-          `$${rate.amount.toFixed(2)}`,
+          !hideMarkup && rate.markupAmount !== undefined && rate.markupAmount > 0 ? `$${rate.markupAmount.toFixed(2)}` : '',
+          !hideMarkup && rate.processingCost !== undefined && rate.processingCost > 0 ? `$${rate.processingCost.toFixed(2)}` : '',
+          `$${displayAmount.toFixed(2)}`,
           rate.deliveryDays?.toString() || 'N/A',
         ]
 
@@ -1099,7 +1101,11 @@ export default function RateEstimatePage() {
                       <p className="text-xl font-bold text-green-600">
                         ${batchResults
                           .filter(r => r.status === 'success' && r.cheapestRate)
-                          .reduce((sum, r) => sum + (r.cheapestRate?.amount || 0), 0)
+                          .reduce((sum, r) => {
+                            const rate = r.cheapestRate!
+                            const amt = hideMarkup ? rate.amount - (rate.markupAmount || 0) - (rate.processingCost || 0) : rate.amount
+                            return sum + amt
+                          }, 0)
                           .toFixed(2)}
                       </p>
                       <p className="text-[10px] text-gray-500">Total Cost</p>
@@ -1293,7 +1299,7 @@ export default function RateEstimatePage() {
                               </div>
                             ) : result?.status === 'success' && result.cheapestRate ? (
                               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500 text-white rounded font-bold shadow-sm">
-                                ${result.cheapestRate.amount.toFixed(2)}
+                                ${(hideMarkup ? result.cheapestRate.amount - (result.cheapestRate.markupAmount || 0) - (result.cheapestRate.processingCost || 0) : result.cheapestRate.amount).toFixed(2)}
                                 {result.cheapestRate.deliveryDays && (
                                   <span className="text-[10px] font-normal opacity-90">
                                     ({result.cheapestRate.deliveryDays}d)
@@ -1496,15 +1502,15 @@ export default function RateEstimatePage() {
                                       )}
                                     </>
                                   )}
-                                  {result.cheapestRate.markupAmount !== undefined && result.cheapestRate.markupAmount > 0 && (
+                                  {!hideMarkup && result.cheapestRate.markupAmount !== undefined && result.cheapestRate.markupAmount > 0 && (
                                     <span className="text-blue-600">Markup: <span className="font-medium">${result.cheapestRate.markupAmount.toFixed(2)}</span></span>
                                   )}
-                                  {result.cheapestRate.processingCost !== undefined && result.cheapestRate.processingCost > 0 && (
+                                  {!hideMarkup && result.cheapestRate.processingCost !== undefined && result.cheapestRate.processingCost > 0 && (
                                     <span className="text-green-600">Processing: <span className="font-medium">${result.cheapestRate.processingCost.toFixed(2)}</span></span>
                                   )}
                                 </div>
                                 <div className="font-bold text-green-700">
-                                  Total: ${result.cheapestRate.amount.toFixed(2)}
+                                  Total: ${(hideMarkup ? result.cheapestRate.amount - (result.cheapestRate.markupAmount || 0) - (result.cheapestRate.processingCost || 0) : result.cheapestRate.amount).toFixed(2)}
                                 </div>
                               </div>
                             )}
@@ -2089,15 +2095,18 @@ export default function RateEstimatePage() {
           <div className="bg-white rounded-lg shadow p-4 sticky top-4">
             <h2 className="text-sm font-bold text-gray-900 mb-3">Rate Estimates</h2>
 
-            {/* Markup Notice */}
+            {/* Markup Toggle */}
             {rates.length > 0 && rates.some(r => r.hasMarkup) && (
               <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-                <div className="flex items-start gap-1.5">
-                  <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <span>Markup included in displayed rates</span>
-                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideMarkup}
+                    onChange={(e) => setHideMarkup(e.target.checked)}
+                    className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>{hideMarkup ? 'Showing actual cost (no markup)' : 'Markup included in displayed rates'}</span>
+                </label>
               </div>
             )}
 
@@ -2136,7 +2145,7 @@ export default function RateEstimatePage() {
                 <div className="space-y-2 max-h-[calc(100vh-14rem)] overflow-y-auto">
                   {sortedCarriers.map(([carrier, carrierRates]) => {
                     const isExpanded = expandedCarriers.has(carrier)
-                    const cheapestRate = Math.min(...carrierRates.map(r => r.amount))
+                    const cheapestRate = Math.min(...carrierRates.map(r => hideMarkup ? r.amount - (r.markupAmount || 0) - (r.processingCost || 0) : r.amount))
                     const rateCount = carrierRates.length
 
                     return (
@@ -2187,19 +2196,19 @@ export default function RateEstimatePage() {
                                           {rate.deliveryDays} {rate.deliveryDays === 1 ? 'day' : 'days'}
                                         </p>
                                       )}
-                                      {rate.hasMarkup && rate.markupAmount !== undefined && rate.markupAmount > 0 && (
+                                      {!hideMarkup && rate.hasMarkup && rate.markupAmount !== undefined && rate.markupAmount > 0 && (
                                         <p className="text-xs text-blue-600 mt-0.5 font-medium">
                                           Markup: ${rate.markupAmount.toFixed(2)}
                                         </p>
                                       )}
-                                      {rate.processingCost !== undefined && rate.processingCost > 0 && (
+                                      {!hideMarkup && rate.processingCost !== undefined && rate.processingCost > 0 && (
                                         <p className="text-xs text-green-600 mt-0.5 font-medium">
                                           Processing: ${rate.processingCost.toFixed(2)}
                                         </p>
                                       )}
                                     </div>
                                     <p className="text-base font-bold text-gray-900 ml-2 flex-shrink-0">
-                                      ${rate.amount.toFixed(2)}
+                                      ${(hideMarkup ? rate.amount - (rate.markupAmount || 0) - (rate.processingCost || 0) : rate.amount).toFixed(2)}
                                     </p>
                                   </div>
 
@@ -2248,14 +2257,14 @@ export default function RateEstimatePage() {
                                           </>
                                         )}
                                         {/* Show markup (percentage) if applicable */}
-                                        {rate.markupAmount !== undefined && rate.markupAmount > 0 && (
+                                        {!hideMarkup && rate.markupAmount !== undefined && rate.markupAmount > 0 && (
                                           <div className="flex justify-between text-blue-600 font-medium border-t border-gray-100 pt-1 mt-1">
                                             <span>Markup</span>
                                             <span>${rate.markupAmount.toFixed(2)}</span>
                                           </div>
                                         )}
                                         {/* Show processing fee (fixed dollar) if applicable */}
-                                        {rate.processingCost !== undefined && rate.processingCost > 0 && (
+                                        {!hideMarkup && rate.processingCost !== undefined && rate.processingCost > 0 && (
                                           <div className="flex justify-between text-green-600 font-medium pt-0.5">
                                             <span>Processing Fee</span>
                                             <span>${rate.processingCost.toFixed(2)}</span>

@@ -193,11 +193,15 @@ export async function POST(req: NextRequest) {
       }
 
       const existing = ratesByService.get(key)
-      existing.amount += rate.shipping_amount?.amount || 0
-      existing.shippingAmount += rate.shipping_amount?.amount || 0
-      existing.insuranceAmount += rate.insurance_amount?.amount || 0
-      existing.confirmationAmount += rate.confirmation_amount?.amount || 0
-      existing.otherAmount += rate.other_amount?.amount || 0
+      const shippingAmt = rate.shipping_amount?.amount || 0
+      const insuranceAmt = rate.insurance_amount?.amount || 0
+      const confirmationAmt = rate.confirmation_amount?.amount || 0
+      const otherAmt = rate.other_amount?.amount || 0
+      existing.amount += shippingAmt + insuranceAmt + confirmationAmt + otherAmt
+      existing.shippingAmount += shippingAmt
+      existing.insuranceAmount += insuranceAmt
+      existing.confirmationAmount += confirmationAmt
+      existing.otherAmount += otherAmt
       existing.cartonCount += 1
     })
 
