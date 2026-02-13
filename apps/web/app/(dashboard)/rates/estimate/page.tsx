@@ -746,12 +746,19 @@ export default function RateEstimatePage() {
 
     // Build dynamic headers
     const baseHeaders = [
-      'Destination',
+      'Name',
+      'Company',
+      'Street 1',
+      'Street 2',
       'City',
       'State',
       'ZIP',
+      'Country',
       'Residential',
       'Weight (lb)',
+      'Length (in)',
+      'Width (in)',
+      'Height (in)',
       'Status',
       'Carrier',
       'Service',
@@ -784,12 +791,19 @@ export default function RateEstimatePage() {
 
         // Base columns
         const baseColumns = [
-          dest.name || dest.company || 'N/A',
+          dest.name || '',
+          dest.company || '',
+          dest.street1 || '',
+          dest.street2 || '',
           dest.city,
           dest.state,
           dest.zip,
+          dest.country || 'US',
           dest.residential === 'yes' ? 'Yes' : dest.residential === 'no' ? 'No' : 'Unknown',
           dest.weight,
+          dest.length || '',
+          dest.width || '',
+          dest.height || '',
           'Success',
           selectedServiceMapping?.carrierName || rate.carrier,
           selectedServiceMapping?.serviceName || rate.service,
@@ -815,12 +829,19 @@ export default function RateEstimatePage() {
         // Error/pending row - fill with empty strings for all fee columns
         const emptyFeeColumns = feeTypeColumns.map(() => '')
         return [
-          dest.name || dest.company || 'N/A',
+          dest.name || '',
+          dest.company || '',
+          dest.street1 || '',
+          dest.street2 || '',
           dest.city,
           dest.state,
           dest.zip,
+          dest.country || 'US',
           dest.residential === 'yes' ? 'Yes' : dest.residential === 'no' ? 'No' : 'Unknown',
           dest.weight,
+          dest.length || '',
+          dest.width || '',
+          dest.height || '',
           result.status === 'error' ? `Error: ${result.error}` : 'Pending',
           '', // Carrier
           '', // Service
