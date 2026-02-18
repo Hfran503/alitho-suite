@@ -120,6 +120,16 @@ function getDefaultMenu(): MenuItem[] {
       isActive: true
     },
     {
+      menuKey: 'cost-vs-estimate',
+      label: 'Cost vs. Estimate',
+      href: '/cost-vs-estimate',
+      icon: 'clipboard-check',
+      parentKey: null,
+      order: 3.5,
+      visibleToRoles: ['full_admin', 'admin', 'accounting'],
+      isActive: true
+    },
+    {
       menuKey: 'rate-estimates',
       label: 'Rate Estimates',
       href: '/rates/estimate',
