@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@repo/database'
+import { getShipStationClient } from '@/lib/shipstation'
 
 // GET /api/rates/quote-requests - List quote requests for tenant
 export async function GET(req: NextRequest) {
@@ -141,44 +142,152 @@ export async function POST(req: NextRequest) {
     // Get unique carrier IDs for the rate estimate call
     const uniqueCarrierIds = [...new Set(servicesList.map(s => s.carrierId))]
 
-    // Call rate estimate API with all carriers (no serviceCode filter so we get all services)
-    const rateResponse = await fetch(new URL('/api/shipstation/rate-estimates', req.url), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        cookie: req.headers.get('cookie') || '',
+    // Get ShipStation client and integration config
+    const client = await getShipStationClient(membership.tenantId)
+    const integration = await db.integration.findUnique({
+      where: {
+        tenantId_provider: {
+          tenantId: membership.tenantId,
+          provider: 'shipstation',
+        },
       },
-      body: JSON.stringify({
-        fromAddress: {
-          postalCode: fromAddress.postalCode,
-          city: fromAddress.city,
-          state: fromAddress.state,
-          countryCode: fromAddress.countryCode || 'US',
-        },
-        toAddress: {
-          postalCode: toAddress.postalCode,
-          city: toAddress.city,
-          state: toAddress.state,
-          countryCode: toAddress.countryCode || 'US',
-        },
-        cartons: expandedCartons,
-        shipDate,
-        confirmation: confirmation || 'none',
-        residential: residential ? 'yes' : 'no',
-        carrierIds: uniqueCarrierIds,
-      }),
+      select: { config: true },
     })
 
-    if (!rateResponse.ok) {
-      const errorData = await rateResponse.json()
-      return NextResponse.json(
-        { error: errorData.error || 'Failed to get rate estimate from carrier' },
-        { status: 400 }
-      )
+    if (!client) {
+      return NextResponse.json({ error: 'ShipStation integration is not configured' }, { status: 400 })
     }
 
-    const rateData = await rateResponse.json()
-    const allReturnedRates = rateData.data?.rates || []
+    // Get carrier markup configuration
+    const carriers = (integration?.config as any)?.carriers || []
+    const carrierMarkupMap = new Map<string, { percent: number; dollar: number }>()
+    carriers.forEach((c: any) => {
+      if (c.id) {
+        carrierMarkupMap.set(c.id, {
+          percent: c.estimateRateMarkup || 0,
+          dollar: c.estimateRateMarkupDollar || 0,
+        })
+      }
+    })
+
+    // Build rate estimate requests (one per carton)
+    const rateEstimates: any[] = []
+    for (const carton of expandedCartons) {
+      const estimateReq: any = {
+        from_country_code: fromAddress.countryCode || 'US',
+        from_postal_code: fromAddress.postalCode,
+        from_city_locality: fromAddress.city,
+        from_state_province: fromAddress.state,
+        to_country_code: toAddress.countryCode || 'US',
+        to_postal_code: toAddress.postalCode,
+        to_city_locality: toAddress.city,
+        to_state_province: toAddress.state,
+        weight: { value: parseFloat(carton.weight), unit: 'pound' },
+        ship_date: shipDate ? new Date(shipDate).toISOString() : new Date().toISOString(),
+        confirmation: confirmation || 'none',
+        address_residential_indicator: residential ? 'yes' : 'unknown',
+        carrier_ids: uniqueCarrierIds,
+      }
+
+      if (carton.length && carton.width && carton.height) {
+        const l = parseFloat(carton.length), w = parseFloat(carton.width), h = parseFloat(carton.height)
+        if (!isNaN(l) && !isNaN(w) && !isNaN(h) && l > 0 && w > 0 && h > 0) {
+          estimateReq.dimensions = { unit: 'inch', length: l, width: w, height: h }
+        }
+      }
+
+      rateEstimates.push(estimateReq)
+    }
+
+    // Call ShipEngine API directly for each carton
+    const rawRates: any[] = []
+    for (let i = 0; i < rateEstimates.length; i++) {
+      try {
+        const response = await fetch('https://api.shipengine.com/v1/rates/estimate', {
+          method: 'POST',
+          headers: {
+            'API-Key': (client as any).apiKey || '',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(rateEstimates[i]),
+        })
+
+        if (!response.ok) {
+          console.error(`Rate estimate error for carton ${i + 1}:`, await response.json().catch(() => ({})))
+          continue
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          data.forEach((rate: any) => rawRates.push({ ...rate, cartonIndex: i }))
+        }
+      } catch (err) {
+        console.error(`Error getting rate estimate for carton ${i + 1}:`, err)
+      }
+    }
+
+    // Group rates by carrier+service, summing costs for multi-carton shipments
+    const ratesByService = new Map<string, any>()
+    rawRates.forEach((rate) => {
+      const key = `${rate.carrier_id}-${rate.service_code}`
+      if (!ratesByService.has(key)) {
+        ratesByService.set(key, {
+          carrierId: rate.carrier_id,
+          serviceCode: rate.service_code,
+          carrier: rate.carrier_friendly_name || rate.carrier_nickname || rate.carrier_code,
+          service: rate.service_type,
+          amount: 0, shippingAmount: 0, insuranceAmount: 0, confirmationAmount: 0, otherAmount: 0,
+          rateDetails: [],
+          deliveryDays: rate.delivery_days,
+          cartonCount: 0,
+        })
+      }
+
+      const existing = ratesByService.get(key)
+      const ship = rate.shipping_amount?.amount || 0
+      const ins = rate.insurance_amount?.amount || 0
+      const conf = rate.confirmation_amount?.amount || 0
+      const other = rate.other_amount?.amount || 0
+      existing.amount += ship + ins + conf + other
+      existing.shippingAmount += ship
+      existing.insuranceAmount += ins
+      existing.confirmationAmount += conf
+      existing.otherAmount += other
+      existing.cartonCount += 1
+
+      if (rate.rate_details && Array.isArray(rate.rate_details)) {
+        rate.rate_details.forEach((detail: any) => {
+          const detailKey = detail.carrier_description || detail.rate_detail_type
+          const ed = existing.rateDetails.find((d: any) => d.description === detailKey)
+          if (ed) {
+            ed.amount += (detail.amount?.amount || 0)
+          } else {
+            existing.rateDetails.push({
+              type: detail.rate_detail_type,
+              description: detail.carrier_description,
+              amount: detail.amount?.amount || 0,
+              currency: detail.amount?.currency || 'usd',
+            })
+          }
+        })
+      }
+    })
+
+    // Apply markup
+    const allReturnedRates = Array.from(ratesByService.values()).map((rate) => {
+      const markup = carrierMarkupMap.get(rate.carrierId)
+      if (markup) {
+        if (markup.percent > 0) {
+          rate.markupAmount = rate.amount * (markup.percent / 100)
+          rate.amount += rate.markupAmount
+        }
+        if (markup.dollar > 0) {
+          rate.processingCost = markup.dollar
+          rate.amount += rate.processingCost
+        }
+      }
+      return rate
+    }).sort((a, b) => a.amount - b.amount)
 
     // Match returned rates to selected services.
     // For each selected service, try exact match (carrierId + serviceCode) first.
