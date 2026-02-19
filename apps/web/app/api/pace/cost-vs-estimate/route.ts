@@ -219,7 +219,7 @@ export async function GET(request: Request) {
 
             for (let i = 0; i < candidateJobs.length; i += statusBatchSize) {
               const batch = candidateJobs.slice(i, i + statusBatchSize)
-              const jobConditions = batch.map(id => `@id = "${id}"`).join(' or ')
+              const jobConditions = batch.map(id => `@job = "${id}"`).join(' or ')
               const xpath = `(${jobConditions})${statusXPath}`
 
               try {
