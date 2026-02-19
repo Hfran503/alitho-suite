@@ -75,12 +75,30 @@ const DEFAULT_MENU_ITEMS = [
     visibleToRoles: ['full_admin', 'admin']
   },
   {
-    menuKey: 'rate-estimates',
-    label: 'Rate Estimates',
+    menuKey: 'rates',
+    label: 'Shipping Rates',
     href: '/rates/estimate',
     icon: 'dollar',
     order: 3,
+    visibleToRoles: ['full_admin', 'admin', 'estimators', 'customer_service']
+  },
+  {
+    menuKey: 'rate-estimates',
+    label: 'Shipping Estimate',
+    href: '/rates/estimate',
+    icon: 'calculator',
+    parentKey: 'rates',
+    order: 0,
     visibleToRoles: ['full_admin', 'admin', 'estimators']
+  },
+  {
+    menuKey: 'quote-requests',
+    label: 'Quote Requests',
+    href: '/rates/quote-requests',
+    icon: 'document',
+    parentKey: 'rates',
+    order: 1,
+    visibleToRoles: ['full_admin', 'admin', 'customer_service', 'estimators']
   },
   {
     menuKey: 'invoice-integrations',

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { shipFrom, shipTo, packages, carrierIds, serviceCode, residential } = body
+    const { shipFrom, shipTo, packages, carrierIds, serviceCode, residential, confirmation } = body
 
     // Validate required fields
     if (!shipFrom || !shipTo || !packages || packages.length === 0) {
@@ -113,8 +113,9 @@ export async function POST(req: NextRequest) {
           state_province: cleanString(shipTo.state) || '',
           postal_code: cleanString(shipTo.zip) || '',
           country_code: cleanString(shipTo.country) || 'US',
-          address_residential_indicator: residential === 'yes' ? true : residential === 'no' ? false : undefined,
+          address_residential_indicator: residential === 'yes' ? 'yes' : residential === 'no' ? 'no' : 'unknown',
         },
+        confirmation: confirmation && confirmation !== 'none' ? confirmation : undefined,
         packages: packages.map((pkg: any) => {
           const packageData: any = {
             weight: {

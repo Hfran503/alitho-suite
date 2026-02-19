@@ -60,6 +60,7 @@ model Tenant {
   opportunities          Opportunity[]
   quotes                 Quote[]
   productTypes           ProductType[]
+  shippingQuoteRequests  ShippingQuoteRequest[]
 
   @@index([slug])
   @@index([status])
@@ -88,6 +89,7 @@ model User {
   kitAssemblies         KitAssembly[]
   storefrontOrdersCreated StorefrontOrder[]
   prebillingJobDismissals PrebillingJobDismissal[]
+  shippingQuoteRequests   ShippingQuoteRequest[]
 
   @@index([email])
   @@index([paceCustomerId])
@@ -2064,4 +2066,70 @@ model ProductType {
   @@unique([tenantId, slug])
   @@index([tenantId])
   @@index([isActive])
+}
+
+// ShippingQuoteRequest - CSR/Sales shipping cost estimate requests
+model ShippingQuoteRequest {
+  id              String    @id @default(cuid())
+  tenantId        String
+  createdById     String
+
+  // Reference
+  referenceNumber String?   // Job # or Ref #
+
+  // Carrier & Service
+  carrierId       String    // ShipStation carrier ID
+  serviceCode     String    // ShipStation service code
+  carrierName     String    // Display name
+  serviceName     String    // Display name
+
+  // From Address
+  fromZip         String
+  fromCity        String
+  fromState       String
+  fromCountry     String    @default("US")
+
+  // Furthest Zone Destination
+  toZip           String
+  toCity          String
+  toState         String
+  toCountry       String    @default("US")
+
+  // Shipping Options
+  residential     Boolean   @default(true)
+  addressCount    Int       @default(1)
+  confirmation    String    @default("none")
+  shipDate        String?
+
+  // Package Details (array of {qty, weight, length, width, height})
+  packages        Json
+
+  // Calculated Results
+  perPackageRate  Decimal?  @db.Decimal(10, 2)
+  perAddressRate  Decimal?  @db.Decimal(10, 2)
+  totalRate       Decimal?  @db.Decimal(10, 2)
+  deliveryDays    Int?
+
+  // Rate breakdown: { carrierRate, markupAmount, processingFee, rateDetails[] }
+  rateBreakdown   Json?
+
+  // All compared rates (when multiple carriers selected)
+  // Array of: { carrierId, serviceCode, carrierName, serviceName, perPackageRate, perAddressRate, totalRate, deliveryDays, rateBreakdown }
+  allRates        Json?
+
+  // Status & Notes
+  status          String    @default("submitted")
+  notes           String?   @db.Text
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy       User      @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@index([createdById])
+  @@index([createdAt])
 }

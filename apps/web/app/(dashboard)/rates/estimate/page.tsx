@@ -10,6 +10,7 @@ interface Carton {
   width: string
   height: string
   weight: string
+  qty: string
 }
 
 interface RateDetail {
@@ -134,7 +135,7 @@ export default function RateEstimatePage() {
   })
 
   const [cartons, setCartons] = useState<Carton[]>([
-    { length: '', width: '', height: '', weight: '' },
+    { length: '', width: '', height: '', weight: '', qty: '1' },
   ])
 
   const [shipDate, setShipDate] = useState<string>(new Date().toISOString().split('T')[0])
@@ -225,7 +226,7 @@ export default function RateEstimatePage() {
   }, [rateMode])
 
   const addCarton = () => {
-    setCartons([...cartons, { length: '', width: '', height: '', weight: '' }])
+    setCartons([...cartons, { length: '', width: '', height: '', weight: '', qty: '1' }])
   }
 
   const removeCarton = (index: number) => {
@@ -238,6 +239,18 @@ export default function RateEstimatePage() {
     const newCartons = [...cartons]
     newCartons[index][field] = value
     setCartons(newCartons)
+  }
+
+  // Expand cartons by qty for API requests
+  const expandCartons = (cartonList: Carton[]): Carton[] => {
+    const expanded: Carton[] = []
+    for (const carton of cartonList) {
+      const qty = Math.max(1, parseInt(carton.qty) || 1)
+      for (let i = 0; i < qty; i++) {
+        expanded.push(carton)
+      }
+    }
+    return expanded
   }
 
   const toggleCarrier = (carrier: string) => {
@@ -440,13 +453,15 @@ export default function RateEstimatePage() {
         // Dimensions are optional
       }
 
+      const expandedCartonList = expandCartons(cartons)
+
       const response = await fetch('/api/shipstation/rate-estimates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fromAddress,
           toAddress,
-          cartons,
+          cartons: expandedCartonList,
           shipDate,
           confirmation,
           residential,
@@ -489,8 +504,10 @@ export default function RateEstimatePage() {
         }
       }
 
+      const expandedCartonList = expandCartons(cartons)
+
       // Build packages array
-      const packages = cartons.map((carton) => ({
+      const packages = expandedCartonList.map((carton) => ({
         weight: parseFloat(carton.weight),
         weightUnit: 'pound',
         length: carton.length ? parseFloat(carton.length) : undefined,
@@ -506,7 +523,8 @@ export default function RateEstimatePage() {
           shipFrom: fullFromAddress,
           shipTo: fullToAddress,
           packages,
-          residential,
+          residential: 'unknown',
+          confirmation,
         }),
       })
 
@@ -1982,7 +2000,21 @@ export default function RateEstimatePage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-5 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Qty
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={carton.qty}
+                        onChange={(e) => updateCarton(index, 'qty', e.target.value)}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="1"
+                      />
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Weight (lb) <span className="text-red-500">*</span>
@@ -2070,6 +2102,7 @@ export default function RateEstimatePage() {
                   <option value="direct_signature">Direct Signature</option>
                 </select>
               </div>
+              {rateMode === 'quick' && (
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Address Type</label>
                 <select
@@ -2082,6 +2115,7 @@ export default function RateEstimatePage() {
                   <option value="no">Commercial</option>
                 </select>
               </div>
+              )}
             </div>
           </div>
           )}
@@ -2114,22 +2148,33 @@ export default function RateEstimatePage() {
         {/* Right Column - Results */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow p-4 sticky top-4">
-            <h2 className="text-sm font-bold text-gray-900 mb-3">Rate Estimates</h2>
-
-            {/* Markup Toggle */}
-            {rates.length > 0 && rates.some(r => r.hasMarkup) && (
-              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hideMarkup}
-                    onChange={(e) => setHideMarkup(e.target.checked)}
-                    className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>{hideMarkup ? 'Showing actual cost (no markup)' : 'Markup included in displayed rates'}</span>
-                </label>
-              </div>
-            )}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-gray-900">Rate Estimates</h2>
+              {rates.length > 0 && rates.some(r => r.hasMarkup) && (
+                <div className="flex items-center bg-gray-100 rounded-full p-0.5">
+                  <button
+                    onClick={() => setHideMarkup(false)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      !hideMarkup
+                        ? 'bg-green-600 text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Customer Price
+                  </button>
+                  <button
+                    onClick={() => setHideMarkup(true)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      hideMarkup
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Our Cost
+                  </button>
+                </div>
+              )}
+            </div>
 
             {rates.length === 0 ? (
               <div className="text-center py-6">

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { fromAddress, toAddress, cartons, shipDate, confirmation, residential } = body
+    const { fromAddress, toAddress, cartons, shipDate, confirmation, residential, carrierIds: requestCarrierIds, serviceCode } = body
 
     // Validate required fields
     if (!fromAddress || !toAddress || !cartons || cartons.length === 0) {
@@ -119,9 +119,15 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Add carrier IDs if configured
-      if (configCarrierIds.length > 0) {
-        estimateRequest.carrier_ids = configCarrierIds
+      // Use request-provided carrier IDs if given, fall back to config
+      const effectiveCarrierIds = requestCarrierIds && requestCarrierIds.length > 0 ? requestCarrierIds : configCarrierIds
+      if (effectiveCarrierIds.length > 0) {
+        estimateRequest.carrier_ids = effectiveCarrierIds
+      }
+
+      // Filter to specific service if provided
+      if (serviceCode) {
+        estimateRequest.service_code = serviceCode
       }
 
       rateEstimates.push(estimateRequest)
@@ -185,6 +191,7 @@ export async function POST(req: NextRequest) {
           insuranceAmount: 0,
           confirmationAmount: 0,
           otherAmount: 0,
+          rateDetails: [],
           currency: rate.shipping_amount?.currency || 'usd',
           deliveryDays: rate.delivery_days,
           estimatedDeliveryDate: rate.estimated_delivery_date,
@@ -203,6 +210,25 @@ export async function POST(req: NextRequest) {
       existing.confirmationAmount += confirmationAmt
       existing.otherAmount += otherAmt
       existing.cartonCount += 1
+
+      // Accumulate rate details for breakdown display
+      if (rate.rate_details && Array.isArray(rate.rate_details)) {
+        rate.rate_details.forEach((detail: any) => {
+          const detailKey = detail.carrier_description || detail.rate_detail_type
+          const existingDetail = existing.rateDetails.find((d: any) => d.description === detailKey)
+          if (existingDetail) {
+            // Sum amounts for multi-carton shipments
+            existingDetail.amount += (detail.amount?.amount || 0)
+          } else {
+            existing.rateDetails.push({
+              type: detail.rate_detail_type,
+              description: detail.carrier_description,
+              amount: detail.amount?.amount || 0,
+              currency: detail.amount?.currency || 'usd',
+            })
+          }
+        })
+      }
     })
 
     // Convert map to array and apply markup
