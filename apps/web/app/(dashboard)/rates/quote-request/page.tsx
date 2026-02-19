@@ -151,6 +151,9 @@ export default function QuoteRequestPage() {
     setLoading(true)
 
     try {
+      if (!referenceNumber.trim()) {
+        throw new Error('Please enter a Ref # / Job #')
+      }
       if (selectedServices.length === 0) {
         throw new Error('Please select at least one carrier/service')
       }
@@ -244,7 +247,7 @@ export default function QuoteRequestPage() {
         {/* Ref # and Carrier/Service */}
         <div className="bg-white rounded-lg shadow p-4">
           <div className="mb-3">
-            <label className="block text-sm font-bold text-gray-900 mb-1">Ref # / Job #</label>
+            <label className="block text-sm font-bold text-gray-900 mb-1">Ref # / Job # <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={referenceNumber}

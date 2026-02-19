@@ -110,6 +110,9 @@ export async function POST(req: NextRequest) {
           : []
 
     // Validate required fields
+    if (!referenceNumber?.trim()) {
+      return NextResponse.json({ error: 'Ref # / Job # is required' }, { status: 400 })
+    }
     if (servicesList.length === 0) {
       return NextResponse.json({ error: 'At least one carrier/service is required' }, { status: 400 })
     }
