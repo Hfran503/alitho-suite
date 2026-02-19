@@ -207,7 +207,7 @@ function addFrontAddress(
 
   const cropOffset = includeCropOffset ? CROP_MARK_MARGIN : 0
   const startX = cropOffset + 0.28 * 72
-  const startY = pageHeight - cropOffset - 0.18 * 72
+  const startY = pageHeight - cropOffset - 0.28 * 72 - fontSize
 
   lines.forEach((line, i) => {
     const text = line.trim()
