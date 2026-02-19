@@ -24,7 +24,12 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
     const skip = (page - 1) * limit
 
-    const where = { tenantId: membership.tenantId }
+    const search = searchParams.get('search')?.trim() || ''
+
+    const where: any = { tenantId: membership.tenantId }
+    if (search) {
+      where.referenceNumber = { contains: search, mode: 'insensitive' }
+    }
 
     const [requests, total] = await Promise.all([
       db.shippingQuoteRequest.findMany({

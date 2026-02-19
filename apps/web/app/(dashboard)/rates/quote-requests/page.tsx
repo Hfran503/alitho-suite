@@ -44,17 +44,22 @@ export default function QuoteRequestsListPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
 
   useEffect(() => {
-    fetchRequests(1)
-  }, [])
+    fetchRequests(1, search)
+  }, [search])
 
-  const fetchRequests = async (page: number) => {
+  const fetchRequests = async (page: number, searchTerm?: string) => {
     try {
       setLoading(true)
       setError(null)
 
-      const res = await fetch(`/api/rates/quote-requests?page=${page}&limit=${pagination.limit}`)
+      const params = new URLSearchParams({ page: String(page), limit: String(pagination.limit) })
+      if (searchTerm) params.set('search', searchTerm)
+
+      const res = await fetch(`/api/rates/quote-requests?${params}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -68,6 +73,16 @@ export default function QuoteRequestsListPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    setSearch(searchInput)
+  }
+
+  const clearSearch = () => {
+    setSearchInput('')
+    setSearch('')
   }
 
   const formatDate = (dateString: string) => {
@@ -121,6 +136,46 @@ export default function QuoteRequestsListPage() {
         </button>
       </div>
 
+      {/* Search */}
+      <form onSubmit={handleSearch} className="mb-4 flex gap-2">
+        <div className="relative flex-1 max-w-sm">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by Ref #..."
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+          />
+          <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searchInput && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+        >
+          Search
+        </button>
+      </form>
+
+      {search && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+          <span>Showing results for <strong>&quot;{search}&quot;</strong></span>
+          <button onClick={clearSearch} className="text-amber-600 hover:text-amber-700 font-medium">Clear</button>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
           {error}
@@ -164,7 +219,7 @@ export default function QuoteRequestsListPage() {
             {requests.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-12 text-center text-gray-500 text-sm">
-                  No quote requests yet. Create your first one to get started.
+                  {search ? `No quote requests matching "${search}"` : 'No quote requests yet. Create your first one to get started.'}
                 </td>
               </tr>
             ) : (
@@ -222,24 +277,48 @@ export default function QuoteRequestsListPage() {
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            {pagination.total} result{pagination.total !== 1 ? 's' : ''}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => fetchRequests(pagination.page - 1)}
+              onClick={() => fetchRequests(pagination.page - 1, search)}
               disabled={pagination.page === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-2.5 py-1.5 border border-gray-300 rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
             >
-              Previous
+              &lsaquo;
             </button>
+            {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 2)
+              .reduce<(number | string)[]>((acc, p, i, arr) => {
+                if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('...')
+                acc.push(p)
+                return acc
+              }, [])
+              .map((p, i) =>
+                typeof p === 'string' ? (
+                  <span key={`ellipsis-${i}`} className="px-1.5 text-sm text-gray-400">...</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => fetchRequests(p, search)}
+                    className={`px-3 py-1.5 rounded text-sm font-medium ${
+                      p === pagination.page
+                        ? 'bg-amber-600 text-white'
+                        : 'border border-gray-300 hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
             <button
-              onClick={() => fetchRequests(pagination.page + 1)}
+              onClick={() => fetchRequests(pagination.page + 1, search)}
               disabled={pagination.page === pagination.totalPages}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-2.5 py-1.5 border border-gray-300 rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
             >
-              Next
+              &rsaquo;
             </button>
           </div>
         </div>
