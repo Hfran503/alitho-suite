@@ -469,63 +469,73 @@ export async function GET() {
     const uniqueProposals = [...new Set(jobs.map(j => j.u_proposal_number).filter(Boolean))]
     console.log(`Fetching ${uniqueProposals.length} unique proposal estimate prices...`)
 
-    const proposalPromises = uniqueProposals.map(async (proposalNumber) => {
-      try {
-        const proposalResponse = await fetch(
-          `${paceApiUrl}/ReadObject/readUDO_proposal?primaryKey=${encodeURIComponent(proposalNumber!)}`,
-          {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': authHeader,
-            },
-            body: '',
-          }
-        )
+    // Process proposals in batches of 50 to avoid overwhelming PACE API
+    const proposalResults: { proposalNumber: any; estimatePrice: any; totalSellPrice: any; estimate: any; po: any }[] = []
+    const proposalBatchSize = 50
 
-        if (proposalResponse.ok) {
-          const proposalData = await proposalResponse.json()
-          let estimateNumber = null
+    for (let i = 0; i < uniqueProposals.length; i += proposalBatchSize) {
+      const batch = uniqueProposals.slice(i, i + proposalBatchSize)
+      console.log(`Processing proposal batch ${Math.floor(i / proposalBatchSize) + 1}/${Math.ceil(uniqueProposals.length / proposalBatchSize)}...`)
 
-          // If proposal has an estimate ID, fetch the estimate number
-          if (proposalData.estimate) {
-            try {
-              const estimateResponse = await fetch(
-                `${paceApiUrl}/ReadObject/readEstimate?primaryKey=${proposalData.estimate}`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Accept': 'application/json',
-                    'Authorization': authHeader,
-                  },
-                  body: '',
-                }
-              )
-
-              if (estimateResponse.ok) {
-                const estimateData = await estimateResponse.json()
-                estimateNumber = estimateData.estimateNumber || null
-              }
-            } catch (estimateErr) {
-              console.error(`Error fetching estimate ${proposalData.estimate}:`, estimateErr)
+      const batchResults = await Promise.all(batch.map(async (proposalNumber) => {
+        try {
+          const proposalResponse = await fetch(
+            `${paceApiUrl}/ReadObject/readUDO_proposal?primaryKey=${encodeURIComponent(proposalNumber!)}`,
+            {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': authHeader,
+              },
+              body: '',
             }
-          }
+          )
 
-          return {
-            proposalNumber,
-            estimatePrice: proposalData.estimate_price || null,
-            totalSellPrice: proposalData.totalSellPrice || null,
-            estimate: estimateNumber,
-            po: proposalData.po || null
+          if (proposalResponse.ok) {
+            const proposalData = await proposalResponse.json()
+            let estimateNumber = null
+
+            // If proposal has an estimate ID, fetch the estimate number
+            if (proposalData.estimate) {
+              try {
+                const estimateResponse = await fetch(
+                  `${paceApiUrl}/ReadObject/readEstimate?primaryKey=${proposalData.estimate}`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Accept': 'application/json',
+                      'Authorization': authHeader,
+                    },
+                    body: '',
+                  }
+                )
+
+                if (estimateResponse.ok) {
+                  const estimateData = await estimateResponse.json()
+                  estimateNumber = estimateData.estimateNumber || null
+                }
+              } catch (estimateErr) {
+                console.error(`Error fetching estimate ${proposalData.estimate}:`, estimateErr)
+              }
+            }
+
+            return {
+              proposalNumber,
+              estimatePrice: proposalData.estimate_price || null,
+              totalSellPrice: proposalData.totalSellPrice || null,
+              estimate: estimateNumber,
+              po: proposalData.po || null
+            }
+          } else {
+            console.warn(`Failed to fetch proposal ${proposalNumber}: HTTP ${proposalResponse.status}`)
           }
+        } catch (err) {
+          console.error(`Error fetching proposal ${proposalNumber}:`, err)
         }
-      } catch (err) {
-        console.error(`Error fetching proposal ${proposalNumber}:`, err)
-      }
-      return { proposalNumber, estimatePrice: null, totalSellPrice: null, estimate: null, po: null }
-    })
-
-    const proposalResults = await Promise.all(proposalPromises)
+        return { proposalNumber, estimatePrice: null, totalSellPrice: null, estimate: null, po: null }
+      }))
+      proposalResults.push(...batchResults)
+    }
     const proposalEstimatePriceMap = new Map(proposalResults.map(r => [r.proposalNumber, r.estimatePrice]))
     const proposalTotalSellPriceMap = new Map(proposalResults.map(r => [r.proposalNumber, r.totalSellPrice]))
     const proposalEstimateMap = new Map(proposalResults.map(r => [r.proposalNumber, r.estimate]))

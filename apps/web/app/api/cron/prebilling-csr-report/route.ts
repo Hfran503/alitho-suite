@@ -21,6 +21,15 @@ import Redis from 'ioredis'
  * Authorization: Uses CRON_SECRET from AWS Secrets Manager (calitho-suite/cron)
  */
 
+/** Safely parse a date string, returning null if invalid.
+ *  Handles PACE format "2026-02-09T00:00:00GMT-08:00" by stripping the non-standard "GMT" prefix. */
+function safeParseDate(dateStr: string | undefined): Date | null {
+  if (!dateStr) return null
+  const normalized = dateStr.replace(/GMT([+-]\d{2}:\d{2})$/, '$1')
+  const d = new Date(normalized)
+  return isNaN(d.getTime()) ? null : d
+}
+
 interface Job {
   job?: string
   customer?: string
@@ -188,42 +197,53 @@ async function fetchPrebillingJobs(_tenantId: string) {
     }
   })
 
-  // Enrich with Proposal data (critical for issue detection)
+  // Enrich with Proposal data in batches (critical for issue detection)
   const uniqueProposals = [...new Set(jobs.map(j => j.u_proposal_number).filter(Boolean))]
-  const proposalResults = await Promise.all(uniqueProposals.map(async (proposalNumber) => {
-    try {
-      const res = await fetch(`${paceApiUrl}/ReadObject/readUDO_proposal?primaryKey=${encodeURIComponent(proposalNumber!)}`, {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'Authorization': authHeader },
-        body: '',
-      })
-      if (res.ok) {
-        const data = await res.json()
-        let estimateNumber = null
-        if (data.estimate) {
-          try {
-            const estRes = await fetch(`${paceApiUrl}/ReadObject/readEstimate?primaryKey=${data.estimate}`, {
-              method: 'POST',
-              headers: { 'Accept': 'application/json', 'Authorization': authHeader },
-              body: '',
-            })
-            if (estRes.ok) {
-              const estData = await estRes.json()
-              estimateNumber = estData.estimateNumber || null
-            }
-          } catch {}
+  const proposalResults: { proposalNumber: any; estimatePrice: any; totalSellPrice: any; estimate: any; po: any }[] = []
+
+  for (let i = 0; i < uniqueProposals.length; i += 50) {
+    const batch = uniqueProposals.slice(i, i + 50)
+    const batchResults = await Promise.all(batch.map(async (proposalNumber) => {
+      try {
+        const res = await fetch(`${paceApiUrl}/ReadObject/readUDO_proposal?primaryKey=${encodeURIComponent(proposalNumber!)}`, {
+          method: 'POST',
+          headers: { 'Accept': 'application/json', 'Authorization': authHeader },
+          body: '',
+        })
+        if (res.ok) {
+          const data = await res.json()
+          let estimateNumber = null
+          if (data.estimate) {
+            try {
+              const estRes = await fetch(`${paceApiUrl}/ReadObject/readEstimate?primaryKey=${data.estimate}`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Authorization': authHeader },
+                body: '',
+              })
+              if (estRes.ok) {
+                const estData = await estRes.json()
+                estimateNumber = estData.estimateNumber || null
+              }
+            } catch {}
+          }
+          return {
+            proposalNumber,
+            estimatePrice: data.estimate_price || null,
+            totalSellPrice: data.totalSellPrice || null,
+            estimate: estimateNumber,
+            po: data.po || null
+          }
+        } else {
+          console.warn(`Failed to fetch proposal ${proposalNumber}: HTTP ${res.status}`)
         }
-        return {
-          proposalNumber,
-          estimatePrice: data.estimate_price || null,
-          totalSellPrice: data.totalSellPrice || null,
-          estimate: estimateNumber,
-          po: data.po || null
-        }
+      } catch (err) {
+        console.warn(`Error fetching proposal ${proposalNumber}:`, err instanceof Error ? err.message : err)
       }
-    } catch {}
-    return { proposalNumber, estimatePrice: null, totalSellPrice: null, estimate: null, po: null }
-  }))
+      return { proposalNumber, estimatePrice: null, totalSellPrice: null, estimate: null, po: null }
+    }))
+    proposalResults.push(...batchResults)
+  }
+  console.log(`✅ Enriched ${proposalResults.length} proposals in batches of 50`)
 
   const proposalEstimatePriceMap = new Map(proposalResults.map(r => [r.proposalNumber, r.estimatePrice]))
   const proposalTotalSellPriceMap = new Map(proposalResults.map(r => [r.proposalNumber, r.totalSellPrice]))
@@ -378,11 +398,13 @@ function jobHasIssues(job: Job): boolean {
 
   // Check if past due by more than 14 days
   if (job.promiseDateTime) {
-    const dueDate = new Date(job.promiseDateTime)
-    const now = new Date()
-    const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysDiff > 14) {
-      return true // Past due by more than 14 days
+    const dueDate = safeParseDate(job.promiseDateTime)
+    if (dueDate) {
+      const now = new Date()
+      const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 14) {
+        return true // Past due by more than 14 days
+      }
     }
   }
 
@@ -444,11 +466,13 @@ function identifyJobIssues(job: Job): string[] {
 
   // Check if past due by more than 14 days
   if (job.promiseDateTime) {
-    const dueDate = new Date(job.promiseDateTime)
-    const now = new Date()
-    const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysDiff > 14) {
-      issues.push(`Past due by ${daysDiff} days`)
+    const dueDate = safeParseDate(job.promiseDateTime)
+    if (dueDate) {
+      const now = new Date()
+      const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 14) {
+        issues.push(`Past due by ${daysDiff} days`)
+      }
     }
   }
 
