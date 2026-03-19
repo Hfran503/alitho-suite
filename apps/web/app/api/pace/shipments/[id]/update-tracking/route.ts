@@ -222,11 +222,13 @@ export async function POST(
     }
 
     // Mark shipment as shipped and update shipment type from planned → completed
+    // NOTE: Do NOT send both shipped=true AND shipmentType change in the same call.
+    // PACE triggers an inventory deduction for EACH of these independently, causing
+    // double inventory transactions. The shipmentType change to a completed type
+    // already handles marking the shipment as shipped and deducting inventory.
     if (primaryTrackingNumber) {
-      shipmentUpdateData.shipped = true
-      console.log('✅ Marking shipment as shipped (labels created)')
-
       // Change shipment type from planned to completed using already-fetched data
+      let shipmentTypeChanged = false
       if (currentShipment?.shipmentType) {
         try {
           console.log(`🔍 Looking up shipment type mapping for tenantId=${membership.tenantId}, plannedTypeId=${currentShipment.shipmentType}`)
@@ -240,6 +242,7 @@ export async function POST(
 
           if (mapping) {
             shipmentUpdateData.shipmentType = mapping.completedTypeId
+            shipmentTypeChanged = true
             console.log(`✅ Changing shipment type: ${mapping.plannedTypeName} (${currentShipment.shipmentType}) → ${mapping.completedTypeName} (${mapping.completedTypeId})`)
           } else {
             console.warn(`⚠️ No shipment type mapping found for tenantId=${membership.tenantId}, plannedTypeId=${currentShipment.shipmentType}`)
@@ -250,6 +253,16 @@ export async function POST(
         }
       } else {
         console.warn('⚠️ Current shipment has no shipmentType field, cannot update shipmentType')
+      }
+
+      // Only set shipped=true if we did NOT change the shipment type.
+      // When shipmentType changes to completed, PACE already triggers inventory deduction.
+      // Setting shipped=true as well would cause a duplicate inventory transaction.
+      if (!shipmentTypeChanged) {
+        shipmentUpdateData.shipped = true
+        console.log('✅ Marking shipment as shipped (no type mapping, using shipped flag)')
+      } else {
+        console.log('✅ Shipment type changed to completed — skipping shipped=true to avoid double inventory deduction')
       }
     }
 
