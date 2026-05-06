@@ -818,12 +818,6 @@ async function createShippingLabels(
       console.log(`[batch-import] 📋 Adding saturday_delivery: true`)
     }
 
-    // Delivery confirmation
-    if (batch.confirmation && batch.confirmation !== 'none') {
-      advancedOptions.confirmation = batch.confirmation
-      console.log(`[batch-import] 📋 Adding confirmation: ${batch.confirmation}`)
-    }
-
     // Notification email
     if (batch.notificationsEmail) {
       advancedOptions.NotificationsEmail = batch.notificationsEmail
@@ -866,6 +860,12 @@ async function createShippingLabels(
     if (Object.keys(advancedOptions).length > 0) {
       labelRequest.shipment.advanced_options = advancedOptions
       console.log(`[batch-import] 📋 Advanced options configured:`, JSON.stringify(advancedOptions, null, 2))
+    }
+
+    // Delivery confirmation (top-level shipment field per ShipEngine API)
+    if (batch.confirmation && batch.confirmation !== 'none') {
+      labelRequest.shipment.confirmation = batch.confirmation
+      console.log(`[batch-import] 📋 Adding confirmation: ${batch.confirmation}`)
     }
 
     console.log('[batch-import] ShipStation label request:', JSON.stringify(labelRequest, null, 2))
