@@ -248,6 +248,7 @@ export class ShipStationClient {
     shipment: {
       carrier_id: string
       service_code: string
+      confirmation?: 'none' | 'delivery' | 'signature' | 'adult_signature' | 'direct_signature'
       ship_to: {
         name: string
         phone?: string

@@ -164,13 +164,10 @@ export async function POST(req: NextRequest) {
       labelRequest.shipment.advanced_options = advancedOptions
     }
 
-    // Add confirmation if provided
+    // Add confirmation if provided (top-level shipment field per ShipEngine API)
     if (confirmation && confirmation !== 'none') {
       console.log('🔍 [API] Adding confirmation to shipment:', confirmation)
-      if (!labelRequest.shipment.advanced_options) {
-        labelRequest.shipment.advanced_options = {}
-      }
-      labelRequest.shipment.advanced_options.confirmation = confirmation
+      labelRequest.shipment.confirmation = confirmation
     }
 
     // Add return label options if this is a return label
