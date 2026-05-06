@@ -28,6 +28,7 @@ interface ShippingConfig {
   carrierPackageCode?: string
   carrierPackageName?: string
   skipAddressVerification: boolean
+  skipLabels: boolean
 }
 
 interface Carrier {
@@ -68,6 +69,7 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
   const [notificationsEmail, setNotificationsEmail] = useState('')
   const [paceShipmentTypeId, setPaceShipmentTypeId] = useState(202)
   const [skipAddressVerification, setSkipAddressVerification] = useState(false)
+  const [skipLabels, setSkipLabels] = useState(false)
 
   const [rates, setRates] = useState<any[]>([])
   const [selectedRate, setSelectedRate] = useState<any>(null)
@@ -246,6 +248,7 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
       carrierPackageCode: useCarrierPackage ? carrierPackageCode : undefined,
       carrierPackageName: useCarrierPackage ? carrierPackageName : undefined,
       skipAddressVerification,
+      skipLabels,
     }
 
     onComplete(config)
@@ -280,6 +283,28 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
           </div>
         </div>
       )}
+
+      {/* PACE-only Mode Toggle */}
+      <div className={`border rounded-lg p-4 ${skipLabels ? 'bg-amber-50 border-amber-300' : 'bg-white border-gray-200'}`}>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={skipLabels}
+            onChange={(e) => setSkipLabels(e.target.checked)}
+            className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500 mt-0.5"
+          />
+          <div className="flex-1">
+            <span className="text-sm font-semibold text-gray-900">
+              Skip Label Creation (PACE only)
+            </span>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Create PACE shipments and cartons without generating ShipEngine labels.
+              No tracking numbers or shipping costs will be recorded.
+              Carrier and service are still required for the PACE Ship Via mapping.
+            </p>
+          </div>
+        </label>
+      </div>
 
       {/* Package Type Configuration */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">

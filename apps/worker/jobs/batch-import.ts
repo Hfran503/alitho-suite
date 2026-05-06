@@ -393,7 +393,7 @@ async function createPaceCartonContentWithRetry(
 async function createPaceCarton(
   shipmentId: string,
   cartonData: {
-    trackingNumber: string
+    trackingNumber?: string
     weight: number
     length?: number | null
     width?: number | null
@@ -414,17 +414,21 @@ async function createPaceCarton(
   retryAttempts?: number;
 }> {
   try {
-    console.log(`[PACE] 📦 Creating Carton for shipment ${shipmentId}, tracking: ${cartonData.trackingNumber}`)
+    console.log(`[PACE] 📦 Creating Carton for shipment ${shipmentId}, tracking: ${cartonData.trackingNumber || '(none)'}`)
 
     const credentials = await getPaceApiCredentials()
 
     const cartonPayload: any = {
       shipment: parseInt(shipmentId), // Use "shipment" not "jobShipment", and parse to int
-      trackingNumber: cartonData.trackingNumber,
       weight: cartonData.weight,
       count: 1, // One carton
       quantity: cartonData.itemQuantity || 0, // Total quantity in this carton
       addDefaultContent: false, // We'll add content manually
+    }
+
+    // Only include tracking number if provided (skipped in PACE-only mode)
+    if (cartonData.trackingNumber) {
+      cartonPayload.trackingNumber = cartonData.trackingNumber
     }
 
     // Add cost if provided
@@ -1023,56 +1027,78 @@ async function processShipmentGroup(
       })
     }
 
-    // Step 1: Create shipping labels via ShipStation FIRST
-    console.log(`[batch-import] 🏷️  Step 1: Creating shipping labels via ShipStation...`)
-    const labelsResult = await createShippingLabels(tenantId, batch, group.rows)
-
-    if (!labelsResult.success || !labelsResult.labels || labelsResult.labels.length === 0) {
-      const errorMsg = labelsResult.error || 'No labels returned from ShipStation'
-      console.error(`[batch-import] ❌ Label creation failed: ${errorMsg}`)
-
-      // Determine error type
-      const isServiceError = isServiceAvailabilityError(errorMsg)
-      const isRetryable = !isServiceError && isTransientError(errorMsg)
-
-      if (isServiceError) {
-        console.log(`[batch-import] 🔍 Error type: SERVICE AVAILABILITY (manual service change required)`)
-      } else {
-        console.log(`[batch-import] 🔍 Error type: ${isRetryable ? 'TRANSIENT (will retry)' : 'PERMANENT (no retry)'}`)
-      }
-
-      // Mark all rows as failed
-      for (const row of group.rows) {
-        await db.batchImportRow.update({
-          where: { id: row.id },
-          data: {
-            status: 'FAILED',
-            groupKey: group.groupKey,
-            errorMessage: isServiceError
-              ? `${errorMsg} - Change service and retry manually`
-              : errorMsg,
-            isTransientError: isRetryable,
-            processedAt: new Date(),
-          },
-        })
-      }
-      return { successCount: 0, failCount: group.rows.length }
+    // Step 1: Create shipping labels via ShipStation (skipped in PACE-only mode)
+    type LabelOutcome = {
+      rowId: string
+      trackingNumber: string
+      labelId: string
+      shipmentId: string
+      labelUrl: any
+      cost: number
     }
+    let labels: LabelOutcome[] = []
+    let addressCorrectionNotes: string[] = []
+    let totalShippingCost = 0
 
-    console.log(`[batch-import] ✅ Created ${labelsResult.labels.length} shipping labels successfully`)
-    console.log(`[batch-import] 📋 Labels:`, labelsResult.labels.map(l => ({
-      rowNumber: group.rows.find(r => r.id === l.rowId)?.rowNumber,
-      tracking: l.trackingNumber,
-      labelId: l.labelId,
-      cost: l.cost,
-    })))
+    if (batch.skipLabels) {
+      console.log(`[batch-import] ⏭️  Step 1: SKIPPED — PACE-only mode (no labels)`)
+      labels = group.rows.map((row) => ({
+        rowId: row.id,
+        trackingNumber: '',
+        labelId: '',
+        shipmentId: '',
+        labelUrl: null,
+        cost: 0,
+      }))
+    } else {
+      console.log(`[batch-import] 🏷️  Step 1: Creating shipping labels via ShipStation...`)
+      const labelsResult = await createShippingLabels(tenantId, batch, group.rows)
 
-    // Extract address correction notes from label result
-    const addressCorrectionNotes = labelsResult.addressCorrectionNotes || []
+      if (!labelsResult.success || !labelsResult.labels || labelsResult.labels.length === 0) {
+        const errorMsg = labelsResult.error || 'No labels returned from ShipStation'
+        console.error(`[batch-import] ❌ Label creation failed: ${errorMsg}`)
 
-    // Calculate total shipping cost
-    const totalShippingCost = labelsResult.labels.reduce((sum, label) => sum + label.cost, 0)
-    console.log(`[batch-import] 💰 Total shipping cost: $${totalShippingCost.toFixed(2)}`)
+        // Determine error type
+        const isServiceError = isServiceAvailabilityError(errorMsg)
+        const isRetryable = !isServiceError && isTransientError(errorMsg)
+
+        if (isServiceError) {
+          console.log(`[batch-import] 🔍 Error type: SERVICE AVAILABILITY (manual service change required)`)
+        } else {
+          console.log(`[batch-import] 🔍 Error type: ${isRetryable ? 'TRANSIENT (will retry)' : 'PERMANENT (no retry)'}`)
+        }
+
+        // Mark all rows as failed
+        for (const row of group.rows) {
+          await db.batchImportRow.update({
+            where: { id: row.id },
+            data: {
+              status: 'FAILED',
+              groupKey: group.groupKey,
+              errorMessage: isServiceError
+                ? `${errorMsg} - Change service and retry manually`
+                : errorMsg,
+              isTransientError: isRetryable,
+              processedAt: new Date(),
+            },
+          })
+        }
+        return { successCount: 0, failCount: group.rows.length }
+      }
+
+      console.log(`[batch-import] ✅ Created ${labelsResult.labels.length} shipping labels successfully`)
+      console.log(`[batch-import] 📋 Labels:`, labelsResult.labels.map(l => ({
+        rowNumber: group.rows.find(r => r.id === l.rowId)?.rowNumber,
+        tracking: l.trackingNumber,
+        labelId: l.labelId,
+        cost: l.cost,
+      })))
+
+      labels = labelsResult.labels
+      addressCorrectionNotes = labelsResult.addressCorrectionNotes || []
+      totalShippingCost = labels.reduce((sum, label) => sum + label.cost, 0)
+      console.log(`[batch-import] 💰 Total shipping cost: $${totalShippingCost.toFixed(2)}`)
+    }
 
     // Look up PACE Ship Via ID from carrier service mapping
     const shipViaId = await getPaceShipViaId(tenantId, batch.carrierId, batch.serviceCode)
@@ -1080,7 +1106,7 @@ async function processShipmentGroup(
     // Step 2: Create PACE JobShipment with ALL information (address, tracking, cost, shipVia)
     console.log(`[batch-import] 📝 Step 2: Creating PACE JobShipment with complete data...`)
     const firstRow = group.rows[0]
-    const firstTracking = labelsResult.labels[0].trackingNumber
+    const firstTracking = batch.skipLabels ? undefined : labels[0]?.trackingNumber
 
     const paceResult = await createPaceJobShipment(group.jobNumber, group.shipDate, {
       shipToName: firstRow.shipToName,
@@ -1092,13 +1118,15 @@ async function processShipmentGroup(
       shipToZip: firstRow.shipToZip,
       shipToPhone: firstRow.shipToPhone,
       trackingNumber: firstTracking,
-      totalShippingCost: totalShippingCost,
+      totalShippingCost: batch.skipLabels ? undefined : totalShippingCost,
       shipViaId: shipViaId,
       billToParty: batch.billToParty,
     })
 
     if (!paceResult.success) {
-      const errorMsg = `Labels created but PACE failed: ${paceResult.error}`
+      const errorMsg = batch.skipLabels
+        ? `PACE shipment creation failed: ${paceResult.error}`
+        : `Labels created but PACE failed: ${paceResult.error}`
       console.error(`[batch-import] ❌ PACE creation failed: ${paceResult.error}`)
 
       // Determine if error is transient (retryable) or permanent
@@ -1123,21 +1151,21 @@ async function processShipmentGroup(
 
     console.log(`[batch-import] ✅ PACE JobShipment created successfully - ID: ${paceResult.shipmentId}`)
 
-    // Step 3: Create PACE Cartons for each label
+    // Step 3: Create PACE Cartons for each label/row
     console.log(`[batch-import] 📦 Step 3: Creating PACE Cartons...`)
     const cartonIds = new Map<string, string>() // Map rowId to cartonId
     const cartonResults = new Map<string, { cartonId?: string; contentAdded?: boolean; contentWarning?: string; retryAttempts?: number }>() // Store full results
 
-    for (const label of labelsResult.labels) {
+    for (const label of labels) {
       if (!paceResult.shipmentId) continue
 
       const row = group.rows.find(r => r.id === label.rowId)
       if (!row) continue
 
-      console.log(`[batch-import] 📦 Creating carton for row ${row.rowNumber} with cost: $${label.cost}`)
+      console.log(`[batch-import] 📦 Creating carton for row ${row.rowNumber}${batch.skipLabels ? '' : ` with cost: $${label.cost}`}`)
 
       const cartonResult = await createPaceCarton(paceResult.shipmentId, {
-        trackingNumber: label.trackingNumber,
+        trackingNumber: batch.skipLabels ? undefined : label.trackingNumber,
         weight: row.weight,
         length: row.length,
         width: row.width,
@@ -1147,7 +1175,7 @@ async function processShipmentGroup(
         reference1: row.reference1,
         reference2: row.reference2,
         reference3: row.reference3,
-        cost: label.cost, // Add shipping cost from label
+        cost: batch.skipLabels ? undefined : label.cost,
       })
 
       if (cartonResult.success && cartonResult.cartonId) {
@@ -1175,12 +1203,12 @@ async function processShipmentGroup(
     }
 
     // Step 4: Update each row with its label information
-    console.log(`[batch-import] 💾 Step 4: Updating database with label information...`)
-    console.log(`[batch-import]    - Labels count: ${labelsResult.labels.length}`)
-    console.log(`[batch-import]    - Label row IDs: ${labelsResult.labels.map(l => l.rowId).join(', ')}`)
+    console.log(`[batch-import] 💾 Step 4: Updating database${batch.skipLabels ? ' (PACE-only mode)' : ' with label information'}...`)
+    console.log(`[batch-import]    - Labels count: ${labels.length}`)
+    console.log(`[batch-import]    - Label row IDs: ${labels.map(l => l.rowId).join(', ')}`)
     console.log(`[batch-import]    - Group row IDs: ${group.rows.map(r => r.id).join(', ')}`)
 
-    for (const label of labelsResult.labels) {
+    for (const label of labels) {
       try {
         const matchingRow = group.rows.find(r => r.id === label.rowId)
         if (!matchingRow) {
@@ -1189,7 +1217,7 @@ async function processShipmentGroup(
           continue
         }
 
-        console.log(`[batch-import]    - Updating row ${matchingRow.rowNumber} (ID: ${label.rowId}): ${label.trackingNumber}`)
+        console.log(`[batch-import]    - Updating row ${matchingRow.rowNumber} (ID: ${label.rowId})${batch.skipLabels ? '' : `: ${label.trackingNumber}`}`)
 
         const cartonIdStr = cartonIds.get(label.rowId)
         const paceCartonId = cartonIdStr ? parseInt(cartonIdStr) : null
@@ -1216,11 +1244,15 @@ async function processShipmentGroup(
           data: {
             status: 'SUCCESS',
             groupKey: group.groupKey, // Save groupKey for multi-package void operations
-            trackingNumber: label.trackingNumber,
-            labelUrl: label.labelUrl,
-            shippingCost: label.cost,
-            shipstationLabelId: label.labelId,
-            shipstationShipmentId: label.shipmentId,
+            ...(batch.skipLabels
+              ? {}
+              : {
+                  trackingNumber: label.trackingNumber,
+                  labelUrl: label.labelUrl,
+                  shippingCost: label.cost,
+                  shipstationLabelId: label.labelId,
+                  shipstationShipmentId: label.shipmentId,
+                }),
             paceJobShipmentId: paceShipmentId,
             paceCartonId: paceCartonId,
             notes: notes,
@@ -1228,56 +1260,58 @@ async function processShipmentGroup(
           },
         })
 
-        // Also create ShippingLabel record for shipment tracking page
-        try {
-          await db.shippingLabel.create({
-            data: {
-              tenantId,
-              paceShipmentId: paceShipmentId!,
-              paceCartonId: paceCartonId,
-              provider: 'shipstation',
-              providerShipmentId: label.shipmentId,
-              providerLabelId: label.labelId,
-              trackingNumber: label.trackingNumber,
-              labelUrl: label.labelUrl,
-              carrier: batch.carrierId,
-              service: batch.serviceCode,
-              shipFrom: batch.fromAddress,
-              shipTo: {
-                name: matchingRow.shipToName,
-                company_name: matchingRow.shipToCompany,
-                address_line1: matchingRow.shipToAddress1,
-                address_line2: matchingRow.shipToAddress2,
-                city_locality: matchingRow.shipToCity,
-                state_province: matchingRow.shipToState,
-                postal_code: matchingRow.shipToZip,
-                country_code: matchingRow.shipToCountry || 'US',
-                phone: matchingRow.shipToPhone,
+        // Also create ShippingLabel record for shipment tracking page (skipped in PACE-only mode)
+        if (!batch.skipLabels) {
+          try {
+            await db.shippingLabel.create({
+              data: {
+                tenantId,
+                paceShipmentId: paceShipmentId!,
+                paceCartonId: paceCartonId,
+                provider: 'shipstation',
+                providerShipmentId: label.shipmentId,
+                providerLabelId: label.labelId,
+                trackingNumber: label.trackingNumber,
+                labelUrl: label.labelUrl,
+                carrier: batch.carrierId,
+                service: batch.serviceCode,
+                shipFrom: batch.fromAddress,
+                shipTo: {
+                  name: matchingRow.shipToName,
+                  company_name: matchingRow.shipToCompany,
+                  address_line1: matchingRow.shipToAddress1,
+                  address_line2: matchingRow.shipToAddress2,
+                  city_locality: matchingRow.shipToCity,
+                  state_province: matchingRow.shipToState,
+                  postal_code: matchingRow.shipToZip,
+                  country_code: matchingRow.shipToCountry || 'US',
+                  phone: matchingRow.shipToPhone,
+                },
+                weight: matchingRow.weight,
+                length: matchingRow.length,
+                width: matchingRow.width,
+                height: matchingRow.height,
+                cost: label.cost,
+                currency: 'USD',
+                status: 'active',
+                isReturnLabel: false,
+                metadata: {
+                  batchImportId: batch.id,
+                  batchImportRowId: label.rowId,
+                  jobNumber: matchingRow.jobNumber,
+                  packageNumber: matchingRow.packageNumber,
+                  totalPackages: matchingRow.totalPackages,
+                  reference1: matchingRow.reference1,
+                  reference2: matchingRow.reference2,
+                  reference3: matchingRow.reference3,
+                },
               },
-              weight: matchingRow.weight,
-              length: matchingRow.length,
-              width: matchingRow.width,
-              height: matchingRow.height,
-              cost: label.cost,
-              currency: 'USD',
-              status: 'active',
-              isReturnLabel: false,
-              metadata: {
-                batchImportId: batch.id,
-                batchImportRowId: label.rowId,
-                jobNumber: matchingRow.jobNumber,
-                packageNumber: matchingRow.packageNumber,
-                totalPackages: matchingRow.totalPackages,
-                reference1: matchingRow.reference1,
-                reference2: matchingRow.reference2,
-                reference3: matchingRow.reference3,
-              },
-            },
-          })
-          console.log(`[batch-import]    - Created ShippingLabel record for tracking`)
-        } catch (labelError) {
-          console.warn(`[batch-import] ⚠️  Failed to create ShippingLabel record:`, labelError)
-          // Don't fail the import if ShippingLabel creation fails
+            })
+            console.log(`[batch-import]    - Created ShippingLabel record for tracking`)
+          } catch (labelError) {
+            console.warn(`[batch-import] ⚠️  Failed to create ShippingLabel record:`, labelError)
+            // Don't fail the import if ShippingLabel creation fails
+          }
         }
 
         successCount++

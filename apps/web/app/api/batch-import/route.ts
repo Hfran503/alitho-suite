@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
         confirmation: shippingConfig.confirmation || 'none',
         notificationsEmail: shippingConfig.notificationsEmail,
         skipAddressVerification: shippingConfig.skipAddressVerification || false,
+        skipLabels: shippingConfig.skipLabels || false,
         columnMapping: columnMapping || {},
         originalData: originalData || null,
         rows: {

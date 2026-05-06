@@ -399,6 +399,7 @@ model BatchImport {
   confirmation       String            @default("none")
   notificationsEmail String?
   skipAddressVerification Boolean      @default(false)
+  skipLabels         Boolean           @default(false)
   fromAddress        Json?
   columnMapping      Json?
   originalData       Json?             // Store original CSV/Excel data for exports
