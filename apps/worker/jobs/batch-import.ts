@@ -169,6 +169,7 @@ async function createPaceJobShipment(
     totalShippingCost?: number
     shipViaId?: number | null
     billToParty?: string | null
+    billToAccount?: string | null
   }
 ): Promise<{ success: boolean; shipmentId?: string; error?: string }> {
   try {
@@ -217,6 +218,12 @@ async function createPaceJobShipment(
     if (shipmentDetails.billToParty === 'third_party') {
       shipmentData.charges = 'Third Party/Ship Bill To'
       console.log(`[PACE] 💳 Setting charges to 'Third Party/Ship Bill To' for third-party billing`)
+
+      // PACE requires accountNumber (or shipBillToContact) when charges = Third Party/Ship Bill To
+      if (shipmentDetails.billToAccount) {
+        shipmentData.accountNumber = shipmentDetails.billToAccount
+        console.log(`[PACE] 🔢 Setting accountNumber: ${shipmentDetails.billToAccount}`)
+      }
     }
 
     console.log(`[PACE] 📋 Shipment Type ID: ${shipmentData.shipmentType}`)
@@ -1003,6 +1010,27 @@ async function processShipmentGroup(
     console.log(`[batch-import]    - Total Packages: ${group.rows.length}`)
     console.log(`[batch-import]    - Row IDs: ${group.rows.map(r => r.rowNumber).join(', ')}`)
 
+    // Guard: third-party billing requires an account number for PACE.
+    // Fail fast BEFORE creating labels so we don't burn ShipStation labels
+    // that PACE will then reject with "account number required".
+    if (batch.billToParty === 'third_party' && !batch.billToAccount) {
+      const errorMsg = 'Third-party billing selected but no account number provided. Set Bill To Account on the batch before retrying.'
+      console.error(`[batch-import] ❌ ${errorMsg}`)
+      for (const row of group.rows) {
+        await db.batchImportRow.update({
+          where: { id: row.id },
+          data: {
+            status: 'FAILED',
+            groupKey: group.groupKey,
+            errorMessage: errorMsg,
+            isTransientError: false,
+            processedAt: new Date(),
+          },
+        })
+      }
+      return { successCount: 0, failCount: group.rows.length }
+    }
+
     // Check if any rows are retries and apply backoff
     const maxRetryCount = Math.max(...group.rows.map(r => r.retryCount || 0))
     if (maxRetryCount > 0) {
@@ -1121,6 +1149,7 @@ async function processShipmentGroup(
       totalShippingCost: batch.skipLabels ? undefined : totalShippingCost,
       shipViaId: shipViaId,
       billToParty: batch.billToParty,
+      billToAccount: batch.billToAccount,
     })
 
     if (!paceResult.success) {
