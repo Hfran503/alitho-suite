@@ -4,7 +4,13 @@ import { existsSync } from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'quote-attachments')
+// In production (Dokploy), a named volume is mounted at /app/apps/web/public/quote-attachments.
+// The Next.js process runs from inside .next/standalone/apps/web, so cwd-relative paths land
+// in ephemeral build artifacts that get wiped on every redeploy — always resolve to the
+// absolute mount when it exists, and fall back to a cwd-relative path for local dev.
+const UPLOAD_DIR = existsSync('/app/apps/web/public/quote-attachments')
+  ? '/app/apps/web/public/quote-attachments'
+  : path.join(process.cwd(), 'public', 'quote-attachments')
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
 const MAX_FILES = 5
 

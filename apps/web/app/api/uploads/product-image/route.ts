@@ -6,19 +6,15 @@ import { existsSync } from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 
-// In Next.js standalone mode (Docker), files are in apps/web/public
-// In development, they're directly in public
-const STANDALONE_DIR = path.join(process.cwd(), 'apps', 'web', 'public', 'product-images')
-const DEV_DIR = path.join(process.cwd(), 'public', 'product-images')
-
-// Determine which directory to use based on environment
+// In production (Dokploy), a named volume is mounted at /app/apps/web/public/product-images.
+// Writes MUST land in that exact path so they persist across deploys. The Next.js process
+// runs from inside .next/standalone/apps/web, so relative paths land in ephemeral build
+// artifacts that get wiped on every redeploy — always resolve to the absolute mount.
 function getUploadDir(): string {
-  // Check if we're in standalone mode by looking for the apps/web structure
-  const standaloneParent = path.join(process.cwd(), 'apps', 'web', 'public')
-  if (existsSync(standaloneParent)) {
-    return STANDALONE_DIR
+  if (existsSync('/app/apps/web/public/product-images')) {
+    return '/app/apps/web/public/product-images'
   }
-  return DEV_DIR
+  return path.join(process.cwd(), 'public', 'product-images')
 }
 
 export async function POST(req: NextRequest) {

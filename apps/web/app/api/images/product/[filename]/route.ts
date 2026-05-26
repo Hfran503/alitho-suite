@@ -3,9 +3,9 @@ import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 
-// In Next.js standalone mode (Docker), files are in apps/web/public
-// In development, they're directly in public
-const STANDALONE_DIR = path.join(process.cwd(), 'apps', 'web', 'public', 'product-images')
+// Match the upload route: prefer the absolute Dokploy volume mount; fall back to a
+// cwd-relative path for local dev.
+const PROD_DIR = '/app/apps/web/public/product-images'
 const DEV_DIR = path.join(process.cwd(), 'public', 'product-images')
 
 // Map file extensions to MIME types
@@ -28,8 +28,8 @@ export async function GET(
     // Sanitize filename to prevent directory traversal
     const sanitizedFilename = path.basename(filename)
 
-    // Check both possible locations (standalone Docker vs development)
-    let filepath = path.join(STANDALONE_DIR, sanitizedFilename)
+    // Check the production mount first, then fall back to the dev path.
+    let filepath = path.join(PROD_DIR, sanitizedFilename)
     if (!existsSync(filepath)) {
       filepath = path.join(DEV_DIR, sanitizedFilename)
     }
