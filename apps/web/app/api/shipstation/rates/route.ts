@@ -63,8 +63,10 @@ export async function POST(req: NextRequest) {
     // Get carrier markup configuration (both percent and dollar)
     const carriers = (integration.config as any)?.carriers || []
     const carrierMarkupMap = new Map<string, { percent: number; dollar: number }>()
+    const carrierNameMap = new Map<string, string>()
     carriers.forEach((carrier: any) => {
       if (carrier.id) {
+        if (carrier.name?.trim()) carrierNameMap.set(carrier.id, carrier.name.trim())
         carrierMarkupMap.set(carrier.id, {
           percent: carrier.estimateRateMarkup || 0,
           dollar: carrier.estimateRateMarkupDollar || 0,
@@ -198,6 +200,8 @@ export async function POST(req: NextRequest) {
             carrierId: rate.carrier_id,
             carrierCode: rate.carrier_code,
             carrierNickname: rate.carrier_nickname,
+            // Name of the connected carrier account (from integration config, then ShipStation nickname)
+            carrierAccountName: carrierNameMap.get(rate.carrier_id) || rate.carrier_nickname || null,
             serviceCode: rate.service_code,
             serviceType: rate.service_type,
             shipDate: rate.ship_date,

@@ -74,6 +74,8 @@ interface Rate {
   rateId: string
   carrierId: string
   carrierCode: string
+  carrierNickname?: string | null
+  carrierAccountName?: string | null
   serviceCode: string
   carrier: string
   service: string
@@ -1065,7 +1067,7 @@ export function ProcessShipmentShipStationModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl max-w-[1500px] w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div>
@@ -1868,16 +1870,41 @@ export function ProcessShipmentShipStationModal({
                       console.log('📦 Filtered rates:', filteredRates.length, 'of', rates.length)
                     }
 
-                    // Group rates by carrier
+                    // Group rates by carrier account (carrierId) so multiple accounts
+                    // of the same carrier (e.g. two UPS accounts) get separate columns
                     const ratesByCarrier = filteredRates.reduce((acc, rate) => {
-                      if (!acc[rate.carrier]) {
-                        acc[rate.carrier] = []
+                      const key = rate.carrierId || rate.carrier
+                      if (!acc[key]) {
+                        acc[key] = []
                       }
-                      acc[rate.carrier].push(rate)
+                      acc[key].push(rate)
                       return acc
                     }, {} as Record<string, typeof rates>)
 
                     const carriers = Object.keys(ratesByCarrier)
+
+                    // Column header: carrier name, plus account name when the same
+                    // carrier has more than one connected account
+                    const carrierNameCounts = carriers.reduce((acc, key) => {
+                      const name = ratesByCarrier[key][0].carrier
+                      acc[name] = (acc[name] || 0) + 1
+                      return acc
+                    }, {} as Record<string, number>)
+                    const carrierSeen: Record<string, number> = {}
+                    const carrierLabels = carriers.reduce((acc, key) => {
+                      const first = ratesByCarrier[key][0]
+                      const name = first.carrier
+                      if (carrierNameCounts[name] > 1) {
+                        carrierSeen[name] = (carrierSeen[name] || 0) + 1
+                        const account = first.carrierAccountName || first.carrierNickname
+                        acc[key] = account && account !== name
+                          ? `${name} – ${account}`
+                          : `${name} (${carrierSeen[name]})`
+                      } else {
+                        acc[key] = name
+                      }
+                      return acc
+                    }, {} as Record<string, string>)
 
                     // Show message if rates were filtered
                     const showFilterMessage = selectedCarrierCodes.length > 0 && filteredRates.length < rates.length
@@ -1907,7 +1934,7 @@ export function ProcessShipmentShipStationModal({
                         <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : carriers.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
                         {carriers.map((carrier) => (
                           <div key={carrier} className="space-y-2">
-                            <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0">{carrier}</h4>
+                            <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0 truncate" title={carrierLabels[carrier]}>{carrierLabels[carrier]}</h4>
                             {ratesByCarrier[carrier].map((rate) => {
                               const hasDetails = rate.rateDetails && rate.rateDetails.length > 0
                               const shippingDetail = hasDetails ? rate.rateDetails?.find(d => d.type === 'shipping') : null
