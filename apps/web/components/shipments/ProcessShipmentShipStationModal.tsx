@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { groupRatesByCarrierAccount, carrierGridCols } from '@/lib/shipping-rates'
 
 interface ProcessShipmentShipStationModalProps {
   isOpen: boolean
@@ -92,6 +93,8 @@ interface Rate {
   warningMessages?: string[]
   hasProcessingCost?: boolean
   processingCost?: number
+  hasMarkup?: boolean
+  markupAmount?: number
 }
 
 export function ProcessShipmentShipStationModal({
@@ -1870,41 +1873,8 @@ export function ProcessShipmentShipStationModal({
                       console.log('📦 Filtered rates:', filteredRates.length, 'of', rates.length)
                     }
 
-                    // Group rates by carrier account (carrierId) so multiple accounts
-                    // of the same carrier (e.g. two UPS accounts) get separate columns
-                    const ratesByCarrier = filteredRates.reduce((acc, rate) => {
-                      const key = rate.carrierId || rate.carrier
-                      if (!acc[key]) {
-                        acc[key] = []
-                      }
-                      acc[key].push(rate)
-                      return acc
-                    }, {} as Record<string, typeof rates>)
-
-                    const carriers = Object.keys(ratesByCarrier)
-
-                    // Column header: carrier name, plus account name when the same
-                    // carrier has more than one connected account
-                    const carrierNameCounts = carriers.reduce((acc, key) => {
-                      const name = ratesByCarrier[key][0].carrier
-                      acc[name] = (acc[name] || 0) + 1
-                      return acc
-                    }, {} as Record<string, number>)
-                    const carrierSeen: Record<string, number> = {}
-                    const carrierLabels = carriers.reduce((acc, key) => {
-                      const first = ratesByCarrier[key][0]
-                      const name = first.carrier
-                      if (carrierNameCounts[name] > 1) {
-                        carrierSeen[name] = (carrierSeen[name] || 0) + 1
-                        const account = first.carrierAccountName || first.carrierNickname
-                        acc[key] = account && account !== name
-                          ? `${name} – ${account}`
-                          : `${name} (${carrierSeen[name]})`
-                      } else {
-                        acc[key] = name
-                      }
-                      return acc
-                    }, {} as Record<string, string>)
+                    // Group rates by carrier account so multiple accounts of the same carrier stay separate
+                    const carrierGroups = groupRatesByCarrierAccount(filteredRates)
 
                     // Show message if rates were filtered
                     const showFilterMessage = selectedCarrierCodes.length > 0 && filteredRates.length < rates.length
@@ -1931,11 +1901,11 @@ export function ProcessShipmentShipStationModal({
                             </div>
                           </div>
                         )}
-                        <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : carriers.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
-                        {carriers.map((carrier) => (
-                          <div key={carrier} className="space-y-2">
-                            <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0 truncate" title={carrierLabels[carrier]}>{carrierLabels[carrier]}</h4>
-                            {ratesByCarrier[carrier].map((rate) => {
+                        <div className={`grid gap-4 ${carrierGridCols(carrierGroups.length)}`}>
+                        {carrierGroups.map((group) => (
+                          <div key={group.key} className="space-y-2">
+                            <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0 truncate" title={group.label}>{group.label}</h4>
+                            {group.rates.map((rate) => {
                               const hasDetails = rate.rateDetails && rate.rateDetails.length > 0
                               const shippingDetail = hasDetails ? rate.rateDetails?.find(d => d.type === 'shipping') : null
                               const otherDetails = (hasDetails ? rate.rateDetails?.filter(d => d.type !== 'shipping') : []) ?? []
@@ -1995,7 +1965,7 @@ export function ProcessShipmentShipStationModal({
                                   </div>
 
                                   {/* Cost Breakdown */}
-                                  {(hasDetails || rate.hasProcessingCost) && (
+                                  {(hasDetails || rate.hasProcessingCost || rate.hasMarkup) && (
                                     <div className="mt-2 pt-2 border-t border-gray-200">
                                       <details className="group">
                                         <summary className="cursor-pointer text-xs font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1">
@@ -2017,6 +1987,12 @@ export function ProcessShipmentShipStationModal({
                                               <span className="text-amber-800 ml-2">+${detail.amount.toFixed(2)}</span>
                                             </div>
                                           ))}
+                                          {rate.hasMarkup && !!rate.markupAmount && (
+                                            <div className="flex justify-between">
+                                              <span className="text-blue-700 truncate">Markup</span>
+                                              <span className="text-blue-800 ml-2">+${rate.markupAmount.toFixed(2)}</span>
+                                            </div>
+                                          )}
                                           {rate.hasProcessingCost && rate.processingCost && (
                                             <div className="flex justify-between">
                                               <span className="text-blue-700 truncate">Processing Cost</span>

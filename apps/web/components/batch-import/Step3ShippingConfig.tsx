@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { groupRatesByCarrierAccount, carrierGridCols } from '@/lib/shipping-rates'
 
 interface Step3ShippingConfigProps {
   onComplete: (config: ShippingConfig) => void
@@ -253,6 +254,9 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
 
     onComplete(config)
   }
+
+  // Group rates by carrier account so multiple accounts of the same carrier stay separate
+  const carrierGroups = groupRatesByCarrierAccount(rates)
 
   return (
     <div className="space-y-6">
@@ -679,19 +683,18 @@ export function Step3ShippingConfig({ onComplete, onBack, columnMapping }: Step3
         </button>
       )}
 
-      {/* Service Selection - Grouped by Carrier */}
+      {/* Service Selection - Grouped by Carrier account */}
       {rates.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold text-gray-900">Select Service (applies to all shipments)</h3>
-          <div className="grid grid-cols-3 gap-4">
-            {/* Group rates by carrier */}
-            {Array.from(new Set(rates.map((r) => r.carrier))).map((carrierName) => {
-              const carrierRates = rates.filter((r) => r.carrier === carrierName)
+          <div className={`grid gap-4 ${carrierGridCols(carrierGroups.length)}`}>
+            {/* Group rates by carrier account */}
+            {carrierGroups.map((group) => {
               return (
-                <div key={carrierName} className="border border-gray-200 rounded-lg p-3">
-                  <h4 className="font-semibold text-gray-900 mb-2 text-sm">{carrierName}</h4>
+                <div key={group.key} className="border border-gray-200 rounded-lg p-3">
+                  <h4 className="font-semibold text-gray-900 mb-2 text-sm truncate" title={group.label}>{group.label}</h4>
                   <div className="space-y-2">
-                    {carrierRates.map((rate) => (
+                    {group.rates.map((rate) => (
                       <div
                         key={rate.rateId}
                         onClick={() => setSelectedRate(rate)}

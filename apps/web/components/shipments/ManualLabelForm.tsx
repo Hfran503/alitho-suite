@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { groupRatesByCarrierAccount, carrierGridCols } from '@/lib/shipping-rates'
 
 type Step = 1 | 2 | 3 | 4 | 5
 
@@ -63,6 +64,8 @@ interface Rate {
   rateId: string
   carrierId: string
   carrierCode: string
+  carrierNickname?: string | null
+  carrierAccountName?: string | null
   serviceCode: string
   carrier: string
   service: string
@@ -77,6 +80,10 @@ interface Rate {
   rateDetails?: RateDetail[]
   rateAttributes?: string[]
   warningMessages?: string[]
+  hasMarkup?: boolean
+  markupAmount?: number
+  hasProcessingCost?: boolean
+  processingCost?: number
 }
 
 export function ManualLabelForm() {
@@ -1583,16 +1590,8 @@ function Step3RateSelection({
     return <div className="text-center py-8 text-gray-500">No rates available</div>
   }
 
-  // Group rates by carrier
-  const ratesByCarrier = rates.reduce((acc: any, rate: Rate) => {
-    if (!acc[rate.carrier]) {
-      acc[rate.carrier] = []
-    }
-    acc[rate.carrier].push(rate)
-    return acc
-  }, {})
-
-  const carriers = Object.keys(ratesByCarrier)
+  // Group rates by carrier account so multiple accounts of the same carrier stay separate
+  const carrierGroups = groupRatesByCarrierAccount<Rate>(rates)
 
   return (
     <div className="space-y-4">
@@ -1608,11 +1607,11 @@ function Step3RateSelection({
         </div>
       </div>
 
-      <div className={`grid gap-4 ${carriers.length === 1 ? 'grid-cols-1' : carriers.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-        {carriers.map((carrier) => (
-          <div key={carrier} className="space-y-2">
-            <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0">{carrier}</h4>
-            {ratesByCarrier[carrier].map((rate: Rate) => {
+      <div className={`grid gap-4 ${carrierGridCols(carrierGroups.length)}`}>
+        {carrierGroups.map((group) => (
+          <div key={group.key} className="space-y-2">
+            <h4 className="font-bold text-gray-900 text-sm px-2 py-1 bg-gray-100 rounded sticky top-0 truncate" title={group.label}>{group.label}</h4>
+            {group.rates.map((rate: Rate) => {
               const hasDetails = rate.rateDetails && rate.rateDetails.length > 0
               const shippingDetail = hasDetails ? rate.rateDetails?.find(d => d.type === 'shipping') : null
               const otherDetails = (hasDetails ? rate.rateDetails?.filter(d => d.type !== 'shipping') : []) ?? []
@@ -1670,7 +1669,7 @@ function Step3RateSelection({
                     )}
                   </div>
 
-                  {hasDetails && (
+                  {(hasDetails || rate.hasMarkup || rate.hasProcessingCost) && (
                     <div className="mt-2 pt-2 border-t border-gray-200">
                       <details className="group">
                         <summary className="cursor-pointer text-xs font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1">
@@ -1692,6 +1691,18 @@ function Step3RateSelection({
                               <span className="text-amber-800 ml-2">+${detail.amount.toFixed(2)}</span>
                             </div>
                           ))}
+                          {rate.hasMarkup && !!rate.markupAmount && (
+                            <div className="flex justify-between">
+                              <span className="text-blue-700 truncate">Markup</span>
+                              <span className="text-blue-800 ml-2">+${rate.markupAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {rate.hasProcessingCost && !!rate.processingCost && (
+                            <div className="flex justify-between">
+                              <span className="text-blue-700 truncate">Processing Cost</span>
+                              <span className="text-blue-800 ml-2">+${rate.processingCost.toFixed(2)}</span>
+                            </div>
+                          )}
                         </div>
                       </details>
                     </div>

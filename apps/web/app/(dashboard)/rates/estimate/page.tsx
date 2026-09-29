@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx'
+import { groupRatesByCarrierAccount } from '@/lib/shipping-rates'
 
 type RateMode = 'quick' | 'full' | 'batch'
 
@@ -21,6 +22,9 @@ interface RateDetail {
 }
 
 interface RateEstimate {
+  carrierId?: string
+  carrierAccountName?: string | null
+  carrierNickname?: string | null
   carrier: string
   service: string
   amount: number
@@ -414,15 +418,10 @@ export default function RateEstimatePage() {
     }
   }
 
-  // Group rates by carrier
-  const groupedRates = rates.reduce((acc, rate) => {
-    const carrier = rate.carrier
-    if (!acc.has(carrier)) {
-      acc.set(carrier, [])
-    }
-    acc.get(carrier)!.push(rate)
-    return acc
-  }, new Map<string, RateEstimate[]>())
+  // Group rates by carrier account so multiple accounts of the same carrier stay separate
+  const carrierGroups = groupRatesByCarrierAccount(rates)
+  const groupedRates = new Map(carrierGroups.map(g => [g.key, g.rates]))
+  const carrierLabels = new Map(carrierGroups.map(g => [g.key, g.label]))
 
   // Sort carriers by cheapest rate
   const sortedCarriers = Array.from(groupedRates.entries()).sort((a, b) => {
@@ -536,6 +535,9 @@ export default function RateEstimatePage() {
       const data = await response.json()
       // Transform the response to match RateEstimate interface
       const transformedRates: RateEstimate[] = data.data.rates.map((rate: any) => ({
+        carrierId: rate.carrierId,
+        carrierAccountName: rate.carrierAccountName,
+        carrierNickname: rate.carrierNickname,
         carrier: rate.carrier || rate.carrierNickname || rate.carrierCode,
         service: rate.service || rate.serviceType,
         amount: rate.amount,
@@ -2233,7 +2235,7 @@ export default function RateEstimatePage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                             <div className="text-left flex-1 min-w-0">
-                              <p className="text-xs font-bold text-gray-900 truncate">{carrier}</p>
+                              <p className="text-xs font-bold text-gray-900 truncate">{carrierLabels.get(carrier) || carrier}</p>
                               <p className="text-xs text-gray-500">
                                 {rateCount} {rateCount === 1 ? 'service' : 'services'}
                               </p>
