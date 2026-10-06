@@ -397,7 +397,8 @@ export async function POST(req: NextRequest) {
         totalRate: cheapest.totalRate,
         deliveryDays: cheapest.deliveryDays,
         rateBreakdown: cheapest.rateBreakdown,
-        allRates: allRates.length > 1 ? allRates : null,
+        // Prisma rejects a bare null on Json fields; undefined leaves the column NULL
+        allRates: allRates.length > 1 ? allRates : undefined,
       },
       include: {
         createdBy: {
